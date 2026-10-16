@@ -1,17 +1,40 @@
 import { IDomainProvider } from './domain/IDomainProvider.js';
 import { IHostingProvider } from './hosting/IHostingProvider.js';
 import { OpenproviderDomainProvider } from './domain/OpenproviderDomainProvider.js';
+import { CustomDomainProvider, CustomRegistrarConfig } from './domain/CustomDomainProvider.js';
 import { CpanelHostingProvider } from './hosting/CpanelHostingProvider.js';
 import { ResellerClubHostingProvider } from './hosting/ResellerClubHostingProvider.js';
 
 export function getDomainProvider(config?: {
+  provider?: string;
+  driver?: string;
   domainApiKey?: string;
   openproviderPassword?: string;
   openproviderSandbox?: boolean;
   openproviderDefaultHandle?: string;
+  username?: string;
+  apiKey?: string;
+  password?: string;
+  baseUrl?: string;
+  isSandbox?: boolean;
+  name?: string;
 }): IDomainProvider {
-  const domainApiKey = config?.domainApiKey || process.env.OPENPROVIDER_USERNAME || '';
-  const openproviderPassword = config?.openproviderPassword || process.env.OPENPROVIDER_PASSWORD || '';
+  const driverType = config?.driver || config?.provider || 'openprovider';
+
+  if (driverType !== 'openprovider' && driverType !== 'default') {
+    const customConfig: CustomRegistrarConfig = {
+      name: config?.name || driverType.toUpperCase(),
+      driver: driverType as any,
+      username: config?.username || config?.domainApiKey || '',
+      apiKey: config?.apiKey || config?.password || config?.openproviderPassword || '',
+      baseUrl: config?.baseUrl || '',
+      isSandbox: config?.isSandbox === true
+    };
+    return new CustomDomainProvider(customConfig);
+  }
+
+  const domainApiKey = config?.domainApiKey || config?.username || process.env.OPENPROVIDER_USERNAME || '';
+  const openproviderPassword = config?.openproviderPassword || config?.password || process.env.OPENPROVIDER_PASSWORD || '';
   const defaultHandle = config?.openproviderDefaultHandle || process.env.OPENPROVIDER_DEFAULT_HANDLE || '';
 
   if (!domainApiKey || !openproviderPassword) {
@@ -26,7 +49,7 @@ export function getDomainProvider(config?: {
 
   const isSandbox = config?.openproviderSandbox !== undefined
     ? config.openproviderSandbox
-    : (process.env.OPENPROVIDER_SANDBOX_MODE === 'true');
+    : (config?.isSandbox !== undefined ? config.isSandbox : process.env.OPENPROVIDER_SANDBOX_MODE === 'true');
   return new OpenproviderDomainProvider(domainApiKey, openproviderPassword, isSandbox, defaultHandle);
 }
 
@@ -59,27 +82,10 @@ export function getHostingProvider(config?: { hostingApiType?: string; hostingAp
           changePlan: async () => { throw new Error('cPanel API key not configured.'); }
         };
       }
-      return new CpanelHostingProvider(hostingApiKey, hostingApiUrl, hostingApiUsername);
+      return new CpanelHostingProvider(hostingApiUrl, hostingApiKey, hostingApiUsername);
     case 'resellerclub':
-      if (!hostingApiKey || !ResellerClubHostingProvider) {
-        return {
-          provisionAccount: async () => ({ success: false, error: 'ResellerClub API key not configured.' }),
-          suspendAccount: async () => { throw new Error('ResellerClub API key not configured.'); },
-          unsuspendAccount: async () => { throw new Error('ResellerClub API key not configured.'); },
-          terminateAccount: async () => { throw new Error('ResellerClub API key not configured.'); },
-          getUsage: async () => { throw new Error('ResellerClub API key not configured.'); },
-          changePlan: async () => { throw new Error('ResellerClub API key not configured.'); }
-        };
-      }
-      return new ResellerClubHostingProvider(hostingApiKey, hostingApiUrl);
+      return new ResellerClubHostingProvider(hostingApiUrl, hostingApiKey);
     default:
-      return {
-        provisionAccount: async () => ({ success: false, error: `Unsupported hosting provider: ${hostingApiType}` }),
-        suspendAccount: async () => { throw new Error(`Unsupported hosting provider: ${hostingApiType}`); },
-        unsuspendAccount: async () => { throw new Error(`Unsupported hosting provider: ${hostingApiType}`); },
-        terminateAccount: async () => { throw new Error(`Unsupported hosting provider: ${hostingApiType}`); },
-        getUsage: async () => { throw new Error(`Unsupported hosting provider: ${hostingApiType}`); },
-        changePlan: async () => { throw new Error(`Unsupported hosting provider: ${hostingApiType}`); }
-      };
+      throw new Error(`Unsupported hosting API type: ${hostingApiType}`);
   }
 }

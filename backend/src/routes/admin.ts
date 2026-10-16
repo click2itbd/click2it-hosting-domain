@@ -176,6 +176,7 @@ adminRouter.post('/domain/test-connection', async (req: any, res: Response) => {
     }
 
     const { provider: providerName, config } = req.body;
+    const serverIp = process.env.SERVER_IP || '160.191.14.26';
     
     if (providerName === 'openprovider') {
       const username = config?.username || process.env.OPENPROVIDER_USERNAME;
@@ -185,7 +186,6 @@ adminRouter.post('/domain/test-connection', async (req: any, res: Response) => {
         : process.env.OPENPROVIDER_SANDBOX_MODE === 'true';
       const defaultHandle = config?.defaultHandle || process.env.OPENPROVIDER_DEFAULT_HANDLE || '';
 
-      const serverIp = process.env.SERVER_IP || '160.191.14.26';
       if (!username || !password) {
         return res.json({ success: false, code: 'NOT_CONFIGURED', message: 'Openprovider credentials are missing. Please enter your Username and Password.', serverIp });
       }
@@ -200,9 +200,21 @@ adminRouter.post('/domain/test-connection', async (req: any, res: Response) => {
       }
     }
 
-    return res.json({ success: false, code: 'UNKNOWN_PROVIDER', message: 'Unknown provider specified' });
+    // Custom or additional domain registrar APIs (ResellerClub, Namecheap, ConnectReseller, Generic REST)
+    const { CustomDomainProvider } = await import('../providers/domain/CustomDomainProvider.js');
+    const customProvider = new CustomDomainProvider({
+      name: config?.name || providerName?.toUpperCase() || 'Custom Registrar API',
+      driver: (config?.driver || providerName || 'generic_rest') as any,
+      username: config?.username || config?.apiKey || '',
+      apiKey: config?.apiKey || config?.password || '',
+      baseUrl: config?.baseUrl || '',
+      isSandbox: config?.isSandbox === true
+    });
+
+    const testRes = await customProvider.testConnection();
+    return res.json({ ...testRes, serverIp });
   } catch (error: any) {
-    return res.status(500).json({ success: false, code: 'UNKNOWN_ERROR', message: 'Connection test failed' });
+    return res.status(500).json({ success: false, code: 'UNKNOWN_ERROR', message: 'Connection test failed: ' + error.message });
   }
 });
 

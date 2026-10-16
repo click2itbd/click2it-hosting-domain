@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { BtclSettingsCard } from './BtclSettingsCard';
+import { CustomDomainRegistrarsSection } from './CustomDomainRegistrarsSection';
 import { apiPost } from '../../../services/apiClient';
 
 const REGISTRAR_DOC_PATH = ['hosting_config', 'registrar_settings'];
@@ -353,6 +354,9 @@ export function DomainRegistrarsModule() {
 
           {/* BTCL (.bd Registry) Settings */}
           <BtclSettingsCard />
+
+          {/* Custom & Additional Domain Registrar APIs */}
+          <CustomDomainRegistrarsSection />
 
         </div>
       </div>

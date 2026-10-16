@@ -4,7 +4,27 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
-import firebaseConfig from '../firebase-applet-config.json';
+
+let firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyKeyForBuildAndProductionFallback",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277.appspot.com",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "593966307838",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:593966307838:web:click2itbd",
+  firestoreDatabaseId: "(default)"
+};
+
+try {
+  // Dynamically load firebase-applet-config.json if present
+  const modules = import.meta.glob('../firebase-applet-config.json', { eager: true });
+  const configModule: any = Object.values(modules)[0];
+  if (configModule?.default) {
+    firebaseConfig = { ...firebaseConfig, ...configModule.default };
+  }
+} catch (e) {
+  // Fall back to environment config
+}
 
 const app = initializeApp(firebaseConfig);
 
@@ -34,25 +54,13 @@ const isDev = isBrowser && (window.location.hostname === 'localhost' || window.l
 const isRealSiteKey = siteKey && typeof siteKey === 'string' && !siteKey.includes('YOUR_') && !siteKey.includes('RECAPTCHA');
 
 if (isBrowser && isRealSiteKey) {
-  if (isDev) {
-    try {
-      (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-      initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(siteKey),
-        isTokenAutoRefreshEnabled: true,
-      });
-    } catch (e) {
-      console.warn('App Check init skipped:', e);
-    }
-  } else {
-    try {
-      initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(siteKey),
-        isTokenAutoRefreshEnabled: true,
-      });
-    } catch (e) {
-      console.warn('App Check init skipped:', e);
-    }
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (e) {
+    console.warn('App Check init skipped:', e);
   }
 }
 
