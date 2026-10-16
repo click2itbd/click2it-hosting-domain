@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { MyServicesTab } from '../components/MyServicesTab';
 import { CustomerTicketsTab } from '../components/CustomerTicketsTab';
-import { SavedBuildsTab } from '../components/SavedBuildsTab';
 import { useAuth } from '../context/AuthContext';
 import { db, storage, auth } from '../firebase';
 import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
@@ -11,8 +10,7 @@ import { doc, getDoc, addDoc, updateDoc, setDoc, collection, query, where, order
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { compressImage } from '../lib/imageCompressor';
 import { toast } from 'react-hot-toast';
-import { User, Mail, Globe, Phone, MapPin, Building, Save, Camera, Loader2, ShoppingBag, Heart, Package, Clock, CheckCircle2, XCircle, ChevronRight, Tag, MessageSquare, Image as ImageIcon, CalendarPlus, Lock, Shield, RotateCcw, Truck, Box, Check, Star, Plus, Bell, Wallet } from 'lucide-react';
-import { PriceAlertsTab } from '../components/PriceAlertsTab';
+import { User, Mail, Globe, Phone, MapPin, Building, Save, Camera, Loader2, ShoppingBag, Package, Clock, CheckCircle2, XCircle, ChevronRight, Tag, MessageSquare, Image as ImageIcon, Lock, Shield, Truck, Box, Check, Star, Plus, Wallet } from 'lucide-react';
 import { CustomerWalletTab } from '../components/CustomerWalletTab';
 import { SEO } from '../components/SEO';
 import { formatCurrency } from '../lib/utils';
@@ -21,8 +19,6 @@ import { useSettings } from '../context/SettingsContext';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { getSiteContext } from '../hooks/useSiteContext';
-import { useWishlist } from '../context/WishlistContext';
-import { ProductCard } from '../components/ProductCard';
 
 interface UserProfileData {
   name: string;
@@ -37,7 +33,6 @@ interface UserProfileData {
 
 export const Profile: React.FC = () => {
   const { user } = useAuth();
-  const { wishlist } = useWishlist();
   const { settings } = useSettings();
   const { addToCart } = useCart();
   const navigate = useNavigate();
@@ -50,13 +45,8 @@ export const Profile: React.FC = () => {
   const [offers, setOffers] = useState<any[]>([]);
   const [offersLoading, setOffersLoading] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [preBooks, setPreBooks] = useState<any[]>([]);
-  const [preBooksLoading, setPreBooksLoading] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [returnModalOrderId, setReturnModalOrderId] = useState<string | null>(null);
-  const [returnReason, setReturnReason] = useState('');
-  const siteContext = getSiteContext();
-  const isHosting = siteContext === 'hosting';
+  const isHosting = true;
 
   const [formData, setFormData] = useState<UserProfileData>({
     name: '',
@@ -143,24 +133,7 @@ export const Profile: React.FC = () => {
   }, [activeTab, user]);
 
   
-  useEffect(() => {
-    if (!user) return;
-    const fetchPreBooks = async () => {
-      setPreBooksLoading(true);
-      try {
-        const q = query(collection(db, 'pre_bookings'), where('email', '==', user.email));
-        const snap = await getDocs(q);
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-        data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        setPreBooks(data);
-      } catch (err) {
-        console.error('Error fetching prebooks:', err);
-      } finally {
-        setPreBooksLoading(false);
-      }
-    };
-    fetchPreBooks();
-  }, [user]);
+
 
   // Fetch all orders for the user unconditionally to show stats
   useEffect(() => {
@@ -347,34 +320,13 @@ export const Profile: React.FC = () => {
                 {/* Nav Links */}
                 <div className="space-y-1">
                    {(() => {
-                     const ctx = getSiteContext();
-                     const isHostingContext = ctx === 'hosting';
-                     
-                     const baseTabs = [
-    { id: 'saved-builds', label: 'Saved PC Builds', icon: Save },
+                     const tabs = [
                        { id: 'profile', label: 'My Profile', icon: User },
-                       { id: 'orders', label: 'My Orders', icon: ShoppingBag },
-                     ];
-                     if (!isHostingContext) {
-                        baseTabs.push({ id: 'pre-orders', label: 'My Pre-Orders', icon: CalendarPlus });
-    // 'saved-builds' is in baseTabs already
-                        baseTabs.push({ id: 'wishlist', label: 'My Wishlist', icon: Heart });
-                        baseTabs.push({ id: 'price-alerts', label: 'Price Alerts', icon: Bell });
-                     }
-                     const hostingTabs = [
                        { id: 'wallet', label: 'My Wallet', icon: Wallet },
+                       { id: 'orders', label: 'My Invoices & Orders', icon: ShoppingBag },
                        { id: 'my_domains', label: 'My Services', icon: Globe },
                        { id: 'tickets', label: 'Support Tickets', icon: MessageSquare },
                        { id: 'offers', label: 'My Offers', icon: Tag },
-                     ];
-                     const tabs = isHostingContext ? [
-                       { id: 'profile', label: 'My Profile', icon: User },
-                       { id: 'wallet', label: 'My Wallet', icon: Wallet },
-                       { id: 'orders', label: 'My Orders', icon: ShoppingBag },
-                       ...hostingTabs.filter(t => t.id !== 'wallet')
-                     ] : [
-                       ...baseTabs,
-                       { id: 'wallet', label: 'My Wallet', icon: Wallet }
                      ];
 
                      return tabs.map(({ id, label, icon: Icon }) => (
@@ -383,11 +335,11 @@ export const Profile: React.FC = () => {
                          onClick={() => setActiveTab(id)}
                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                            activeTab === id
-                             ? (isHostingContext ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-600')
+                             ? 'bg-blue-50 text-blue-700'
                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                          }`}
                        >
-                         <Icon size={18} className={activeTab === id ? (isHostingContext ? 'text-blue-600' : 'text-orange-500') : 'text-gray-400'} /> 
+                         <Icon size={18} className={activeTab === id ? 'text-blue-600' : 'text-gray-400'} /> 
                          {label}
                        </button>
                      ));
@@ -711,89 +663,17 @@ export const Profile: React.FC = () => {
                                     </div>
                                  </div>
 
-                                 <div className="flex flex-wrap gap-3 justify-end">
-                                   <button className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 flex items-center gap-2">
-                                     <CheckCircle2 size={16} /> Download Invoice
-                                   </button>
-                                   {status === 'delivered' && !isHosting && (
-                                     <button onClick={() => setReturnModalOrderId(order.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-100 flex items-center gap-2">
-                                       <RotateCcw size={16} /> Request Return
-                                     </button>
-                                   )}
-                                 </div>
+                                  <div className="flex flex-wrap gap-3 justify-end">
+                                    <button className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 flex items-center gap-2">
+                                      <CheckCircle2 size={16} /> Download Invoice
+                                    </button>
+                                  </div>
                               </div>
                             )}
                           </div>
                         );
                       })
                    )}
-                </div>
-             )}
-
-             {/* PRE-ORDERS TAB */}
-             {activeTab === 'pre-orders' && !isHosting && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                    <CalendarPlus className="text-orange-500" size={24} /> My Pre-Orders
-                  </h2>
-                  {preBooksLoading ? (
-                    <div className="flex justify-center py-12"><Loader2 size={32} className="animate-spin text-orange-500" /></div>
-                  ) : preBooks.length > 0 ? (
-                    <div className="space-y-4">
-                      {preBooks.map(pb => (
-                        <div key={pb.id} className="border border-gray-100 rounded-xl p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-                           <div className="flex gap-4 items-center">
-                              <div className="w-16 h-16 bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                 <img src={pb.productImage || 'https://via.placeholder.com/64'} alt="product" className="w-full h-full object-contain mix-blend-multiply" />
-                              </div>
-                              <div>
-                                 <h4 className="font-bold text-gray-900 text-sm">{pb.productName}</h4>
-                                 <p className="text-xs text-gray-500 mt-1">Requested on: {new Date(pb.createdAt?.seconds ? pb.createdAt.seconds * 1000 : pb.createdAt).toLocaleDateString()}</p>
-                                 <p className="text-xs text-gray-500">Phone: {pb.phone}</p>
-                              </div>
-                           </div>
-                           <div className="flex flex-col items-end">
-                              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                                pb.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                pb.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                'bg-yellow-100 text-yellow-700'
-                              }`}>
-                                {pb.status || 'Pending'}
-                              </span>
-                              {pb.status === 'approved' && <span className="text-xs text-green-600 font-semibold mt-2 text-right">We will contact you soon for delivery.</span>}
-                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                      <CalendarPlus size={48} className="text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">No pre-orders yet</h3>
-                      <p className="text-gray-500">You haven't requested any pre-books.</p>
-                    </div>
-                  )}
-                </div>
-             )}
-
-             {/* WISHLIST TAB */}
-             {activeTab === 'wishlist' && !isHosting && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                    <Heart className="text-orange-500 fill-orange-500" size={24} /> My Wishlist
-                  </h2>
-                  {wishlist.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {wishlist.map(product => (
-                        <ProductCard key={product.id} product={product} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-16 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                      <Heart size={48} className="text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">Your wishlist is empty</h3>
-                      <p className="text-gray-500">Save items you love to view or buy them later.</p>
-                    </div>
-                  )}
                 </div>
              )}
 
@@ -830,67 +710,10 @@ export const Profile: React.FC = () => {
                   )}
                 </div>
              )}
-
-             {/* Price Alerts Tab */}
-             {activeTab === 'price-alerts' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
-                  <PriceAlertsTab />
-                </div>
-             )}
              
           </div>
         </div>
       </div>
-
-      {/* Return Modal */}
-      {returnModalOrderId && (
-        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-up">
-            <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <RotateCcw className="text-red-500" /> Request Return (RMA)
-            </h3>
-            <p className="text-sm text-gray-500 mb-6">Please tell us why you want to return this order.</p>
-            
-            <textarea
-              className="w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 min-h-[120px] mb-6"
-              placeholder="E.g. The product was damaged upon arrival..."
-              value={returnReason}
-              onChange={e => setReturnReason(e.target.value)}
-            />
-            
-            <div className="flex gap-3 justify-end">
-              <button 
-                onClick={() => setReturnModalOrderId(null)}
-                className="px-5 py-2.5 text-gray-600 font-bold hover:bg-gray-100 rounded-xl"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={async () => {
-                   if(!returnReason.trim()) return toast.error('Please provide a reason');
-                   try {
-                     await addDoc(collection(db, 'returns'), {
-                       orderId: returnModalOrderId,
-                       userId: user?.uid,
-                       reason: returnReason,
-                       status: 'pending',
-                       createdAt: new Date().toISOString()
-                     });
-                     toast.success('Return request submitted successfully!');
-                     setReturnModalOrderId(null);
-                     setReturnReason('');
-                   } catch (e) {
-                     toast.error('Failed to submit return request');
-                   }
-                }}
-                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl"
-              >
-                Submit Request
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Address Modal */}
       {showAddressModal && (

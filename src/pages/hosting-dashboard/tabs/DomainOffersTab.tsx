@@ -1,5 +1,5 @@
 import React from 'react';
-import DomainOffers from '../../admin/tabs/hosting/DomainOffers';
+import DomainOffers from '../admin/DomainOffers';
 
 export function DomainOffersTab({ state }) {
   if (state.activeTab !== 'domain-offers') return null;

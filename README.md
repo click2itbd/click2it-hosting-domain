@@ -1,30 +1,45 @@
-1: <div align="center">
-2: <img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-3: </div>
-4: 
-5: # Run and deploy your AI Studio app
-6: 
-7: This contains everything you need to run your app locally.
-8: 
-9: View your app in AI Studio: https://ai.studio/apps/422fbad2-d827-4e69-8599-aed85390d277
-10: 
-11: ## Run Locally
-12: 
-13: **Prerequisites:**  Node.js
-14: 
-15: 
-16: 1. Install dependencies:
-17:    `npm install`
-18: 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-19: 3. Run the app:
-20:    `npm run dev`
-21: 
-22: ## ⚠️ Before deploying to production
-23: 
-24: Run the deploy safety check to ensure `VITE_DEV_BYPASS` is not enabled:
-25: 
-26: ```bash
-27: npm run predeploy:check
-28: ```
-29: 
-30: If `VITE_DEV_BYPASS=true` is set in `.env.local`, the build will fail. This flag bypasses admin authentication during local development and must never be active in production, otherwise the admin panel will be publicly accessible.
+# Click2IT - Domain & Hosting Platform
+
+A high-performance Web Hosting, Cloud VPS, and Domain Registration & Management platform.
+
+## Features
+- **Shared Hosting & Cloud VPS:** Automated package selection, dynamic features, billing cycles, and comparison.
+- **Domain Services:**
+  - Real-time Domain Search & Bulk Search
+  - Openprovider & BTCL (.bd) integration for registrations and transfers
+  - Domain Locking, Security, and Nameserver Management
+  - Automated & Manual Domain Renewals
+- **Billing & Automation:**
+  - Automated cPanel / WHM account provisioning & suspension
+  - Openprovider automated registration and fulfillment
+  - Integrated Manual & Gateway Payments (bKash, Nagad, SSLCommerz)
+  - PDF Invoice generation and automated email notifications
+- **Client Area:**
+  - Manage active hosting accounts & domain portfolios
+  - Client deposit wallet & transaction histories
+  - Support ticket management with live status
+- **Admin Dashboard:**
+  - Comprehensive control over servers, plans, pricing tiers, applications, DNS, tickets, and user balances.
+
+## Development Setup
+
+1. **Install Dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Environment Configuration:**
+   Configure your `.env` (backend) and `.env.local` (frontend) with your Firebase credentials, WHM API token, Openprovider credentials, and email SMTP keys as demonstrated in `.env.example`.
+
+3. **Run Dev Environment:**
+   ```bash
+   npm run dev
+   ```
+   - Frontend runs on `http://localhost:3001`
+   - Backend API runs on `http://localhost:4001`
+
+4. **Production Build & Verification:**
+   ```bash
+   npm run lint
+   npm run build
+   ```

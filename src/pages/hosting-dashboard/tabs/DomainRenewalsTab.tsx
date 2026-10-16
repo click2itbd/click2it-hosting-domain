@@ -1,5 +1,5 @@
 import React from 'react';
-import DomainRenewals from '../../admin/tabs/hosting/DomainRenewals';
+import DomainRenewals from '../admin/DomainRenewals';
 
 export function DomainRenewalsTab({ state }) {
   if (state.activeTab !== 'domain-renewals') return null;

@@ -697,7 +697,7 @@ export const generatePDF = async (
   });
 
   // Page numbering in a corner (Bottom-Right corner) for multi-page documents
-  const totalPages = doc.internal.getNumberOfPages();
+  const totalPages = ((doc.internal as any).getNumberOfPages ? (doc.internal as any).getNumberOfPages() : (doc as any).getNumberOfPages()) || 1;
   if (totalPages > 1) {
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);

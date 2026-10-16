@@ -6,9 +6,9 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 import { formatCurrency, cn } from '../../../lib/utils';
-import SupportTickets from '../../admin/tabs/hosting/SupportTickets';
-import HostingPlans from '../../admin/tabs/hosting/HostingPlans';
-import { DomainPricingManager } from '../../../components/admin/hosting/DomainPricingManager';
+import SupportTickets from '../admin/SupportTickets';
+import HostingPlans from '../admin/HostingPlans';
+import { DomainPricingManager } from '../admin/DomainPricingManager';
 import {
   PagesEditorModule, CategoriesModule, ExtraServicesModule, 
   AddonPackagesModule, PromoCodesModule, ServersModule, DomainRegistrarsModule,

@@ -1,5 +1,5 @@
 import React from 'react';
-import ActiveHostingAccounts from '../../admin/tabs/hosting/ActiveHostingAccounts';
+import ActiveHostingAccounts from '../admin/ActiveHostingAccounts';
 
 export function ServerAccountsTab({ state }) {
   if (state.activeTab !== 'server-accounts') return null;

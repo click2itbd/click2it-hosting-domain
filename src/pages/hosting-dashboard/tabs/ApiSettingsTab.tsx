@@ -1,5 +1,5 @@
 import React from 'react';
-import { HostingApiSettings } from '../../../components/admin/hosting/HostingApiSettings';
+import { HostingApiSettings } from '../admin/HostingApiSettings';
 
 export function ApiSettingsTab({ state }) {
   if (state.activeTab !== 'api-settings') return null;

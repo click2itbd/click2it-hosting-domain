@@ -6,7 +6,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell 
 } from 'recharts';
 import { formatCurrency, cn } from '../../../lib/utils';
-import SupportTickets from '../../admin/tabs/hosting/SupportTickets';
+import SupportTickets from '../admin/SupportTickets';
 import {
   PagesEditorModule, CategoriesModule, PlanPackagesModule, ExtraServicesModule, 
   AddonPackagesModule, PromoCodesModule, ServersModule, DomainPricingModule, DomainRegistrarsModule
