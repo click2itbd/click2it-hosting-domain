@@ -1,0 +1,74 @@
+import { getAdminAuth, isUserAdmin } from '../firebase/admin.js';
+function decodeDevToken(idToken) {
+    try {
+        const payload = idToken.split('.')[1];
+        const decoded = Buffer.from(payload, 'base64').toString('utf8');
+        return JSON.parse(decoded);
+    }
+    catch {
+        return null;
+    }
+}
+export async function requireFirebaseAuth(req, res, next) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Missing or invalid authorization token' });
+    }
+    const idToken = authHeader.split('Bearer ')[1];
+    try {
+        const adminAuth = getAdminAuth();
+        if (adminAuth) {
+            const decodedToken = await adminAuth.verifyIdToken(idToken);
+            req.user = decodedToken;
+            return next();
+        }
+    }
+    catch (error) {
+        console.warn('[requireFirebaseAuth] token verification error:', error?.message || error);
+    }
+    // Fallback to dev JWT decode if present
+    const decoded = decodeDevToken(idToken);
+    if (decoded?.user_id || decoded?.sub || decoded?.uid) {
+        req.user = { uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
+        return next();
+    }
+    return res.status(401).json({ error: 'Invalid or expired token' });
+}
+export async function requireAdmin(req, res, next) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Missing or invalid authorization token' });
+    }
+    const idToken = authHeader.split('Bearer ')[1];
+    let uid = '';
+    let email = '';
+    try {
+        const adminAuth = getAdminAuth();
+        if (adminAuth) {
+            const decodedToken = await adminAuth.verifyIdToken(idToken);
+            req.user = decodedToken;
+            uid = decodedToken.uid;
+            email = decodedToken.email || '';
+        }
+    }
+    catch (error) {
+        console.warn('[requireAdmin] token verification error:', error?.message || error);
+    }
+    if (!uid) {
+        const decoded = decodeDevToken(idToken);
+        if (decoded?.user_id || decoded?.sub || decoded?.uid) {
+            req.user = { uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
+            uid = decoded.user_id || decoded.sub || decoded.uid;
+            email = decoded.email || '';
+        }
+    }
+    if (!uid) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    // Verifies user role field from users collection via isUserAdmin
+    const isAdmin = await isUserAdmin(uid, email).catch(() => false);
+    if (isAdmin) {
+        return next();
+    }
+    return res.status(403).json({ error: 'Admin access required' });
+}
