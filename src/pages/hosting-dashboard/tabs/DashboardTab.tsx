@@ -15,6 +15,7 @@ import {
 import { apiGet } from '../../../services/apiClient';
 import { Wallet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { SystemConnectionStatus } from '../components/SystemConnectionStatus';
 
 const ApiBalanceWidget = () => {
   const [balance, setBalance] = React.useState<number | null>(null);
@@ -84,9 +85,12 @@ export function DashboardTab({ state }) {
     <>
       {/*  */}
       {activeTab === 'dashboard' && (
-              <div className="space-y-6 animate-in fade-in duration-500">
-                {/* Top Modern Cards */}
-                <ApiBalanceWidget />
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Provider Connection Status Board */}
+          <SystemConnectionStatus onNavigateTab={setActiveTab} />
+
+          {/* Top Modern Cards */}
+          <ApiBalanceWidget />
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {[
                     { title: 'Pending Domains', count: pendingDomainCount, icon: Globe, color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-200', onClick: () => setActiveTab('domain-list') },

@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { getAdminDb, isUserAdmin } from '../firebase/admin.js';
+import { getAdminDb, isUserAdmin, getAdminAuth } from '../firebase/admin.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { sendEmail } from '../services/email.js';
 import { fulfillOrder } from '../services/fulfillment.js';
@@ -101,59 +101,54 @@ customersRouter.post('/deposit-request', requireFirebaseAuth, async (req: any, r
     const depositData = {
       id: depositRef.id,
       userId,
-      customerEmail: req.user.email || userData?.email || '',
-      customerName: userData?.displayName || userData?.name || 'Customer',
+      customerEmail: req.user.email || userData.email || '',
+      customerName: userData.displayName || userData.name || 'Customer',
       amount: numAmount,
-      paymentMethod: paymentMethod || 'manual_bkash',
+      paymentMethod: paymentMethod || 'bKash',
       transactionId: transactionId.trim(),
       notes: notes || '',
-      status: 'pending', // pending, approved, rejected
+      status: 'pending',
       createdAt: now,
       updatedAt: now
     };
 
     await depositRef.set(depositData);
 
-    // Send email notification to customer
-    if (depositData.customerEmail) {
-      await sendEmail({
-        to: depositData.customerEmail,
-        subject: `Deposit Request Received - ৳${numAmount}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
-            <h2 style="color: #2563eb;">Funds Deposit Request Submitted</h2>
-            <p>Dear ${depositData.customerName},</p>
-            <p>We have received your wallet deposit request of <strong>৳${numAmount}</strong> via <strong>${paymentMethod.toUpperCase()}</strong>.</p>
-            <p><strong>Transaction ID:</strong> ${depositData.transactionId}</p>
-            <p>Our billing team will verify the payment and credit your account balance shortly.</p>
-            <p style="margin-top: 20px; color: #64748b; text-align: center;">Thank you for choosing Click2IT!</p>
-          </div>
-        `,
-        customerEmail: depositData.customerEmail,
-        category: 'payment'
-      }).catch(e => console.warn('Deposit email failed:', e));
-    }
+    // Send admin alert email if configured
+    sendEmail({
+      to: process.env.ADMIN_EMAIL || 'click2itbd@gmail.com',
+      subject: `New Deposit Request: ৳${numAmount.toLocaleString()} (${paymentMethod})`,
+      html: `
+        <h3>New Deposit Request Received</h3>
+        <p><strong>Customer:</strong> ${depositData.customerName} (${depositData.customerEmail})</p>
+        <p><strong>Amount:</strong> ৳${numAmount.toLocaleString()}</p>
+        <p><strong>Method:</strong> ${paymentMethod}</p>
+        <p><strong>TrxID:</strong> ${transactionId}</p>
+        <p>Please review and verify in Admin Dashboard.</p>
+      `,
+      category: 'payment'
+    }).catch(e => console.warn('Deposit alert email failed:', e));
 
     return res.json({
       success: true,
-      message: 'Deposit request submitted successfully. It will be credited upon verification.',
+      message: 'Deposit request submitted successfully! Funds will be added after admin verification.',
       deposit: depositData
     });
   } catch (error: any) {
     console.error('Failed to submit deposit request:', error);
-    return res.status(500).json({ error: error.message || 'Failed to submit deposit request' });
+    return res.status(500).json({ error: error.message || 'Failed to submit deposit request.' });
   }
 });
 
 /**
  * POST /api/customers/pay-order
- * Pay for an order (Domain registration / renewal / hosting) using Account Balance
+ * Direct Wallet Balance Payment for Order Fulfillment
  */
 customersRouter.post('/pay-order', requireFirebaseAuth, async (req: any, res: Response) => {
   const userId = req.user.uid;
   const { orderId } = req.body;
 
-  if (!orderId) {
+  if (!orderId || typeof orderId !== 'string') {
     return res.status(400).json({ error: 'Order ID is required.' });
   }
 
@@ -167,20 +162,21 @@ customersRouter.post('/pay-order', requireFirebaseAuth, async (req: any, res: Re
     }
 
     const orderData: any = orderSnap.data();
-    if (orderData.userId && orderData.userId !== userId) {
-      return res.status(403).json({ error: 'You do not have permission for this order.' });
+
+    if (orderData.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized to pay for this order.' });
     }
 
-    if (orderData.paymentStatus === 'verified' || orderData.status === 'completed') {
-      return res.status(400).json({ error: 'This order has already been paid and completed.' });
+    if (orderData.paymentStatus === 'verified' || orderData.paymentStatus === 'paid') {
+      return res.status(400).json({ error: 'Order is already paid.' });
     }
 
     const totalAmount = Number(orderData.total || orderData.totalBdt || 0);
-    if (totalAmount <= 0) {
-      return res.status(400).json({ error: 'Invalid order amount.' });
+    if (!totalAmount || totalAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid order total amount.' });
     }
 
-    // Check customer balance in Firestore
+    // Check user balance
     const userRef = db.collection('users').doc(userId);
     const userSnap = await userRef.get();
     const userData: any = userSnap.exists ? userSnap.data() : {};
@@ -188,11 +184,11 @@ customersRouter.post('/pay-order', requireFirebaseAuth, async (req: any, res: Re
 
     if (currentBalance < totalAmount) {
       return res.status(400).json({
-        error: `Insufficient account balance. Available: ৳${currentBalance.toLocaleString()}, Required: ৳${totalAmount.toLocaleString()}. Please add funds first.`
+        error: `Insufficient wallet balance. Order total: ৳${totalAmount.toLocaleString()}, Available: ৳${currentBalance.toLocaleString()}. Please top up your wallet balance.`
       });
     }
 
-    // Deduct balance and record transaction
+    // Deduct balance
     const newBalance = currentBalance - totalAmount;
     const now = new Date().toISOString();
 
@@ -431,8 +427,8 @@ customersRouter.post('/renew-domain', requireFirebaseAuth, async (req: any, res:
 // ==========================================
 
 /**
- * GET /api/admin/customers
- * Get comprehensive list of all customers, including balances, domain counts, hosting counts
+ * GET /api/admin/customers or /api/customers/admin/list
+ * Get comprehensive list of all customers
  */
 customersRouter.get('/admin/list', requireFirebaseAuth, async (req: any, res: Response) => {
   const adminUid = req.user?.uid;
@@ -478,14 +474,30 @@ customersRouter.get('/admin/list', requireFirebaseAuth, async (req: any, res: Re
     const customers = usersSnap.docs.map((doc: any) => {
       const data = doc.data();
       const uid = doc.id;
+      // Generate consistent numeric Customer ID (e.g. 29398326)
+      const numericId = data.customerId || Math.abs(uid.split('').reduce((a: number, b: string) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 90000000 + 10000000;
       return {
         id: uid,
         uid,
+        customerId: String(numericId),
         email: data.email || 'N/A',
         name: data.displayName || data.name || data.email || 'Customer',
-        phone: data.phone || data.phoneNumber || 'N/A',
-        role: data.role || 'customer',
+        displayName: data.displayName || data.name || 'Customer',
         status: data.status || 'active',
+        statusDescription: data.statusDescription || '',
+        pin: data.pin || String(Math.floor(1000 + Math.random() * 9000)),
+        company: data.company || '',
+        address1: data.address1 || '',
+        address2: data.address2 || '',
+        address3: data.address3 || '',
+        city: data.city || 'Chattogram',
+        zip: data.zip || '4216',
+        state: data.state || data.region || 'Chittagong',
+        country: data.country || 'Bangladesh',
+        phone: data.phone || data.phoneNumber || '',
+        mobile: data.mobile || data.phone || data.phoneNumber || '',
+        language: data.language || 'English',
+        role: data.role || 'customer',
         balance: typeof data.balance === 'number' ? data.balance : 0,
         createdAt: data.createdAt || null,
         domainsCount: domainsByUser[uid] || 0,
@@ -507,8 +519,277 @@ customersRouter.get('/admin/list', requireFirebaseAuth, async (req: any, res: Re
 });
 
 /**
- * POST /api/admin/customers/:userId/balance or /api/customers/admin/balance or /api/customers/admin/add-funds
- * Admin Add or Deduct Balance / Funds to Customer Account
+ * GET /api/admin/customers/:userId/details
+ * Fetch complete WHMCS-style Customer Profile details, Domains, Hosting Accounts, and Transactions
+ */
+customersRouter.get('/admin/:userId/details', requireFirebaseAuth, async (req: any, res: Response) => {
+  const adminUid = req.user?.uid;
+  const { userId } = req.params;
+
+  const isAdmin = await isUserAdmin(adminUid, req.user?.email).catch(() => false);
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Admin authorization required.' });
+  }
+
+  try {
+    const db = getAdminDb();
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'Customer user account not found.' });
+    }
+
+    const userData: any = userDoc.data();
+    const numericId = userData.customerId || Math.abs(userId.split('').reduce((a: number, b: string) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 90000000 + 10000000;
+
+    // Fetch user domains (domainOrders & bd_domain_applications)
+    const domainsSnap = await db.collection('domainOrders').where('userId', '==', userId).limit(50).get().catch(() => ({ docs: [] }));
+    const bdDomainsSnap = await db.collection('bd_domain_applications').where('userId', '==', userId).limit(50).get().catch(() => ({ docs: [] }));
+
+    const domainsList = [
+      ...domainsSnap.docs.map((d: any) => ({ id: d.id, source: 'openprovider', ...d.data() })),
+      ...bdDomainsSnap.docs.map((d: any) => ({ id: d.id, source: 'btcl_bd', ...d.data() }))
+    ];
+
+    // Fetch hosting accounts
+    const hostingSnap = await db.collection('hostingAccounts').where('userId', '==', userId).limit(50).get().catch(() => ({ docs: [] }));
+    const hostingList = hostingSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+    // Fetch wallet transactions
+    const txSnap = await db.collection('wallet_transactions').where('userId', '==', userId).orderBy('createdAt', 'desc').limit(50).get().catch(() => ({ docs: [] }));
+    const transactionsList = txSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+    // Fetch user orders / invoices
+    const ordersSnap = await db.collection('orders').where('userId', '==', userId).orderBy('createdAt', 'desc').limit(50).get().catch(() => ({ docs: [] }));
+    const ordersList = ordersSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+    const totalReceipts = transactionsList
+      .filter((t: any) => t.type === 'credit')
+      .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+
+    const customerDetails = {
+      id: userId,
+      uid: userId,
+      customerId: String(numericId),
+      name: userData.displayName || userData.name || userData.email || 'Customer',
+      displayName: userData.displayName || userData.name || 'Customer',
+      email: userData.email || '',
+      status: userData.status || 'active',
+      statusDescription: userData.statusDescription || 'Active Account',
+      pin: userData.pin || String(Math.floor(1000 + Math.random() * 9000)),
+      company: userData.company || '',
+      address1: userData.address1 || '',
+      address2: userData.address2 || '',
+      address3: userData.address3 || '',
+      city: userData.city || 'Chattogram',
+      zip: userData.zip || '4216',
+      state: userData.state || userData.region || 'Chittagong',
+      country: userData.country || 'Bangladesh',
+      phone: userData.phone || userData.phoneNumber || '',
+      mobile: userData.mobile || userData.phone || userData.phoneNumber || '',
+      language: userData.language || 'English',
+      balance: typeof userData.balance === 'number' ? userData.balance : 0,
+      totalReceipts,
+      createdAt: userData.createdAt || new Date().toISOString(),
+      domains: domainsList,
+      hosting: hostingList,
+      transactions: transactionsList,
+      orders: ordersList
+    };
+
+    return res.json({
+      success: true,
+      customer: customerDetails
+    });
+
+  } catch (error: any) {
+    console.error('Failed to get customer details:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch customer details.' });
+  }
+});
+
+/**
+ * POST /api/admin/customers/:userId/update
+ * Admin Edit / Modify Customer Profile Information
+ */
+customersRouter.post('/admin/:userId/update', requireFirebaseAuth, async (req: any, res: Response) => {
+  const adminUid = req.user?.uid;
+  const { userId } = req.params;
+  const {
+    name, displayName, phone, mobile, company, address1, address2, address3,
+    city, zip, state, country, pin, language, status, statusDescription
+  } = req.body;
+
+  const isAdmin = await isUserAdmin(adminUid, req.user?.email).catch(() => false);
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Admin authorization required.' });
+  }
+
+  try {
+    const db = getAdminDb();
+    const userRef = db.collection('users').doc(userId);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      return res.status(404).json({ error: 'Customer user document not found.' });
+    }
+
+    const now = new Date().toISOString();
+    const updateData: any = {
+      updatedAt: now
+    };
+
+    if (name) updateData.name = name;
+    if (displayName || name) updateData.displayName = displayName || name;
+    if (phone) updateData.phone = phone;
+    if (mobile) updateData.mobile = mobile;
+    if (company !== undefined) updateData.company = company;
+    if (address1 !== undefined) updateData.address1 = address1;
+    if (address2 !== undefined) updateData.address2 = address2;
+    if (address3 !== undefined) updateData.address3 = address3;
+    if (city !== undefined) updateData.city = city;
+    if (zip !== undefined) updateData.zip = zip;
+    if (state !== undefined) updateData.state = state;
+    if (country !== undefined) updateData.country = country;
+    if (pin !== undefined) updateData.pin = pin;
+    if (language !== undefined) updateData.language = language;
+    if (status) updateData.status = status;
+    if (statusDescription !== undefined) updateData.statusDescription = statusDescription;
+
+    await userRef.update(updateData);
+
+    return res.json({
+      success: true,
+      message: 'Customer profile updated successfully.',
+      updatedData: updateData
+    });
+  } catch (error: any) {
+    console.error('Failed to update customer profile:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update customer profile.' });
+  }
+});
+
+/**
+ * POST /api/admin/customers/:userId/status
+ * Admin Suspend / Unsuspend / Delete Customer
+ */
+customersRouter.post('/admin/:userId/status', requireFirebaseAuth, async (req: any, res: Response) => {
+  const adminUid = req.user?.uid;
+  const { userId } = req.params;
+  const { status, description } = req.body;
+
+  const isAdmin = await isUserAdmin(adminUid, req.user?.email).catch(() => false);
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Admin authorization required.' });
+  }
+
+  if (!['active', 'suspended', 'deleted'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be active, suspended, or deleted.' });
+  }
+
+  try {
+    const db = getAdminDb();
+    const userRef = db.collection('users').doc(userId);
+    const userSnap = await userRef.get();
+
+    if (!userSnap.exists) {
+      return res.status(404).json({ error: 'Customer user document not found.' });
+    }
+
+    const now = new Date().toISOString();
+    if (status === 'deleted') {
+      await userRef.delete();
+      return res.json({
+        success: true,
+        message: 'Customer account deleted successfully.'
+      });
+    }
+
+    await userRef.update({
+      status,
+      statusDescription: description || (status === 'suspended' ? 'Suspended by admin' : 'Active Account'),
+      updatedAt: now
+    });
+
+    return res.json({
+      success: true,
+      message: `Customer account status changed to ${status}.`
+    });
+  } catch (error: any) {
+    console.error('Failed to change customer status:', error);
+    return res.status(500).json({ error: error.message || 'Failed to change customer status.' });
+  }
+});
+
+/**
+ * POST /api/admin/customers/:userId/send-password-reset
+ * Trigger Password Reset Email to Customer
+ */
+customersRouter.post('/admin/:userId/send-password-reset', requireFirebaseAuth, async (req: any, res: Response) => {
+  const adminUid = req.user?.uid;
+  const { userId } = req.params;
+
+  const isAdmin = await isUserAdmin(adminUid, req.user?.email).catch(() => false);
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Admin authorization required.' });
+  }
+
+  try {
+    const db = getAdminDb();
+    const userSnap = await db.collection('users').doc(userId).get();
+    if (!userSnap.exists) {
+      return res.status(404).json({ error: 'Customer account not found.' });
+    }
+
+    const userData = userSnap.data() || {};
+    const email = userData.email;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Customer has no valid email address.' });
+    }
+
+    // Generate Firebase Auth Password Reset Link if Firebase Admin Auth is active
+    let resetLink = `https://click2it.bd/login?resetEmail=${encodeURIComponent(email)}`;
+    try {
+      const authSdk = getAdminAuth();
+      if (authSdk) {
+        resetLink = await authSdk.generatePasswordResetLink(email);
+      }
+    } catch (authErr) {
+      console.warn('Firebase Admin Auth password reset link generation skipped:', authErr);
+    }
+
+    await sendEmail({
+      to: email,
+      subject: 'Password Reset Request - Click2IT',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #2563eb;">Reset Your Password</h2>
+          <p>Dear ${userData.displayName || userData.name || 'Customer'},</p>
+          <p>An administrator has initiated a password reset for your Click2IT account.</p>
+          <p style="text-align: center; margin: 25px 0;">
+            <a href="${resetLink}" style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">Reset Password Now</a>
+          </p>
+          <p style="color: #64748b; font-size: 12px;">If you did not request this, please contact support immediately.</p>
+        </div>
+      `,
+      customerEmail: email,
+      category: 'system'
+    });
+
+    return res.json({
+      success: true,
+      message: `Password reset email sent successfully to ${email}.`
+    });
+
+  } catch (error: any) {
+    console.error('Failed to send password reset:', error);
+    return res.status(500).json({ error: error.message || 'Failed to send password reset.' });
+  }
+});
+
+/**
+ * POST /api/admin/customers/:userId/balance
+ * Admin Add or Deduct Balance
  */
 const handleAdminBalanceAdjust = async (req: any, res: Response) => {
   const adminUid = req.user?.uid;

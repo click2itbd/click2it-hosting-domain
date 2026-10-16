@@ -7,9 +7,23 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
-}, (firebaseConfig as any).firestoreDatabaseId);
+
+let firestoreInstance: any;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  }, (firebaseConfig as any).firestoreDatabaseId);
+} catch (err) {
+  console.warn('[Firebase] Persistent cache failed, falling back to standard Firestore:', err);
+  try {
+    firestoreInstance = initializeFirestore(app, {}, (firebaseConfig as any).firestoreDatabaseId);
+  } catch (err2) {
+    console.warn('[Firebase] Firestore fallback initialization:', err2);
+    firestoreInstance = initializeFirestore(app, {});
+  }
+}
+
+export const db = firestoreInstance;
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1');

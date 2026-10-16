@@ -26,12 +26,15 @@ export function createApp(): Express {
 
   app.use(
     helmet({
+      frameguard: false,
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
+          frameAncestors: ["*"],
           scriptSrc: [
             "'self'",
             "'unsafe-inline'",
+            "'unsafe-eval'",
             "https://apis.google.com",
             "https://www.google.com",
             "https://www.gstatic.com",
@@ -44,36 +47,27 @@ export function createApp(): Express {
           imgSrc: [
             "'self'",
             "data:",
-            "https://images.unsplash.com",
-            "https://placehold.co",
+            "blob:",
+            "https://*",
           ],
           connectSrc: [
             "'self'",
-            "https://api.openprovider.eu",
-            "https://api.cte.openprovider.eu",
-            "https://cln.cloudlinux.com",
-            "https://securetoken.googleapis.com",
-            "https://identitytoolkit.googleapis.com",
-            "https://firestore.googleapis.com",
-            "https://*.cloudfunctions.net",
-            "https://firebasestorage.googleapis.com",
-            "https://www.google.com",
-            "https://www.gstatic.com",
-            "https://content-firebaseappcheck.googleapis.com",
-            "https://firebaseappcheck.googleapis.com",
+            "https://*",
+            "wss://*",
+            "ws://*",
           ],
           fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
           objectSrc: ["'none'"],
           mediaSrc: ["'self'"],
           frameSrc: [
             "'self'",
-            "https://*.firebaseapp.com",
-            "https://*.google.com",
+            "https://*",
           ],
         },
       },
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: false,
+      crossOriginOpenerPolicy: false,
     }),
   );
 

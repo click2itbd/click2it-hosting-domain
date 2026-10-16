@@ -1,15 +1,7 @@
 import dns from 'node:dns';
 import { Agent, setGlobalDispatcher } from 'undici';
 
-// Configure public DNS resolvers to bypass faulty/timing-out local router DNS
-const resolver = new dns.promises.Resolver();
-try {
-  resolver.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
-} catch (e) {
-  console.warn('[NetworkDNS] Failed to set custom DNS servers:', e);
-}
-
-// Global Undici Agent with resilient DNS resolution
+// Optional custom DNS lookup with immediate fallback to OS default dns.lookup
 export const resilientAgent = new Agent({
   connect: {
     lookup: (hostname: string, options: any, callback: any) => {
@@ -17,23 +9,7 @@ export const resilientAgent = new Agent({
         callback = options;
         options = {};
       }
-      resolver.resolve4(hostname).then(
-        (addresses) => {
-          if (addresses && addresses.length > 0) {
-            if (options && options.all) {
-              callback(null, addresses.map(a => ({ address: a, family: 4 })));
-            } else {
-              callback(null, addresses[0], 4);
-            }
-          } else {
-            dns.lookup(hostname, options, callback);
-          }
-        },
-        () => {
-          // Fall back to OS lookup
-          dns.lookup(hostname, options, callback);
-        }
-      );
+      dns.lookup(hostname, options, callback);
     },
     timeout: 20000,
   },
@@ -41,5 +17,9 @@ export const resilientAgent = new Agent({
   bodyTimeout: 20000,
 });
 
-setGlobalDispatcher(resilientAgent);
-console.log('[NetworkDNS] Resilient DNS resolver initialized with 8.8.8.8 and 1.1.1.1');
+if (process.env.ENABLE_CUSTOM_DNS === 'true') {
+  setGlobalDispatcher(resilientAgent);
+  console.log('[NetworkDNS] Custom DNS dispatcher enabled');
+} else {
+  console.log('[NetworkDNS] Standard OS DNS lookup active');
+}

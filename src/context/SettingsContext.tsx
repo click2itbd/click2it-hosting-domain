@@ -65,6 +65,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setDoc(settingsRef, defaultSettings);
       }
       setLoading(false);
+    }, (err) => {
+      console.warn('[SettingsContext] Firestore settings fetch failed, using defaults:', err);
+      setLoading(false);
     });
 
     return unsubscribe;

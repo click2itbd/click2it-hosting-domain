@@ -5,6 +5,7 @@ import { OpenproviderDomainProvider } from '../providers/domain/OpenproviderDoma
 import { getCloudLinuxProvider } from '../providers/cloudlinux/CloudLinuxProvider.js';
 import { verifySmtpConnection } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
+import { getDomainProviderConfig } from '../services/domainProviderConfig.js';
 
 const adminRouter = Router();
 adminRouter.use(requireFirebaseAuth);
@@ -231,6 +232,251 @@ adminRouter.post('/email/test-connection', async (req: any, res: Response) => {
     return res.json(result);
   } catch (error: any) {
     return res.status(500).json({ success: false, code: 'UNKNOWN_ERROR', message: 'SMTP connection test failed' });
+  }
+});
+
+adminRouter.get('/connections-status', async (req: any, res: Response) => {
+  try {
+    const isAdmin = await isUserAdmin(req.user.uid);
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const targetService = req.query.service as string | undefined;
+
+    // 1. Backend Status Check
+    const checkBackend = async () => {
+      const start = Date.now();
+      return {
+        id: 'backend',
+        name: 'Backend API',
+        connected: true,
+        status: 'online' as const,
+        latencyMs: Date.now() - start,
+        code: 'OPERATIONAL',
+        message: 'Node/Express API runtime operational',
+        serverTime: new Date().toISOString(),
+        details: {
+          uptimeSeconds: Math.floor(process.uptime()),
+          nodeVersion: process.version,
+          environment: process.env.NODE_ENV || 'development',
+        },
+        lastChecked: new Date().toISOString(),
+      };
+    };
+
+    // 2. Openprovider Status Check
+    const checkOpenprovider = async () => {
+      const start = Date.now();
+      try {
+        const providerConfig = await getDomainProviderConfig();
+        const username = providerConfig.domainApiKey || process.env.OPENPROVIDER_USERNAME;
+        const password = providerConfig.openproviderPassword || process.env.OPENPROVIDER_PASSWORD;
+        const isSandbox = providerConfig.openproviderSandbox;
+        const defaultHandle = providerConfig.openproviderDefaultHandle || process.env.OPENPROVIDER_DEFAULT_HANDLE || '';
+        const serverIp = process.env.SERVER_IP || '160.191.14.26';
+
+        if (!username || !password) {
+          return {
+            id: 'openprovider',
+            name: 'Openprovider',
+            connected: false,
+            status: 'error' as const,
+            latencyMs: Date.now() - start,
+            code: 'NOT_CONFIGURED',
+            message: 'Openprovider credentials not configured in settings or environment',
+            details: {
+              isSandbox,
+              serverIp,
+              configured: false,
+            },
+            lastChecked: new Date().toISOString(),
+          };
+        }
+
+        const provider = new OpenproviderDomainProvider(username, password, isSandbox, defaultHandle);
+        const testRes = await provider.testConnection();
+        const isSuccess = !!testRes.success;
+
+        return {
+          id: 'openprovider',
+          name: 'Openprovider',
+          connected: isSuccess,
+          status: isSuccess ? ('online' as const) : ('error' as const),
+          latencyMs: Date.now() - start,
+          code: testRes.code || (isSuccess ? 'CONNECTED' : 'FAILED'),
+          message: testRes.message || (isSuccess ? 'Openprovider API connected and verified' : 'Connection failed'),
+          details: {
+            isSandbox,
+            serverIp: testRes.serverIp || serverIp,
+            configured: true,
+            balance: (testRes as any).balance !== undefined ? (testRes as any).balance : undefined,
+          },
+          lastChecked: new Date().toISOString(),
+        };
+      } catch (err: any) {
+        return {
+          id: 'openprovider',
+          name: 'Openprovider',
+          connected: false,
+          status: 'error' as const,
+          latencyMs: Date.now() - start,
+          code: 'CONNECTION_ERROR',
+          message: err?.message || 'Failed to reach Openprovider API',
+          details: { configured: true },
+          lastChecked: new Date().toISOString(),
+        };
+      }
+    };
+
+    // 3. WHM / cPanel Status Check
+    const checkWhm = async () => {
+      const start = Date.now();
+      try {
+        const dbConfig = await getAdminDocument('settings', 'hostingApiConfig');
+        const hostingUrl = dbConfig.data?.hostingApiUrl || process.env.WHM_URL || process.env.WHM_API_URL || '';
+        const whmToken = (process.env.WHM_API_TOKEN || process.env.WHM_API_KEY || '').trim();
+        const whmUser = (process.env.WHM_USERNAME || 'root').trim();
+
+        if (!hostingUrl || !whmToken) {
+          return {
+            id: 'whm',
+            name: 'WHM / cPanel',
+            connected: false,
+            status: 'error' as const,
+            latencyMs: Date.now() - start,
+            code: 'NOT_CONFIGURED',
+            message: 'WHM API URL or API Token is not configured',
+            details: {
+              serverUrl: hostingUrl || 'Not configured',
+              configured: false,
+            },
+            lastChecked: new Date().toISOString(),
+          };
+        }
+
+        const provider = new CpanelHostingProvider(
+          whmToken,
+          hostingUrl,
+          whmUser,
+          parseInt(process.env.WHM_TIMEOUT_MS || '10000', 10)
+        );
+        const testRes = await provider.testConnection();
+        const isSuccess = !!testRes.success;
+
+        return {
+          id: 'whm',
+          name: 'WHM / cPanel',
+          connected: isSuccess,
+          status: isSuccess ? ('online' as const) : ('error' as const),
+          latencyMs: Date.now() - start,
+          code: testRes.code || (isSuccess ? 'CONNECTED' : 'FAILED'),
+          message: testRes.message || (isSuccess ? 'WHM server authenticated and reachable' : 'Connection failed'),
+          details: {
+            serverUrl: hostingUrl,
+            username: whmUser,
+            configured: true,
+          },
+          lastChecked: new Date().toISOString(),
+        };
+      } catch (err: any) {
+        return {
+          id: 'whm',
+          name: 'WHM / cPanel',
+          connected: false,
+          status: 'error' as const,
+          latencyMs: Date.now() - start,
+          code: 'CONNECTION_ERROR',
+          message: err?.message || 'Failed to communicate with WHM server',
+          details: { configured: true },
+          lastChecked: new Date().toISOString(),
+        };
+      }
+    };
+
+    // 4. CloudLinux Status Check
+    const checkCloudLinux = async () => {
+      const start = Date.now();
+      try {
+        const provider = getCloudLinuxProvider();
+        const testRes = await provider.testConnection();
+        const isSuccess = !!testRes.success;
+
+        return {
+          id: 'cloudlinux',
+          name: 'CloudLinux',
+          connected: isSuccess,
+          status: isSuccess ? ('online' as const) : ('error' as const),
+          latencyMs: Date.now() - start,
+          code: testRes.code || (isSuccess ? 'CONNECTED' : 'FAILED'),
+          message: testRes.message || (isSuccess ? 'CloudLinux API authenticated' : 'Connection failed'),
+          details: {
+            code: testRes.code,
+            configured: testRes.code !== 'NOT_CONFIGURED',
+          },
+          lastChecked: new Date().toISOString(),
+        };
+      } catch (err: any) {
+        return {
+          id: 'cloudlinux',
+          name: 'CloudLinux',
+          connected: false,
+          status: 'error' as const,
+          latencyMs: Date.now() - start,
+          code: 'CONNECTION_ERROR',
+          message: err?.message || 'Failed to communicate with CloudLinux API',
+          lastChecked: new Date().toISOString(),
+        };
+      }
+    };
+
+    if (targetService === 'backend') {
+      const backendRes = await checkBackend();
+      return res.json({ success: true, service: backendRes });
+    }
+    if (targetService === 'openprovider') {
+      const opRes = await checkOpenprovider();
+      return res.json({ success: true, service: opRes });
+    }
+    if (targetService === 'whm') {
+      const whmRes = await checkWhm();
+      return res.json({ success: true, service: whmRes });
+    }
+    if (targetService === 'cloudlinux') {
+      const clnRes = await checkCloudLinux();
+      return res.json({ success: true, service: clnRes });
+    }
+
+    // Run all concurrently
+    const [backendRes, opRes, whmRes, clnRes] = await Promise.all([
+      checkBackend(),
+      checkOpenprovider(),
+      checkWhm(),
+      checkCloudLinux(),
+    ]);
+
+    const services = {
+      backend: backendRes,
+      openprovider: opRes,
+      whm: whmRes,
+      cloudlinux: clnRes,
+    };
+
+    const allConnected = Object.values(services).every((s) => s.connected);
+    const connectedCount = Object.values(services).filter((s) => s.connected).length;
+    const totalCount = Object.values(services).length;
+
+    return res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      allConnected,
+      connectedCount,
+      totalCount,
+      services,
+    });
+  } catch (error: any) {
+    console.error('Failed to get connection status:', error);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve connection statuses' });
   }
 });
 

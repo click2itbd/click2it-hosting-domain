@@ -5,8 +5,17 @@ import { validateEnvironment } from "./backend/src/config/index.js";
 import path from "path";
 import express from "express";
 
+process.on("uncaughtException", (err) => {
+  console.error("[Uncaught Exception]", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Unhandled Rejection]", reason);
+});
+
 async function startDevServer() {
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  // CRITICAL: Always bind to port 3000 for AI Studio preview proxy
+  const port = 3000;
 
   try {
     validateEnvironment();
@@ -36,6 +45,10 @@ async function startDevServer() {
 
   const server = app.listen(port, "0.0.0.0", () => {
     console.log(`🚀 Hosting server running on http://0.0.0.0:${port}`);
+  });
+
+  server.on("error", (err: any) => {
+    console.error("[Server Error]", err);
   });
 
   const shutdown = () => {

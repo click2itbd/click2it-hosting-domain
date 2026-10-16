@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 
 export interface SmtpConfig {
   host: string;
@@ -17,7 +17,7 @@ export interface SmtpProviderError extends Error {
 
 export class SmtpEmailProvider {
   private config: SmtpConfig;
-  private transporter: nodemailer.Transporter | null = null;
+  private transporter: Transporter | null = null;
   private requestTimeout: number;
 
   constructor(config: SmtpConfig, requestTimeout: number = 10000) {
@@ -25,7 +25,7 @@ export class SmtpEmailProvider {
     this.requestTimeout = requestTimeout;
   }
 
-  private getTransporter(): nodemailer.Transporter {
+  private getTransporter(): Transporter {
     if (!this.transporter) {
       const isGmail = (this.config.host && this.config.host.toLowerCase().includes('gmail')) ||
                       (this.config.user && this.config.user.toLowerCase().endsWith('@gmail.com'));
@@ -42,7 +42,7 @@ export class SmtpEmailProvider {
           connectionTimeout: this.requestTimeout,
           greetingTimeout: this.requestTimeout,
           socketTimeout: this.requestTimeout,
-        }) as nodemailer.Transporter;
+        }) as Transporter;
       } else {
         this.transporter = nodemailer.createTransport({
           host: this.config.host,
@@ -58,7 +58,7 @@ export class SmtpEmailProvider {
           connectionTimeout: this.requestTimeout,
           greetingTimeout: this.requestTimeout,
           socketTimeout: this.requestTimeout,
-        }) as nodemailer.Transporter;
+        }) as Transporter;
       }
     }
     return this.transporter;
