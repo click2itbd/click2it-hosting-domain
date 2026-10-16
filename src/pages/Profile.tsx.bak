@@ -1,0 +1,740 @@
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Layout } from '../components/Layout';
+import { MyServicesTab } from '../components/MyServicesTab';
+import { CustomerTicketsTab } from '../components/CustomerTicketsTab';
+import { useAuth } from '../context/AuthContext';
+import { db, storage, auth } from '../firebase';
+import { updateProfile } from 'firebase/auth';
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { compressImage } from '../lib/imageCompressor';
+import { toast } from 'react-hot-toast';
+import { User, Mail, Globe, Phone, MapPin, Building, Save, Camera, Loader2, ShoppingBag, Heart, Package, Clock, CheckCircle2, XCircle, ChevronRight, Tag, MessageSquare, Image as ImageIcon } from 'lucide-react';
+import { SEO } from '../components/SEO';
+import { formatCurrency } from '../lib/utils';
+import { generatePDF } from '../lib/pdf';
+import { useSettings } from '../context/SettingsContext';
+import { useCart } from '../context/CartContext';
+import { useNavigate } from 'react-router-dom';
+import { getSiteContext } from '../hooks/useSiteContext';
+
+interface UserProfileData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  company: string;
+  photoURL: string;
+}
+
+export const Profile: React.FC = () => {
+  const { user } = useAuth();
+  const { settings } = useSettings();
+  const { addToCart } = useCart();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [offersLoading, setOffersLoading] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const siteContext = getSiteContext();
+  const isHosting = siteContext === 'hosting';
+
+  const [formData, setFormData] = useState<UserProfileData>({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    company: '',
+    photoURL: ''
+  });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imgLoadError, setImgLoadError] = useState(false);
+
+  // Sync tab from URL search params if changed
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setFormData({
+            name: data.name || user.displayName || '',
+            email: data.email || user.email || '',
+            phone: data.phone || '',
+            address: data.address || '',
+            city: data.city || '',
+            company: data.company || '',
+            photoURL: data.photoURL || user.photoURL || ''
+          });
+        } else {
+          setFormData(prev => ({
+            ...prev,
+            name: user.displayName || '',
+            email: user.email || '',
+            photoURL: user.photoURL || ''
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        toast.error('Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
+
+  useEffect(() => {
+    if (activeTab !== 'offers' || !user) return;
+    const fetchOffers = async () => {
+      setOffersLoading(true);
+      try {
+        const q = query(
+          collection(db, 'domain_offers'),
+          where('email', '==', user.email)
+        );
+        const snap = await getDocs(q);
+        let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        data.sort((a: any, b: any) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        setOffers(data);
+      } catch (err) {
+        console.error('Error fetching offers:', err);
+      } finally {
+        setOffersLoading(false);
+      }
+    };
+    fetchOffers();
+  }, [activeTab, user]);
+
+  // Fetch all orders for the user unconditionally to show stats
+  useEffect(() => {
+    if (!user) return;
+    const fetchOrders = async () => {
+      setOrdersLoading(true);
+      try {
+        const q = query(
+          collection(db, 'orders'),
+          where('userId', '==', user.uid)
+        );
+        const snap = await getDocs(q);
+        let fetchedOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // Client-side sort to avoid requiring a composite index in Firestore
+        fetchedOrders.sort((a: any, b: any) => {
+          const getOrderDate = (val: any) => {
+            if (!val) return 0;
+            if (val.toDate) return val.toDate().getTime();
+            if (val.seconds) return val.seconds * 1000;
+            return new Date(val).getTime();
+          };
+          return getOrderDate(b.createdAt) - getOrderDate(a.createdAt);
+        });
+        
+        setOrders(fetchedOrders);
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [activeTab, user]);
+
+  const handlePayOffer = (offer: any) => {
+    const product = {
+      id: `domain_${offer.domain}`,
+      name: `Domain Registration - ${offer.domain}`,
+      description: '1 Year Registration (Accepted Offer)',
+      price: offer.amount,
+      category: 'Hosting & Domains',
+      stock: 9999,
+      images: [],
+      createdAt: new Date().toISOString(),
+      itemType: 'domain' as const,
+      domainTld: offer.domain.split('.').pop() || '',
+      termYears: 1,
+    };
+    addToCart(product as any);
+    navigate('/hosting/checkout');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setSaving(true);
+
+    // DEV MODE: Simulate save
+    if (import.meta.env.DEV) {
+      await new Promise(r => setTimeout(r, 800));
+      toast.success('[DEV] Profile updated! (Simulated)');
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      await setDoc(docRef, {
+        name: formData.name,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        company: formData.company,
+        photoURL: formData.photoURL,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      toast.success('Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </Layout>
+    );
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error('Image size should be less than 3MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    setImgLoadError(false);
+
+    try {
+      let finalUrl = '';
+      
+      // Try Firebase Storage first
+      try {
+        const storageRef = ref(storage, `profiles/${user.uid}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        finalUrl = await getDownloadURL(storageRef);
+      } catch (storageErr) {
+        console.warn('Storage upload fallback to base64:', storageErr);
+        // Fallback to high quality base64 data URL
+        finalUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      setFormData(prev => ({ ...prev, photoURL: finalUrl }));
+      
+      // Save to Firestore
+      const docRef = doc(db, 'users', user.uid);
+      await setDoc(docRef, { photoURL: finalUrl, updatedAt: new Date().toISOString() }, { merge: true });
+
+      // Also update Firebase Auth profile if current user is active
+      if (auth.currentUser) {
+        try {
+          await updateProfile(auth.currentUser, { photoURL: finalUrl.startsWith('data:') ? undefined : finalUrl });
+        } catch {
+          // ignore auth profile photo length limit
+        }
+      }
+
+      toast.success('Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to update profile picture. Please try another image.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  return (
+    <Layout>
+      <SEO title="My Profile" />
+
+      {/* Hero Header */}
+      <div 
+        style={
+          isHosting 
+            ? { background: 'linear-gradient(160deg, #020b2e 0%, #050f3a 55%, #0b1a5c 100%)' }
+            : { background: 'linear-gradient(160deg, #081621 0%, #1a2a3a 100%)' }
+        } 
+        className="py-16 px-4 relative overflow-hidden"
+      >
+        {/* Decorative glow */}
+        <div 
+          className="absolute inset-0 pointer-events-none" 
+          style={
+            isHosting
+              ? { background: 'radial-gradient(ellipse at 60% 50%, rgba(56,100,240,0.15) 0%, transparent 70%)' }
+              : { background: 'radial-gradient(ellipse at 60% 50%, rgba(249,115,22,0.15) 0%, transparent 70%)' }
+          } 
+        />
+        
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center md:items-stretch justify-between gap-8 relative">
+          
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            {/* Avatar with upload */}
+            <div className="relative group flex-shrink-0">
+              <div className={isHosting 
+                ? "w-32 h-32 rounded-full border-4 border-blue-500/40 overflow-hidden bg-blue-900/30 flex items-center justify-center shadow-2xl shadow-blue-900/50"
+                : "w-32 h-32 rounded-full border-4 border-orange-500/40 overflow-hidden bg-gray-900/50 flex items-center justify-center shadow-2xl shadow-orange-500/20"
+              }>
+                {formData.photoURL && !imgLoadError ? (
+                  <img 
+                    src={formData.photoURL} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover" 
+                    referrerPolicy="no-referrer"
+                    onError={() => setImgLoadError(true)}
+                  />
+                ) : (
+                  <User size={52} className={isHosting ? "text-blue-300/60" : "text-gray-400"} />
+                )}
+              </div>
+              <label 
+                title="Upload profile picture"
+                className="absolute bottom-1 right-1 bg-orange-500 hover:bg-orange-600 text-white p-2.5 rounded-full cursor-pointer transition-all shadow-lg shadow-orange-500/30 hover:scale-110 active:scale-95"
+              >
+                {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
+              </label>
+            </div>
+
+            {/* Name & Email */}
+            <div className="text-center md:text-left">
+              <div className={isHosting
+                ? "inline-flex items-center gap-2 border border-blue-500/30 bg-blue-500/10 rounded-full px-4 py-1 mb-3 text-xs text-blue-300 font-semibold uppercase tracking-widest"
+                : "inline-flex items-center gap-2 border border-orange-500/30 bg-orange-500/10 rounded-full px-4 py-1 mb-3 text-xs text-orange-300 font-semibold uppercase tracking-widest"
+              }>
+                <span className={isHosting ? "w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" : "w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"} />
+                My Account
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{formData.name || 'Your Profile'}</h1>
+              <p className={isHosting ? "text-blue-300 flex items-center justify-center md:justify-start gap-2 text-sm" : "text-gray-300 flex items-center justify-center md:justify-start gap-2 text-sm"}>
+                <Mail size={15} /> {formData.email}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Stats Block */}
+          {!isHosting && (
+            <div className="flex md:flex-col justify-center items-center gap-4 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-6 shadow-xl">
+              <div className="text-center">
+                <div className="text-3xl font-black text-white">{orders.length}</div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mt-1">Total Orders</div>
+              </div>
+              <div className="w-px h-8 md:w-16 md:h-px bg-white/10" />
+              <div className="text-center">
+                <div className="text-3xl font-black text-[#F97316]">
+                  {formatCurrency(orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + (o.total || 0), 0))}
+                </div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mt-1">Total Spent</div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="flex gap-1 overflow-x-auto whitespace-nowrap hide-scrollbar">
+            {(() => {
+              const ctx = getSiteContext();
+              const isHosting = ctx === 'hosting';
+
+              // Base tabs — always shown
+              const baseTabs = [
+                { id: 'profile', label: 'My Profile', icon: User },
+                { id: 'orders', label: 'My Orders', icon: ShoppingBag },
+              ];
+              
+              if (!isHosting) {
+                 baseTabs.push({ id: 'wishlist', label: 'My Wishlist', icon: Heart });
+              }
+
+              // Hosting-only tabs
+              const hostingTabs = [
+                { id: 'my_domains', label: 'My Services', icon: Globe },
+                { id: 'tickets', label: 'Support Tickets', icon: MessageSquare },
+                { id: 'offers', label: 'My Offers', icon: Tag },
+              ];
+
+              const tabs = isHosting ? [...baseTabs, ...hostingTabs] : baseTabs;
+
+              return tabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => {
+                  if (id === 'wishlist') {
+                    navigate('/wishlist');
+                  } else {
+                    setActiveTab(id);
+                  }
+                }}
+                  className={`flex items-center gap-2 px-5 py-4 text-sm font-semibold border-b-2 transition-all ${
+                    activeTab === id
+                      ? (isHosting ? 'border-blue-600 text-blue-600' : 'border-orange-500 text-orange-500')
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Icon size={16} /> {label}
+                </button>
+              ));
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-4 py-8">
+
+        {/* ── PROFILE TAB ── */}
+        {activeTab === 'profile' && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+            <form onSubmit={handleSubmit} className="p-8">
+              <h2 className="text-lg font-bold text-gray-800 mb-6 pb-4 border-b border-gray-100 flex items-center gap-2">
+                <User size={18} className={isHosting ? "text-blue-600" : "text-orange-500"} /> Personal Information
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <User size={15} className="text-blue-500" /> Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50"
+                    placeholder="Your Full Name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <Mail size={15} className="text-blue-500" /> Email Address
+                  </label>
+                  <input type="email" value={formData.email} disabled className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed" />
+                  <p className="text-[10px] text-gray-400">Email address cannot be changed.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <Phone size={15} className="text-blue-500" /> Phone Number
+                  </label>
+                  <input type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50" placeholder="+880 1..." />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <Building size={15} className="text-blue-500" /> Company Name (Optional)
+                  </label>
+                  <input type="text" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50" placeholder="Your Company Ltd." />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <ImageIcon size={15} className="text-blue-500" /> Profile Picture URL (Optional)
+                  </label>
+                  <input 
+                    type="url" 
+                    value={formData.photoURL} 
+                    onChange={e => {
+                      setFormData({...formData, photoURL: e.target.value});
+                      setImgLoadError(false);
+                    }} 
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50 text-xs" 
+                    placeholder="https://example.com/avatar.jpg" 
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <MapPin size={15} className="text-blue-500" /> Address
+                  </label>
+                  <textarea rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none bg-gray-50/50" placeholder="House, Street, Area..." />
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-bold text-gray-700">City / Region</label>
+                  <input type="text" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-gray-50/50" placeholder="Dhaka" />
+                </div>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+                <button type="submit" disabled={saving} style={!saving ? { background: 'linear-gradient(135deg, #f97316, #ea6100)' } : {}} className="text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-70 disabled:cursor-not-allowed bg-gray-400">
+                  {saving ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</> : <><Save size={18} />Save Changes</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ── ORDERS TAB ── */}
+        
+        {/* OFFERS TAB */}
+        {activeTab === 'offers' && (
+          <div>
+            {offersLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              </div>
+            ) : offers.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center">
+                <Tag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-gray-700 mb-2">No Offers Yet</h3>
+                <p className="text-gray-400 mb-6">You haven't submitted any domain offers.</p>
+                <button onClick={() => navigate('/hosting')} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium transition-colors">
+                  Search Domains <ChevronRight size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {offers.map(offer => (
+                  <div key={offer.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="font-bold text-lg text-gray-800">{offer.domain}</h4>
+                      <p className="text-sm text-gray-500">Offered Amount: <span className="font-bold text-green-600">BDT {offer.amount}</span></p>
+                      <p className="text-xs text-gray-400 mt-1">Submitted on {new Date(offer.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                      <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        offer.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                        offer.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {offer.status}
+                      </div>
+                      
+                      {offer.status === 'accepted' && (
+                        <button 
+                          onClick={() => handlePayOffer(offer)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-all whitespace-nowrap"
+                        >
+                          Pay Now
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+          
+          {activeTab === 'my_domains' && (
+            <MyServicesTab />
+          )}
+
+          {activeTab === 'tickets' && (
+            <CustomerTicketsTab currentUser={user} />
+          )}
+
+          {activeTab === 'orders' && (
+          <div>
+            {ordersLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center">
+                <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-gray-700 mb-2">No Orders Yet</h3>
+                <p className="text-gray-400 mb-6">You haven't placed any orders yet.</p>
+                <a href="/" className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium transition-colors">
+                  Browse Services <ChevronRight size={16} />
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {orders.map(order => {
+                  const isPaid = order.paymentStatus === 'paid';
+                  const isFailed = order.paymentStatus === 'failed';
+                  const isCancelled = order.status === 'cancelled' || order.paymentStatus === 'cancelled';
+                  const isPending = !isPaid && !isFailed && !isCancelled;
+                  const isExpanded = expandedOrderId === order.id;
+                  
+                  const getOrderDate = (val: any) => {
+                    if (!val) return new Date();
+                    if (val.toDate) return val.toDate();
+                    if (val.seconds) return new Date(val.seconds * 1000);
+                    return new Date(val);
+                  };
+                  
+                  const date = getOrderDate(order.createdAt).toLocaleDateString('en-BD', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                  return (
+                    <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all">
+
+                      {/* Clickable Order Header */}
+                      <button
+                        onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                        className="w-full text-left px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isPaid ? 'bg-green-100' : isFailed ? 'bg-red-100' : isCancelled ? 'bg-gray-100' : 'bg-yellow-100'
+                          }`}>
+                            {isPaid ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : isFailed ? <XCircle className="w-5 h-5 text-red-600" /> : isCancelled ? <XCircle className="w-5 h-5 text-gray-500" /> : <Clock className="w-5 h-5 text-yellow-600" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-gray-900">Order #{order.documentNumber || order.id.slice(-8).toUpperCase()}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">{date}</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 ml-auto justify-end">
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                            order.status === 'delivered' || order.status === 'completed' || order.status === 'active' ? 'bg-green-100 text-green-700' :
+                            order.status === 'processing' || order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
+                            order.status === 'cancelled' ? 'bg-gray-100 text-gray-600' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            📦 {order.status || 'pending'}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                            isPaid ? 'bg-green-100 text-green-700' : isFailed ? 'bg-red-100 text-red-700' : isCancelled ? 'bg-gray-100 text-gray-600' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            💳 {isPaid ? 'Paid' : isFailed ? 'Failed' : isCancelled ? 'Cancelled' : 'Pending'}
+                          </span>
+                          <span className="font-black text-gray-900 text-lg ml-2">{formatCurrency(order.total)}</span>
+                          <ChevronRight size={16} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                        </div>
+                      </button>
+
+                      {/* Expanded Detail View */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-100">
+
+                          {/* Items */}
+                          <div className="px-6 py-4">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Order Items</h4>
+                            <div className="space-y-2">
+                              {(order.items || []).map((item: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                                      <Package size={15} className="text-blue-500" />
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-800">{item.name || item.productName || item.title || 'Product'}</div>
+                                      <div className="text-xs text-gray-400">Qty: {item.quantity || 1} {item.category ? `• ${item.category}` : ''}</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-sm font-bold text-gray-800">{formatCurrency((item.price || 0) * (item.quantity || 1))}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Summary grid */}
+                          <div className="px-6 pb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="bg-gray-50 rounded-xl p-3">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Payment Method</div>
+                              <div className="text-sm font-bold text-gray-800 capitalize">{order.paymentMethod || 'N/A'}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl p-3">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Order Status</div>
+                              <div className="text-sm font-bold text-gray-800 capitalize">{order.status || 'pending'}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl p-3">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Subtotal</div>
+                              <div className="text-sm font-bold text-gray-800">{formatCurrency(order.total || 0)}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl p-3">
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Payment Status</div>
+                              <div className={`text-sm font-bold capitalize ${
+                                isPaid ? 'text-green-600' : isFailed ? 'text-red-600' : isCancelled ? 'text-gray-500' : 'text-yellow-600'
+                              }`}>{isCancelled ? 'cancelled' : (order.paymentStatus || 'pending')}</div>
+                            </div>
+                          </div>
+
+                          {/* Shipping address if exists */}
+                          {order.shippingAddress && (
+                            <div className="px-6 pb-4">
+                              <div className="bg-gray-50 rounded-xl p-3">
+                                <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Delivery Address</div>
+                                <div className="text-sm text-gray-700">{order.shippingAddress}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="px-6 pb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="text-[10px] text-gray-400">Order ID: <span className="font-mono text-gray-600">{order.id}</span></div>
+                            <div className="flex gap-3">
+                              <button onClick={() => navigate('/track-order?id=' + (order.invoiceNumber || order.id))} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors">
+                                Track Order
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  try {
+                                    const pdfDoc = generatePDF(order as any, 'invoice', settings);
+                                    pdfDoc.autoPrint();
+                                    window.open(pdfDoc.output('bloburl'), '_blank');
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }} 
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                              >
+                                Download Invoice
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+};
+
+
+
+
+
+

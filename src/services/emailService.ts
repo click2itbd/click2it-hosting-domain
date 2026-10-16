@@ -1,0 +1,237 @@
+import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../firebase';
+
+export interface EmailLog {
+  id?: string;
+  orderId: string;
+  customerEmail: string;
+  subject: string;
+  content: string;
+  sentAt: string;
+  status: 'sent' | 'failed';
+}
+
+import { auth } from '../firebase';
+import { resolveApiBaseUrl } from './apiClient';
+
+async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const cleanBase = resolveApiBaseUrl();
+  let cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (cleanBase.endsWith('/api') && cleanPath.startsWith('/api/')) {
+    cleanPath = cleanPath.slice(4);
+  }
+
+  const url = `${cleanBase}${cleanPath}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  if (!headers['Authorization'] && typeof window !== 'undefined' && auth.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+    } catch {
+      // ignore
+    }
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Network error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export interface ServiceActivationDetails {
+  domain?: string;
+  serverIp?: string;
+  controlPanelUrl?: string;
+  isVps?: boolean;
+  hostname?: string;
+  os?: string;
+  serverLocation?: string;
+  rootPassword?: string;
+  sshCommand?: string;
+  specs?: any;
+}
+
+export const sendServiceActivationEmail = async (
+  orderId: string, 
+  customerEmail: string, 
+  serviceDetails: ServiceActivationDetails
+) => {
+  const isVps = serviceDetails.isVps || Boolean(serviceDetails.hostname && serviceDetails.os);
+  const subject = isVps
+    ? `🚀 Your Cloud VPS is Live & Ready! - ${serviceDetails.hostname || serviceDetails.serverIp || 'Server'}`
+    : `Your Service is Active! - ${serviceDetails.domain || 'Hosting'}`;
+  
+  let content = '';
+  let html = '';
+
+  if (isVps) {
+    const sshCmd = serviceDetails.sshCommand || `ssh root@${serviceDetails.serverIp || 'YOUR_IP'}`;
+    content = `
+Hello,
+
+Great news! Your Cloud VPS server has been deployed and is now live!
+
+Server Details:
+- Hostname: ${serviceDetails.hostname || 'N/A'}
+- Primary IP: ${serviceDetails.serverIp || 'N/A'}
+- Operating System: ${serviceDetails.os || 'Linux'}
+- Datacenter: ${serviceDetails.serverLocation || 'Dhaka / Global'}
+- Root Username: root
+${serviceDetails.rootPassword ? `- Root Password: ${serviceDetails.rootPassword}` : ''}
+- Quick SSH Connect: ${sshCmd}
+
+You can also view your server details and management options directly from your Client Dashboard.
+
+Thank you for choosing Click2IT!
+    `.trim();
+
+    html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
+        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%); padding: 24px; border-radius: 8px; color: #ffffff; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 22px;">🚀 Cloud VPS Server Activated</h2>
+          <p style="margin: 6px 0 0; color: #c7d2fe; font-size: 13px;">Your dedicated virtual server instance is ready</p>
+        </div>
+        <p style="color: #374151; font-size: 15px;">Hello,</p>
+        <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">Great news! Your dedicated Cloud VPS instance is online and assigned to your account. Below are your connection details:</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <tr><td style="padding: 10px 14px; font-weight: bold; color: #475569; width: 40%; border-bottom: 1px solid #e2e8f0;">Hostname</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;"><strong>${serviceDetails.hostname || 'N/A'}</strong></td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Server IP Address</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;"><strong style="color: #2563eb;">${serviceDetails.serverIp || 'N/A'}</strong></td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Operating System</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${serviceDetails.os || 'Linux'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Datacenter Location</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${serviceDetails.serverLocation || 'Dhaka / Global'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Root Username</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;"><code>root</code> (or Administrator)</td></tr>
+          ${serviceDetails.rootPassword ? `<tr><td style="padding: 10px 14px; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Root Password</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;"><code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${serviceDetails.rootPassword}</code></td></tr>` : ''}
+        </table>
+
+        <div style="background-color: #0f172a; color: #22c55e; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 13px; margin: 16px 0;">
+          <div style="color: #94a3b8; font-size: 11px; margin-bottom: 4px;"># SSH Command (Linux/macOS terminal or PowerShell):</div>
+          ${sshCmd}
+        </div>
+
+        <p style="font-size: 13px; color: #6b7280;">You can log in to your <a href="https://click2itbd.com/dashboard" style="color: #4f46e5; font-weight: bold;">Client Dashboard</a> to manage your services and invoices.</p>
+        <p style="font-size: 14px; color: #374151; margin-top: 24px;">Thank you for choosing Click2IT!</p>
+      </div>
+    `;
+  } else {
+    content = `
+Hello,
+
+Great news! Your service for ${serviceDetails.domain || 'your recent order'} has been activated.
+
+Here are your service details:
+- Server IP: ${serviceDetails.serverIp || 'N/A'}
+- Control Panel: ${serviceDetails.controlPanelUrl || 'N/A'}
+
+Thank you for choosing us!
+    `.trim();
+
+    html = content.replace(/\n/g, '<br>');
+  }
+
+  try {
+    const response = await apiRequest<{ success: boolean }>('/api/send-email', {
+      method: 'POST',
+      body: JSON.stringify({
+        to: customerEmail,
+        subject,
+        html: content.replace(/\n/g, '<br>'),
+      }),
+    });
+
+    await addDoc(collection(db, 'emailLogs'), {
+      orderId,
+      customerEmail,
+      subject,
+      content,
+      sentAt: new Date().toISOString(),
+      status: response.success ? 'sent' : 'failed'
+    });
+
+    return response.success;
+  } catch (err) {
+    console.error('Failed to send email:', err);
+    await addDoc(collection(db, 'emailLogs'), {
+      orderId,
+      customerEmail,
+      subject,
+      content,
+      sentAt: new Date().toISOString(),
+      status: 'failed'
+    });
+    return false;
+  }
+};
+
+export const getEmailLogsForOrder = async (orderId: string): Promise<EmailLog[]> => {
+  try {
+    const q = query(
+      collection(db, 'emailLogs'),
+      where('orderId', '==', orderId)
+    );
+    const snapshot = await getDocs(q);
+    const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EmailLog));
+    return logs.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+  } catch (err) {
+    console.error('Failed to fetch email logs:', err);
+    return [];
+  }
+};
+
+export interface SendEmailResponse {
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
+export const sendEmail = async ({
+  to,
+  subject,
+  html,
+  attachments,
+  category,
+  orderId,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+  attachments?: any[];
+  category?: string;
+  orderId?: string;
+}): Promise<SendEmailResponse> => {
+  try {
+    const response = await apiRequest<{ success: boolean; error?: string; message?: string }>('/api/send-email', {
+      method: 'POST',
+      body: JSON.stringify({
+        to,
+        subject,
+        html,
+        attachments,
+        category,
+        orderId,
+      }),
+    });
+    return { 
+      success: response?.success ?? true,
+      message: response?.message 
+    };
+  } catch (err: any) {
+    console.error('Failed to send email:', err);
+    return { 
+      success: false, 
+      error: err?.message || 'Email delivery failed. Please verify SMTP settings.' 
+    };
+  }
+};
+

@@ -1,0 +1,16 @@
+node_modules/
+build/
+# dist/ and backend/dist/ are intentionally tracked — cPanel reads them for deployment
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.env*.local
+firebase-applet-config.json
+backend/.env
+backend/.env.local
+firebase-service-account.json
+backend/firebase-service-account.json
+*.pem
+*.key

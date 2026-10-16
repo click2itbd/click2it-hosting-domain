@@ -1,0 +1,8 @@
+{
+  "name": "CLICK2IT BD- E-Commerce & Inventory",
+  "description": "A comprehensive e-commerce platform inspired by Star Tech, featuring inventory management, invoicing, quotations, and delivery challans.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

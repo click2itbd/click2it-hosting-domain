@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    # - export DEPLOYPATH=/home/$USER/public_html
+    # - export BACKENDPATH=/home/$USER/backend_app
+    - /bin/bash deploy.sh

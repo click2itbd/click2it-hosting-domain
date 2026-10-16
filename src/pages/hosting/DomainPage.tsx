@@ -1,0 +1,200 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useCart } from '../../context/CartContext';
+import { Layout } from '../../components/Layout';
+import { PageHeader } from '../../components/hosting/PageHeader';
+import { SEO } from '../../components/SEO';
+import DomainPricingSection from '../hosting-sections/DomainPricingSection';
+import { Search, Shield, ShieldCheck, Settings, RefreshCw, ArrowRight, Loader2, CheckCircle, XCircle, ShoppingCart } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { formatCurrency } from '../../lib/utils';
+
+const DomainPage = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { addToCart } = useCart();
+  
+  const preselectedTld = searchParams.get('tld') || '';
+  
+  const [searchQuery, setSearchQuery] = useState(preselectedTld ? `.${preselectedTld.replace(/^\./, '')}` : '');
+  const [selectedTld, setSelectedTld] = useState('.com');
+  const [isSearching, setIsSearching] = useState(false);
+
+  const POPULAR_TLDS = ['.com', '.net', '.org', '.com.bd', '.xyz', '.store', '.online'];
+
+  useEffect(() => {
+    if (preselectedTld) {
+      const tld = preselectedTld.startsWith('.') ? preselectedTld : `.${preselectedTld}`;
+      setSearchQuery(tld);
+    }
+  }, [preselectedTld]);
+
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    let query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      toast.error('Please enter a domain name');
+      return;
+    }
+    
+    if (!query.includes('.')) {
+      query += selectedTld;
+    }
+    
+    navigate(`/domain/search?q=${encodeURIComponent(query)}`);
+  };
+
+  return (
+    <Layout fullWidth>
+      <SEO 
+        title="Domain Registration in Bangladesh | Buy .COM, .NET at Best Price"
+        description="Search and register your domain name at lowest price in Bangladesh. Instant activation, free DNS management, WHOIS privacy protection, and 24/7 support at Click2IT."
+        keywords="domain registration bangladesh, buy domain bd, cheap domain name, .com domain price bd, click2it domain, website name bd"
+        canonical="https://click2itbd.com/domain"
+      />
+      
+      <PageHeader 
+        title="Find Your Perfect Domain Name" 
+        subtitle="Search, register, and manage your domain names with ease. Get the perfect web address for your business." 
+      />
+
+      {/* Domain Search Section */}
+      <section className="py-6 md:py-8 ">
+        <div className="container mx-auto px-2 sm:px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 md:mb-8">
+            Start Your Journey Here
+          </h2>
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.08)] border border-gray-100 overflow-hidden flex items-stretch max-w-3xl mx-auto mb-4 md:mb-6">
+            <form onSubmit={handleSearch} className="flex-grow flex items-stretch">
+              <div className="flex items-center pl-3 md:pl-5 text-gray-400">
+                <Search size={18} className="md:w-5 md:h-5" />
+              </div>
+              <input
+                type="text"
+                placeholder="Type your domain name here..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-3 md:px-4 py-4 md:py-5 text-base md:text-lg text-gray-800 outline-none bg-transparent placeholder-gray-400"
+                disabled={isSearching}
+              />
+              <div className="flex items-center gap-2 pr-2">
+                <select 
+                  value={selectedTld}
+                  onChange={(e) => setSelectedTld(e.target.value)}
+                  className="hidden md:block text-sm text-gray-600 bg-gray-100 border-0 rounded-lg px-3 py-2 outline-none h-[44px] cursor-pointer">
+                  {POPULAR_TLDS.map(tld => (
+                    <option key={tld} value={tld}>{tld}</option>
+                  ))}
+                </select>
+                <button 
+                  type="submit"
+                  disabled={isSearching}
+                  className="flex items-center gap-2 text-white font-bold px-5 md:px-7 h-[40px] md:h-[44px] rounded-xl transition-all active:scale-95 hover:opacity-90 disabled:opacity-70 my-auto"
+                  style={{ background: 'linear-gradient(135deg, #f97316, #ea6100)' }}
+                >
+                  {isSearching ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Search size={16} className="md:w-[18px] md:h-[18px]" />}
+                  <span className="hidden sm:inline">{isSearching ? 'Checking...' : 'Search Now'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <p className="mt-4 text-xs md:text-sm text-black/70">
+            Popular extensions: <span className="font-medium text-black/70">.com, .net, .org, .io, .co</span>
+          </p>
+
+          <div className="mt-8">
+            <Link to="/domain/bd" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-800 text-white px-6 py-3 rounded-full text-sm font-bold shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform">
+              <ShieldCheck size={18} />
+              Register .BD Domains in Bangladesh
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Domain Pricing Section */}
+      <DomainPricingSection />
+
+      {/* Why Register With Us Section */}
+      <section className="py-12 md:py-20 bg-white ">
+        <div className="container mx-auto px-2 sm:px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10 md:mb-16">
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-black-700 sm:text-4xl">
+              Why Register With Us?
+            </h2>
+            <p className="mt-3 md:mt-4 max-w-2xl text-base md:text-xl text-gray-500 dark:text-gray-400 mx-auto">
+              Everything you need to manage your domains effectively and securely.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-10">
+            {/* Card 1 */}
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl md:rounded-2xl p-6 md:p-8 shadow-xl hover:shadow-2xl transition-all duration-300 text-white relative overflow-hidden group">
+              <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 md:w-32 md:h-32 bg-white/10 rounded-full blur-2xl transition-transform group-hover:scale-110"></div>
+              <div className="bg-white/20 backdrop-blur-sm w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center mb-4 md:mb-6 relative z-10">
+                <Shield className="h-6 w-6 md:h-7 md:w-7 text-white" />
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-white mb-2 md:mb-3 relative z-10">Free Domain Privacy</h3>
+              <p className="text-blue-100 relative z-10 text-sm md:text-base">
+                Keep your personal information safe. We include free WHOIS privacy protection with every eligible domain registration.
+              </p>
+            </div>
+
+            {/* Card 2 */}
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl md:rounded-2xl p-6 md:p-8 shadow-xl hover:shadow-2xl transition-all duration-300 text-white relative overflow-hidden group">
+              <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 md:w-32 md:h-32 bg-white/10 rounded-full blur-2xl transition-transform group-hover:scale-110"></div>
+              <div className="bg-white/20 backdrop-blur-sm w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center mb-4 md:mb-6 relative z-10">
+                <Settings className="h-6 w-6 md:h-7 md:w-7 text-white" />
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-white mb-2 md:mb-3 relative z-10">Easy DNS Management</h3>
+              <p className="text-blue-100 relative z-10 text-sm md:text-base">
+                Route your domain to any website, email service, or hosting provider with our powerful, intuitive DNS control panel.
+              </p>
+            </div>
+
+            {/* Card 3 */}
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl md:rounded-2xl p-6 md:p-8 shadow-xl hover:shadow-2xl transition-all duration-300 text-white relative overflow-hidden group">
+              <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 md:w-32 md:h-32 bg-white/10 rounded-full blur-2xl transition-transform group-hover:scale-110"></div>
+              <div className="bg-white/20 backdrop-blur-sm w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center mb-4 md:mb-6 relative z-10">
+                <RefreshCw className="h-6 w-6 md:h-7 md:w-7 text-white" />
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-white mb-2 md:mb-3 relative z-10">Auto-renewal</h3>
+              <p className="text-blue-100 relative z-10 text-sm md:text-base">
+                Never lose your domain. Set up auto-renewal to ensure your perfect web address stays yours, year after year.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Domain Transfer Banner */}
+      <section className="py-6 md:py-8 ">
+        <div className="container mx-auto px-2 sm:px-4 sm:px-6 lg:px-8">
+          <div className="bg-blue-700 dark:bg-blue-800 rounded-2xl md:rounded-3xl p-6 md:p-12 lg:flex lg:items-center lg:justify-between shadow-2xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 md:w-80 md:h-80 bg-blue-500 rounded-full opacity-20 blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 -mb-16 -ml-16 w-48 h-48 md:w-64 md:h-64 bg-blue-400 rounded-full opacity-20 blur-3xl"></div>
+            
+            <div className="relative z-10 lg:w-0 lg:flex-1 mb-6 md:mb-0">
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-white sm:text-4xl">
+                Already have a domain?
+              </h2>
+              <p className="mt-3 md:mt-4 max-w-3xl text-base md:text-lg text-blue-100">
+                Transfer to us and save! Enjoy lower renewal rates, free privacy protection, and a consolidated dashboard for all your assets.
+              </p>
+            </div>
+              <div className="md:mt-0 md:ml-8 relative z-10 flex-shrink-0">
+                <button 
+                  onClick={() => navigate('/domain/transfer')}
+                  className="bg-white hover:bg-gray-50 text-blue-600 font-bold py-3 px-6 md:py-4 md:px-8 rounded-full shadow-lg transition-all duration-200 transform hover:-translate-y-1 flex items-center gap-2 w-full md:w-auto justify-center"
+                >
+                  Transfer Domain Now <ArrowRight className="h-4 w-4 md:h-5 md:w-5" />
+                </button>
+              </div>
+          </div>
+        </div>
+      </section>
+    </Layout>
+  );
+};
+
+export default DomainPage;

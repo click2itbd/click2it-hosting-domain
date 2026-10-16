@@ -1,0 +1,263 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "E-commerce product details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "stock": { "type": "integer" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "specs": { "type": "object", "additionalProperties": { "type": "string" } },
+        "variants": { 
+          "type": "array", 
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "sku": { "type": "string" },
+              "price": { "type": "number" },
+              "stock": { "type": "integer" }
+            },
+            "required": ["id", "name", "sku", "price", "stock"]
+          }
+        },
+        "socketType": { "type": "string" },
+        "ramType": { "type": "string" },
+        "chipset": { "type": "string" },
+        "vendorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "stock", "category"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order/invoice/quotation/challan",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "processing", "shipped", "delivered", "cancelled"] },
+        "type": { "type": "string", "enum": ["invoice", "quotation", "challan"] },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "shippingAddress": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["items", "total", "status", "type", "createdAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "phone"]
+    },
+    "Vendor": {
+      "title": "Vendor",
+      "description": "Vendor information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "phone"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction record",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["sale", "purchase", "expense"] },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "entityId": { "type": "string" },
+        "entityName": { "type": "string" },
+        "referenceId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "amount", "date", "entityId", "entityName"]
+    },
+    "NavigationMenu": {
+      "title": "Navigation Menu",
+      "description": "Dynamic navigation menu and categories",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "subCategories": { "type": "array" },
+        "order": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "slug", "order"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Product review from a customer",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "userId", "userName", "rating", "comment", "createdAt"]
+    },
+    "Subscriber": {
+      "title": "Subscriber",
+      "description": "Newsletter subscriber",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Marketing campaign",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "content": { "type": "string" },
+        "recipients": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["draft", "sent", "scheduled", "sending"] },
+        "scheduledAt": { "type": "string", "format": "date-time" },
+        "sentAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "subject", "content", "recipients", "status", "createdAt"]
+    },
+    "DiscountCode": {
+      "title": "Discount Code",
+      "description": "Promo codes for discounts",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "discountPercentage": { "type": "number" },
+        "expiryDate": { "type": "string", "format": "date-time" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "discountPercentage", "expiryDate", "isActive", "createdAt"]
+    },
+    "HostingService": {
+      "title": "Hosting Service",
+      "description": "Categories for hosting like Domain, VPS, etc",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "iconPath": { "type": "string" },
+        "startingPrice": { "type": "number" },
+        "billingCycle": { "type": "string" },
+        "order": { "type": "integer" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["title", "description", "startingPrice", "billingCycle", "order", "isActive"]
+    },
+    "HostingPlan": {
+      "title": "Hosting Plan",
+      "description": "Plans for domain and hosting",
+      "type": "object",
+      "properties": {
+        "serviceId": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "billingCycle": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "popular": { "type": "boolean" },
+        "order": { "type": "integer" }
+      },
+      "required": ["serviceId", "name", "price", "billingCycle", "features", "order"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Product catalog"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Orders and documents"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customer database"
+    },
+    "/vendors/{vendorId}": {
+      "schema": "Vendor",
+      "description": "Vendor database"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial transactions"
+    },
+    "/menus/{menuId}": {
+      "schema": "NavigationMenu",
+      "description": "Navigation menus and categories"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Product reviews"
+    },
+    "/subscribers/{subscriberId}": {
+      "schema": "Subscriber",
+      "description": "Newsletter subscribers"
+    },
+    "/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Marketing campaigns"
+    },
+    "/discountCodes/{discountCodeId}": {
+      "schema": "DiscountCode",
+      "description": "Promo codes"
+    },
+    "/hostingServices/{serviceId}": {
+      "schema": "HostingService",
+      "description": "Hosting types/categories"
+    },
+    "/hostingPlans/{planId}": {
+      "schema": "HostingPlan",
+      "description": "Domain and hosting plans"
+    }
+  }
+}

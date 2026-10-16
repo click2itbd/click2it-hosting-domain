@@ -1,0 +1,72 @@
+﻿@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "Inter", sans-serif;
+}
+
+:root {
+  /* Text and Core Structure */
+  --c2i-ink: #081621;
+  --c2i-ink-soft: #334155;
+  --c2i-paper: #FFFFFF;
+  --c2i-line: #E2E8F0;
+  
+  /* Brand Accents */
+  --c2i-orange: #F97316;
+  --c2i-red: #EF4444;
+  --c2i-red-deep: #B91C1C;
+  --c2i-success: #16A34A;
+  --c2i-success-soft: #ECFDF3;
+  --c2i-amber: #D97706;
+  
+  /* Blues (Primary theme colors) */
+  --c2i-blue-dark: #081621;
+  --c2i-blue-main: #142270;
+  --c2i-blue-light: #2c42b8;
+  
+  /* Shadows */
+  --c2i-shadow-sm: 0 1px 2px rgba(8, 22, 33, 0.06);
+  --c2i-shadow-md: 0 4px 16px rgba(8, 22, 33, 0.08);
+  --c2i-shadow-lg: 0 12px 32px rgba(8, 22, 33, 0.12);
+  
+  /* Gradients */
+  --c2i-gradient-dark: linear-gradient(135deg, #081621 0%, #142270 100%);
+  --c2i-gradient-red: linear-gradient(135deg, #F97316 0%, #EF4444 100%);
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  background-color: var(--c2i-paper);
+  color: var(--c2i-ink);
+}
+
+.dot-grid {
+  background-image: radial-gradient(currentColor 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.08;
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 1440px !important;
+  }
+  @media (min-width: 768px) {
+    .container {
+      padding-left: 50px !important;
+      padding-right: 50px !important;
+    }
+  }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+

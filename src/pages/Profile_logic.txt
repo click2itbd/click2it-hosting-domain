@@ -1,0 +1,310 @@
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Layout } from '../components/Layout';
+import { MyServicesTab } from '../components/MyServicesTab';
+import { CustomerTicketsTab } from '../components/CustomerTicketsTab';
+import { useAuth } from '../context/AuthContext';
+import { db, storage, auth } from '../firebase';
+import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
+import { doc, getDoc, addDoc, updateDoc, setDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { compressImage } from '../lib/imageCompressor';
+import { toast } from 'react-hot-toast';
+import { User, Mail, Globe, Phone, MapPin, Building, Save, Camera, Loader2, ShoppingBag, Heart, Package, Clock, CheckCircle2, XCircle, ChevronRight, Tag, MessageSquare, Image as ImageIcon, CalendarPlus, Lock, Shield, RotateCcw, Truck, Box, Check, Star, Plus } from 'lucide-react';
+import { SEO } from '../components/SEO';
+import { formatCurrency } from '../lib/utils';
+import { generatePDF } from '../lib/pdf';
+import { useSettings } from '../context/SettingsContext';
+import { useCart } from '../context/CartContext';
+import { useNavigate } from 'react-router-dom';
+import { getSiteContext } from '../hooks/useSiteContext';
+
+interface UserProfileData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  company: string;
+  photoURL: string;
+  addresses?: any[];
+}
+
+export const Profile: React.FC = () => {
+  const { user } = useAuth();
+  const { settings } = useSettings();
+  const { addToCart } = useCart();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [offersLoading, setOffersLoading] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [preBooks, setPreBooks] = useState<any[]>([]);
+  const [preBooksLoading, setPreBooksLoading] = useState(false);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [returnModalOrderId, setReturnModalOrderId] = useState<string | null>(null);
+  const [returnReason, setReturnReason] = useState('');
+  const siteContext = getSiteContext();
+  const isHosting = siteContext === 'hosting';
+
+  const [formData, setFormData] = useState<UserProfileData>({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    company: '',
+    photoURL: ''
+  });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imgLoadError, setImgLoadError] = useState(false);
+
+  // Sync tab from URL search params if changed
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setFormData({
+            name: data.name || user.displayName || '',
+            email: data.email || user.email || '',
+            phone: data.phone || '',
+            address: data.address || '',
+            city: data.city || '',
+            company: data.company || '',
+            photoURL: data.photoURL || user.photoURL || ''
+          });
+        } else {
+          setFormData(prev => ({
+            ...prev,
+            name: user.displayName || '',
+            email: user.email || '',
+            photoURL: user.photoURL || ''
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        toast.error('Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
+
+  useEffect(() => {
+    if (activeTab !== 'offers' || !user) return;
+    const fetchOffers = async () => {
+      setOffersLoading(true);
+      try {
+        const q = query(
+          collection(db, 'domain_offers'),
+          where('email', '==', user.email)
+        );
+        const snap = await getDocs(q);
+        let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        data.sort((a: any, b: any) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        setOffers(data);
+      } catch (err) {
+        console.error('Error fetching offers:', err);
+      } finally {
+        setOffersLoading(false);
+      }
+    };
+    fetchOffers();
+  }, [activeTab, user]);
+
+  
+  useEffect(() => {
+    if (!user) return;
+    const fetchPreBooks = async () => {
+      setPreBooksLoading(true);
+      try {
+        const q = query(collection(db, 'pre_bookings'), where('email', '==', user.email));
+        const snap = await getDocs(q);
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        data.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setPreBooks(data);
+      } catch (err) {
+        console.error('Error fetching prebooks:', err);
+      } finally {
+        setPreBooksLoading(false);
+      }
+    };
+    fetchPreBooks();
+  }, [user]);
+
+  // Fetch all orders for the user unconditionally to show stats
+  useEffect(() => {
+    if (!user) return;
+    const fetchOrders = async () => {
+      setOrdersLoading(true);
+      try {
+        const q = query(
+          collection(db, 'orders'),
+          where('userId', '==', user.uid)
+        );
+        const snap = await getDocs(q);
+        let fetchedOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // Client-side sort to avoid requiring a composite index in Firestore
+        fetchedOrders.sort((a: any, b: any) => {
+          const getOrderDate = (val: any) => {
+            if (!val) return 0;
+            if (val.toDate) return val.toDate().getTime();
+            if (val.seconds) return val.seconds * 1000;
+            return new Date(val).getTime();
+          };
+          return getOrderDate(b.createdAt) - getOrderDate(a.createdAt);
+        });
+        
+        setOrders(fetchedOrders);
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [activeTab, user]);
+
+  const handlePayOffer = (offer: any) => {
+    const product = {
+      id: `domain_${offer.domain}`,
+      name: `Domain Registration - ${offer.domain}`,
+      description: '1 Year Registration (Accepted Offer)',
+      price: offer.amount,
+      category: 'Hosting & Domains',
+      stock: 9999,
+      images: [],
+      createdAt: new Date().toISOString(),
+      itemType: 'domain' as const,
+      domainTld: offer.domain.split('.').pop() || '',
+      termYears: 1,
+    };
+    addToCart(product as any);
+    navigate('/hosting/checkout');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setSaving(true);
+
+    // DEV MODE: Simulate save
+    if (import.meta.env.DEV) {
+      await new Promise(r => setTimeout(r, 800));
+      toast.success('[DEV] Profile updated! (Simulated)');
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      await setDoc(docRef, {
+        name: formData.name,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        company: formData.company,
+        photoURL: formData.photoURL,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      toast.success('Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </Layout>
+    );
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error('Image size should be less than 3MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    setImgLoadError(false);
+
+    try {
+      let finalUrl = '';
+      
+      // Try Firebase Storage first
+      try {
+        const storageRef = ref(storage, `profiles/${user.uid}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        finalUrl = await getDownloadURL(storageRef);
+      } catch (storageErr) {
+        console.warn('Storage upload fallback to base64:', storageErr);
+        // Fallback to high quality base64 data URL
+        finalUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      setFormData(prev => ({ ...prev, photoURL: finalUrl }));
+      
+      // Save to Firestore
+      const docRef = doc(db, 'users', user.uid);
+      await setDoc(docRef, { photoURL: finalUrl, updatedAt: new Date().toISOString() }, { merge: true });
+
+      // Also update Firebase Auth profile if current user is active
+      if (auth.currentUser) {
+        try {
+          await updateProfile(auth.currentUser, { photoURL: finalUrl.startsWith('data:') ? undefined : finalUrl });
+        } catch {
+          // ignore auth profile photo length limit
+        }
+      }
+
+      toast.success('Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to update profile picture. Please try another image.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  
