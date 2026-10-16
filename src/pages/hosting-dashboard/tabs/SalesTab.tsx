@@ -128,7 +128,7 @@ export function SalesTab({ state }) {
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 600 }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 600 }} tickFormatter={val => `৳${val}`} />
               <Tooltip 
-                formatter={(value) => [formatCurrency(value), '']} 
+                formatter={(value: any) => [formatCurrency(Number(value) || 0), '']} 
                 contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px 16px', fontWeight: 'bold' }}
                 cursor={{ stroke: '#94A3B8', strokeWidth: 1, strokeDasharray: '4 4' }}
               />

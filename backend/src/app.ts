@@ -206,13 +206,8 @@ export function createApp(): Express {
   apiRouter.use("/", campaignRouter);
 
   app.use("/api", apiRouter);
-  app.use("/", apiRouter);
 
   app.all("/api/*", (req, res) => {
-    res.status(404).json({ error: "API Endpoint Not Found" });
-  });
-
-  app.all("/*", (req, res) => {
     res.status(404).json({ error: "API Endpoint Not Found" });
   });
 

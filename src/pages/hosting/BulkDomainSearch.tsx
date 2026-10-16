@@ -28,7 +28,7 @@ export const BulkDomainSearch = () => {
       return clean;
     };
     
-    const domainsToSearch = Array.from(new Set(rawDomains.map(processDomain))).slice(0, 20); // Max 20
+    const domainsToSearch: string[] = Array.from<string>(new Set(rawDomains.map(processDomain))).slice(0, 20); // Max 20
     
     if (domainsToSearch.length === 0) {
       toast.error('Please enter at least one domain to search.');

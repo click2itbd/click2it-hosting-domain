@@ -148,7 +148,7 @@ export function DashboardTab({ state }) {
                                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                                 ))}
                               </Pie>
-                              <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                              <Tooltip formatter={(value: any) => formatCurrency(Number(value) || 0)} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                             </PieChart>
                           </ResponsiveContainer>
                         ) : (
@@ -214,7 +214,7 @@ export function DashboardTab({ state }) {
                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 500 }} dy={10} />
                             <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 500 }} tickFormatter={val => `৳${val}`} />
                             <Tooltip 
-                              formatter={(value) => [formatCurrency(value), '']} 
+                              formatter={(value: any) => [formatCurrency(Number(value) || 0), '']} 
                               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                             />
                             <Area type="monotone" dataKey="paid" stroke="#3B82F6" fillOpacity={1} fill="url(#colorPaid)" strokeWidth={3} activeDot={{ r: 6, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} />

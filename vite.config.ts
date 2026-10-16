@@ -14,14 +14,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 3001,
-      host: true,
-      proxy: {
-        "/api": {
-          target: `http://localhost:${process.env.PORT || env.PORT || 4001}`,
-          changeOrigin: true,
-        },
-      },
+      port: 3000,
+      host: '0.0.0.0',
+      allowedHosts: true,
       hmr: process.env.DISABLE_HMR !== "true",
     },
     build: {
