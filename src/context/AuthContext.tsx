@@ -5,14 +5,29 @@ import { auth, db } from '../firebase';
 import { UserProfile, UserPermission } from '../types';
 import { resolveApiBaseUrl } from '../services/apiClient';
 
+export interface ImpersonatedCustomer {
+  uid: string;
+  email: string;
+  displayName?: string;
+  name?: string;
+  balance?: number;
+  phone?: string;
+  customerId?: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  effectiveUser: (User | { uid: string; email: string; displayName?: string }) | null;
   profile: UserProfile | null;
   loading: boolean;
   isAdmin: boolean;
   isManager: boolean;
   isStaff: boolean;
   canAccessAdmin: boolean;
+  impersonatedCustomer: ImpersonatedCustomer | null;
+  isImpersonating: boolean;
+  startImpersonation: (customer: ImpersonatedCustomer) => void;
+  stopImpersonation: () => void;
   hasPermission: (permission: UserPermission) => boolean;
 }
 
@@ -22,6 +37,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [impersonatedCustomer, setImpersonatedCustomer] = useState<ImpersonatedCustomer | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('impersonated_customer');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const startImpersonation = (cust: ImpersonatedCustomer) => {
+    setImpersonatedCustomer(cust);
+    try {
+      sessionStorage.setItem('impersonated_customer', JSON.stringify(cust));
+    } catch (e) {
+      console.warn('Failed to save impersonated customer:', e);
+    }
+  };
+
+  const stopImpersonation = () => {
+    setImpersonatedCustomer(null);
+    try {
+      sessionStorage.removeItem('impersonated_customer');
+    } catch (e) {
+      console.warn('Failed to clear impersonation:', e);
+    }
+  };
+
+  const effectiveUser = impersonatedCustomer
+    ? ({
+        ...(user || {}),
+        uid: impersonatedCustomer.uid,
+        email: impersonatedCustomer.email,
+        displayName: impersonatedCustomer.displayName || impersonatedCustomer.name || 'Customer',
+      } as any)
+    : user;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -108,7 +158,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isManager, isStaff, canAccessAdmin, hasPermission }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        effectiveUser,
+        profile,
+        loading,
+        isAdmin,
+        isManager,
+        isStaff,
+        canAccessAdmin,
+        impersonatedCustomer,
+        isImpersonating: !!impersonatedCustomer,
+        startImpersonation,
+        stopImpersonation,
+        hasPermission,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

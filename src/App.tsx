@@ -71,10 +71,13 @@ export default function App() {
                   <Route path="/clientarea" element={<Navigate to="/profile" replace />} />
                   <Route path="/profile" element={<ProtectedRoute><LazyWrapper><Profile /></LazyWrapper></ProtectedRoute>} />
 
-                  {/* --- ADMIN DASHBOARD --- */}
+                  {/* --- ADMIN DASHBOARD & CRM --- */}
                   <Route path="/admin" element={<ProtectedRoute adminOnly><LazyWrapper><HostingBillingDashboard /></LazyWrapper></ProtectedRoute>} />
                   <Route path="/admin/billing" element={<ProtectedRoute adminOnly><LazyWrapper><HostingBillingDashboard /></LazyWrapper></ProtectedRoute>} />
                   <Route path="/admin/*" element={<ProtectedRoute adminOnly><LazyWrapper><HostingBillingDashboard /></LazyWrapper></ProtectedRoute>} />
+                  <Route path="/whatsapp-crm" element={<Navigate to="/admin?tab=whatsapp-crm" replace />} />
+                  <Route path="/meta-campaigns" element={<Navigate to="/admin?tab=meta-campaigns" replace />} />
+                  <Route path="/campaigns" element={<Navigate to="/admin?tab=meta-campaigns" replace />} />
 
                   {/* --- ROOT & HOSTING PAGES --- */}
                   <Route path="/" element={<Hosting />} />

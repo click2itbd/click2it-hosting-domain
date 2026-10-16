@@ -4,9 +4,11 @@ import { apiClient } from '../services/apiClient';
 import { toast } from 'react-hot-toast';
 import { Spinner } from '../pages/hosting-dashboard/components/SharedUI';
 import { auth, db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import { collection, doc, getDoc, getDocs, setDoc, query, where, orderBy, limit } from 'firebase/firestore';
 
 export function CustomerWalletTab() {
+  const { user, effectiveUser, impersonatedCustomer } = useAuth();
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [deposits, setDeposits] = useState<any[]>([]);
@@ -21,9 +23,36 @@ export function CustomerWalletTab() {
   const [depositNotes, setDepositNotes] = useState<string>('');
   const [submittingDeposit, setSubmittingDeposit] = useState<boolean>(false);
 
+  const targetUid = impersonatedCustomer?.uid || effectiveUser?.uid || auth.currentUser?.uid;
+
   const fetchWallet = async () => {
     setLoading(true);
-    const currentUser = auth.currentUser;
+
+    // If viewing as impersonated customer, fetch direct from Firestore for that customer
+    if (impersonatedCustomer && targetUid) {
+      try {
+        const userDocSnap = await getDoc(doc(db, 'users', targetUid));
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          setBalance(typeof userData?.balance === 'number' ? userData.balance : 0);
+        }
+        const txQ = query(collection(db, 'wallet_transactions'), where('userId', '==', targetUid), limit(50));
+        const txSnap = await getDocs(txQ);
+        const txList = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        txList.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setTransactions(txList);
+
+        const depQ = query(collection(db, 'deposit_requests'), where('userId', '==', targetUid), limit(50));
+        const depSnap = await getDocs(depQ);
+        const depList = depSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        depList.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setDeposits(depList);
+        setLoading(false);
+        return;
+      } catch (fErr) {
+        console.warn('Direct impersonated customer wallet fetch error:', fErr);
+      }
+    }
 
     try {
       // 1. Try API
@@ -40,9 +69,9 @@ export function CustomerWalletTab() {
     }
 
     // 2. Direct Firestore fallback if user is authenticated
-    if (currentUser) {
+    if (targetUid) {
       try {
-        const userDocSnap = await getDoc(doc(db, 'users', currentUser.uid));
+        const userDocSnap = await getDoc(doc(db, 'users', targetUid));
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           setBalance(typeof userData?.balance === 'number' ? userData.balance : 0);
@@ -52,7 +81,7 @@ export function CustomerWalletTab() {
         try {
           const txQ = query(
             collection(db, 'wallet_transactions'),
-            where('userId', '==', currentUser.uid),
+            where('userId', '==', targetUid),
             orderBy('createdAt', 'desc'),
             limit(50)
           );
@@ -60,7 +89,7 @@ export function CustomerWalletTab() {
           setTransactions(txSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch (e) {
           console.warn('Direct tx fallback query skipped orderBy:', e);
-          const txQ = query(collection(db, 'wallet_transactions'), where('userId', '==', currentUser.uid), limit(50));
+          const txQ = query(collection(db, 'wallet_transactions'), where('userId', '==', targetUid), limit(50));
           const txSnap = await getDocs(txQ);
           setTransactions(txSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         }
@@ -69,14 +98,14 @@ export function CustomerWalletTab() {
         try {
           const depQ = query(
             collection(db, 'deposit_requests'),
-            where('userId', '==', currentUser.uid),
+            where('userId', '==', targetUid),
             orderBy('createdAt', 'desc'),
             limit(20)
           );
           const depSnap = await getDocs(depQ);
           setDeposits(depSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch {
-          const depQ = query(collection(db, 'deposit_requests'), where('userId', '==', currentUser.uid), limit(20));
+          const depQ = query(collection(db, 'deposit_requests'), where('userId', '==', targetUid), limit(20));
           const depSnap = await getDocs(depQ);
           setDeposits(depSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         }

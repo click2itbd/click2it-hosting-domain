@@ -30,8 +30,10 @@ export class OpenproviderDomainProvider implements IDomainProvider {
   constructor(username: string, passwordHash: string, isSandbox: boolean = false, defaultHandle: string = '') {
     this.username = username;
     this.passwordHash = passwordHash;
-    // Default to production Openprovider API (for cp.openprovider.eu members)
-    this.baseUrl = isSandbox ? 'https://api.cte.openprovider.eu/v1' : 'https://api.openprovider.eu/v1';
+    // Default to production Openprovider API or official sandbox API
+    this.baseUrl = isSandbox 
+      ? (process.env.OPENPROVIDER_SANDBOX_URL || 'https://api.sandbox.openprovider.nl/v1beta') 
+      : (process.env.OPENPROVIDER_API_URL || 'https://api.openprovider.eu/v1');
     this.defaultHandle = defaultHandle || process.env.OPENPROVIDER_DEFAULT_HANDLE || '';
   }
 
@@ -52,10 +54,14 @@ export class OpenproviderDomainProvider implements IDomainProvider {
       return response;
     } catch (err: any) {
       OpenproviderDomainProvider.consecutiveFailures++;
-      const isConnectionError = err.code === 'UND_ERR_CONNECT_TIMEOUT' || String(err.message || '').includes('ECONNREFUSED');
-      if (OpenproviderDomainProvider.consecutiveFailures >= 3 || isConnectionError) {
-        OpenproviderDomainProvider.circuitOpenUntil = Date.now() + 30_000;
-        console.warn(`[Openprovider] Circuit breaker tripped for 30s due to connection failure: ${err.message}`);
+      const errMsg = String(err.message || '');
+      const isConnectionError = err.code === 'UND_ERR_CONNECT_TIMEOUT' || 
+        errMsg.includes('ECONNREFUSED') || 
+        errMsg.includes('fetch failed') ||
+        err.name === 'TypeError' ||
+        err.name === 'AbortError';
+      if (OpenproviderDomainProvider.consecutiveFailures >= 2 || isConnectionError) {
+        OpenproviderDomainProvider.circuitOpenUntil = Date.now() + 60_000;
       }
       throw err;
     } finally {

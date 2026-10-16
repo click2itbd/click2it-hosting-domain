@@ -10,6 +10,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { useCart } from '../../context/CartContext';
 import toast from 'react-hot-toast';
 import { SEO } from '../../components/SEO';
+import { DomainCrossSellModal } from '../../components/hosting/DomainCrossSellModal';
 
 export default function DomainSearchResults() {
   const [searchParams] = useSearchParams();
@@ -26,6 +27,7 @@ export default function DomainSearchResults() {
   const [offerPhone, setOfferPhone] = useState('');
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const [infoDomain, setInfoDomain] = useState<any | null>(null);
+  const [crossSellDomain, setCrossSellDomain] = useState<{ domain: string; price: number } | null>(null);
   const [favorites, setFavorites] = useState<string[]>(() => {
     const saved = localStorage.getItem('domainFavorites');
     return saved ? JSON.parse(saved) : [];
@@ -167,6 +169,7 @@ export default function DomainSearchResults() {
     };
     addToCart(product as any);
     toast.success(`Domain ${domain} added to cart`);
+    setCrossSellDomain({ domain, price });
   };
 
   const handleMakeOffer = async (e: React.FormEvent) => {
@@ -514,6 +517,20 @@ export default function DomainSearchResults() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Domain Cross-Sell Offer Modal (Hosting & VPS) */}
+      {crossSellDomain && (
+        <DomainCrossSellModal
+          isOpen={!!crossSellDomain}
+          onClose={() => setCrossSellDomain(null)}
+          domainName={crossSellDomain.domain}
+          domainPrice={crossSellDomain.price}
+          onOpenCustomBuilder={() => {
+            setCrossSellDomain(null);
+            navigate('/hosting?custom=true');
+          }}
+        />
       )}
     </Layout>
   );

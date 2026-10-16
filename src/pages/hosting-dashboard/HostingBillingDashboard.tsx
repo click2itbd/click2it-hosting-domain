@@ -5,7 +5,8 @@ import { TopNavbar } from './components/TopNavbar';
 import { 
   DashboardTab, DomainSearchListTab, ServerAccountsTab, AllOrdersTab, TicketsTab,
   DomainOffersTab, DomainRenewalsTab, UsersTab, FinancialTab, SalesTab, ApiSettingsTab, ModuleTabs,
-  BdDomainApplicationsTab, NameserverRequestsTab, SslCertificatesTab, DnsManagementTab
+  BdDomainApplicationsTab, NameserverRequestsTab, SslCertificatesTab, DnsManagementTab,
+  WhatsAppCrmTab, MetaCampaignsTab
 } from './tabs';
 
 export function HostingBillingDashboard() {
@@ -36,6 +37,8 @@ export function HostingBillingDashboard() {
             <SalesTab state={state} />
             <ApiSettingsTab state={state} />
             <ModuleTabs state={state} />
+            {state.activeTab === 'whatsapp-crm' && <WhatsAppCrmTab state={state} />}
+            {state.activeTab === 'meta-campaigns' && <MetaCampaignsTab state={state} />}
           </div>
         </div>
       </main>

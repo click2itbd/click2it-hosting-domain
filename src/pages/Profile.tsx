@@ -32,7 +32,8 @@ interface UserProfileData {
 }
 
 export const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, effectiveUser, impersonatedCustomer, stopImpersonation } = useAuth();
+  const activeUser = effectiveUser || user;
   const { settings } = useSettings();
   const { addToCart } = useCart();
   const navigate = useNavigate();
@@ -70,29 +71,29 @@ export const Profile: React.FC = () => {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user) return;
+      if (!activeUser) return;
 
       try {
-        const docRef = doc(db, 'users', user.uid);
+        const docRef = doc(db, 'users', activeUser.uid);
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
           const data = docSnap.data();
           setFormData({
-            name: data.name || user.displayName || '',
-            email: data.email || user.email || '',
+            name: data.name || activeUser.displayName || '',
+            email: data.email || activeUser.email || '',
             phone: data.phone || '',
             address: data.address || '',
             city: data.city || '',
             company: data.company || '',
-            photoURL: data.photoURL || user.photoURL || ''
+            photoURL: data.photoURL || (activeUser as any).photoURL || ''
           });
         } else {
           setFormData(prev => ({
             ...prev,
-            name: user.displayName || '',
-            email: user.email || '',
-            photoURL: user.photoURL || ''
+            name: activeUser.displayName || '',
+            email: activeUser.email || '',
+            photoURL: (activeUser as any).photoURL || ''
           }));
         }
       } catch (error) {
@@ -104,16 +105,16 @@ export const Profile: React.FC = () => {
     };
 
     fetchProfile();
-  }, [user]);
+  }, [activeUser]);
 
   useEffect(() => {
-    if (activeTab !== 'offers' || !user) return;
+    if (activeTab !== 'offers' || !activeUser) return;
     const fetchOffers = async () => {
       setOffersLoading(true);
       try {
         const q = query(
           collection(db, 'domain_offers'),
-          where('email', '==', user.email)
+          where('email', '==', activeUser.email)
         );
         const snap = await getDocs(q);
         let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -130,20 +131,17 @@ export const Profile: React.FC = () => {
       }
     };
     fetchOffers();
-  }, [activeTab, user]);
-
-  
-
+  }, [activeTab, activeUser]);
 
   // Fetch all orders for the user unconditionally to show stats
   useEffect(() => {
-    if (!user) return;
+    if (!activeUser) return;
     const fetchOrders = async () => {
       setOrdersLoading(true);
       try {
         const q = query(
           collection(db, 'orders'),
-          where('userId', '==', user.uid)
+          where('userId', '==', activeUser.uid)
         );
         const snap = await getDocs(q);
         let fetchedOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -167,7 +165,7 @@ export const Profile: React.FC = () => {
       }
     };
     fetchOrders();
-  }, [activeTab, user]);
+  }, [activeTab, activeUser]);
 
   const handlePayOffer = (offer: any) => {
     const product = {
@@ -289,6 +287,39 @@ export const Profile: React.FC = () => {
   return (
     <Layout>
       <SEO title="My Profile" />
+
+      {impersonatedCustomer && (
+        <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-blue-950 text-white px-4 py-3 shadow-xl border-b border-indigo-500/30 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <span className="text-slate-300 font-medium">Customer Portal (Client Area) — Impersonating:</span>
+              <span className="font-extrabold text-sm text-cyan-300">{impersonatedCustomer.displayName || impersonatedCustomer.name || 'Customer'}</span>
+              <span className="text-slate-400 font-mono">({impersonatedCustomer.email})</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  stopImpersonation();
+                  navigate('/admin?tab=users');
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl shadow transition-all flex items-center gap-1.5"
+              >
+                Return to Admin Dashboard
+              </button>
+              <button
+                onClick={stopImpersonation}
+                className="bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-xl transition-all"
+              >
+                Exit Impersonation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-gray-50 min-h-screen py-8">
         <div className="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-8">

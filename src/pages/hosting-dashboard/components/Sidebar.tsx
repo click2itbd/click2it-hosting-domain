@@ -1,11 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, FileEdit, Folder, Package, PlusSquare, Tag, Server, Settings, Globe, LogOut, Users, DollarSign, HardDrive, RefreshCw, HeadphonesIcon, LayoutDashboard, ShoppingCart, Shield } from 'lucide-react';
+import { X, FileEdit, Folder, Package, PlusSquare, Tag, Server, Settings, Globe, LogOut, Users, DollarSign, HardDrive, RefreshCw, HeadphonesIcon, LayoutDashboard, ShoppingCart, Shield, MessageSquare, Megaphone } from 'lucide-react';
 import { auth } from '../../../firebase';
 import { cn } from '../../../lib/utils';
+import { useAuth } from '../../../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 export function Sidebar({ state }) {
   const navigate = useNavigate();
+  const { startImpersonation } = useAuth();
   const { sidebarOpen, setSidebarOpen, activeTab, setActiveTab, loginAsUserId, setLoginAsUserId, users } = state;
 
   return (
@@ -49,6 +52,8 @@ export function Sidebar({ state }) {
             { icon: HeadphonesIcon, label: 'Support Tickets', id: 'tickets' },
               { icon: Shield, label: 'SSL Certificates', id: 'ssl-certificates' },
               { icon: Globe, label: 'DNS Management', id: 'dns-management' },
+              { icon: MessageSquare, label: 'WhatsApp CRM (WAPlus)', id: 'whatsapp-crm' },
+              { icon: Megaphone, label: 'Meta Ads (FB & IG)', id: 'meta-campaigns' },
           ].map((item, idx) => {
             const isActive = activeTab === item.id;
             return (
@@ -124,7 +129,26 @@ export function Sidebar({ state }) {
         <div className="flex items-center gap-2">
           <select
             value={loginAsUserId}
-            onChange={e => setLoginAsUserId(e.target.value)}
+            onChange={e => {
+              const val = e.target.value;
+              setLoginAsUserId(val);
+              if (val) {
+                const selected = users.find((u: any) => (u.id === val || u.uid === val));
+                if (selected) {
+                  startImpersonation({
+                    uid: selected.id || selected.uid,
+                    email: selected.email || '',
+                    displayName: selected.displayName || selected.name || 'Customer',
+                    name: selected.name || selected.displayName || 'Customer',
+                    balance: selected.balance,
+                    phone: selected.phone || selected.phoneNumber,
+                    customerId: selected.customerId
+                  });
+                  toast.success(`Opening Customer Portal for ${selected.displayName || selected.name || selected.email}`);
+                  navigate('/profile');
+                }
+              }
+            }}
             className="bg-[#0f172a] text-xs font-semibold text-slate-300 border border-white/5 rounded-lg p-2.5 flex-1 focus:ring-1 focus:ring-cyan-500 outline-none transition-all">
             <option value="">Select user...</option>
             {users.map(u => (

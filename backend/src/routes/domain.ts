@@ -24,50 +24,85 @@ interface DomainPricing {
 
 const domainRouter = Router();
 let domainPricingCache: { expiresAt: number; data: DomainPricing[] } | null = null;
+let livePricingCooldownUntil = 0;
 const PRICED_TLDS = ['com', 'net', 'org', 'xyz', 'io', 'co', 'dev', 'online', 'info', 'biz', 'store'];
 
 export async function fetchLiveOpenproviderPricingList(): Promise<DomainPricing[]> {
+  if (Date.now() < livePricingCooldownUntil) {
+    return [];
+  }
+
   try {
     const config = await getDomainConfig();
+    if (!config.domainApiKey || !config.openproviderPassword) {
+      return [];
+    }
+
     const provider = getDomainProvider(config);
+    if (!provider.getTldPricing) return [];
+
     let pricingSettings = { usdToBdtRate: 123, markupPercent: 15 };
     try {
       pricingSettings = await getDomainPricingSettings();
     } catch {}
 
-    if (!provider.getTldPricing) return [];
+    // Probe the connection first with .com to avoid running 10 failed queries in parallel
+    let firstQuote: any = null;
+    try {
+      firstQuote = await provider.getTldPricing('com');
+    } catch (probeErr: any) {
+      // If live connection or auth failed, cooldown for 5 minutes and fall back smoothly
+      livePricingCooldownUntil = Date.now() + 5 * 60_000;
+      console.info(`[Domain] Live Openprovider pricing temporarily unavailable (${probeErr.message}). Using stored/default pricing.`);
+      return [];
+    }
 
-    const results = await Promise.all(
-      PRICED_TLDS.map(async (tld) => {
-        try {
-          const quote = await provider.getTldPricing!(tld);
-          if (
-            quote &&
-            quote.currency === 'USD' &&
-            Number.isFinite(quote.registrationPrice) && quote.registrationPrice > 0 &&
-            Number.isFinite(quote.renewalPrice) && quote.renewalPrice > 0 &&
-            Number.isFinite(quote.transferPrice) && quote.transferPrice > 0
-          ) {
-            return {
-              tld: quote.tld.startsWith('.') ? quote.tld : `.${quote.tld}`,
-              registerPrice: calculateCustomerPriceBdt(quote.registrationPrice, pricingSettings),
-              renewPrice: calculateCustomerPriceBdt(quote.renewalPrice, pricingSettings),
-              transferPrice: calculateCustomerPriceBdt(quote.transferPrice, pricingSettings),
-              currency: 'BDT',
-              isActive: true,
-            };
-          }
-          return null;
-        } catch (e: any) {
-          console.warn(`[Domain] Failed live pricing for .${tld}:`, e.message);
-          return null;
+    const results: (DomainPricing | null)[] = [];
+    if (
+      firstQuote &&
+      firstQuote.currency === 'USD' &&
+      Number.isFinite(firstQuote.registrationPrice) && firstQuote.registrationPrice > 0 &&
+      Number.isFinite(firstQuote.renewalPrice) && firstQuote.renewalPrice > 0 &&
+      Number.isFinite(firstQuote.transferPrice) && firstQuote.transferPrice > 0
+    ) {
+      results.push({
+        tld: '.com',
+        registerPrice: calculateCustomerPriceBdt(firstQuote.registrationPrice, pricingSettings),
+        renewPrice: calculateCustomerPriceBdt(firstQuote.renewalPrice, pricingSettings),
+        transferPrice: calculateCustomerPriceBdt(firstQuote.transferPrice, pricingSettings),
+        currency: 'BDT',
+        isActive: true,
+      });
+    }
+
+    // Now query remaining TLDs safely
+    for (const tld of PRICED_TLDS.slice(1)) {
+      try {
+        const quote = await provider.getTldPricing!(tld);
+        if (
+          quote &&
+          quote.currency === 'USD' &&
+          Number.isFinite(quote.registrationPrice) && quote.registrationPrice > 0 &&
+          Number.isFinite(quote.renewalPrice) && quote.renewalPrice > 0 &&
+          Number.isFinite(quote.transferPrice) && quote.transferPrice > 0
+        ) {
+          results.push({
+            tld: quote.tld.startsWith('.') ? quote.tld : `.${quote.tld}`,
+            registerPrice: calculateCustomerPriceBdt(quote.registrationPrice, pricingSettings),
+            renewPrice: calculateCustomerPriceBdt(quote.renewalPrice, pricingSettings),
+            transferPrice: calculateCustomerPriceBdt(quote.transferPrice, pricingSettings),
+            currency: 'BDT',
+            isActive: true,
+          });
         }
-      })
-    );
+      } catch {
+        // Individual TLD price not available or not supported on this account, skip silently
+      }
+    }
 
     const livePricing = results.filter((p): p is DomainPricing => p !== null);
     if (livePricing.length > 0) {
-      domainPricingCache = { expiresAt: Date.now() + 10 * 60_000, data: livePricing };
+      domainPricingCache = { expiresAt: Date.now() + 15 * 60_000, data: livePricing };
       try {
         const db = getAdminDb();
         if (typeof db?.batch === 'function') {
@@ -83,8 +118,8 @@ export async function fetchLiveOpenproviderPricingList(): Promise<DomainPricing[
       }
     }
     return livePricing;
-  } catch (err) {
-    console.warn('[Domain] Failed to fetch live Openprovider pricing list:', err);
+  } catch (err: any) {
+    livePricingCooldownUntil = Date.now() + 5 * 60_000;
     return [];
   }
 }

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, Search, Shield, ShieldOff, CheckCircle2, User as UserIcon, Wallet, PlusCircle, MinusCircle, 
   History, ArrowUpRight, ArrowDownLeft, DollarSign, Clock, AlertCircle, Check, X, Eye, LogIn, ExternalLink, RefreshCw,
@@ -9,9 +11,12 @@ import { Spinner } from '../components/SharedUI';
 import { toast } from 'react-hot-toast';
 import { apiClient } from '../../../services/apiClient';
 import { db } from '../../../firebase';
+import { useAuth } from '../../../context/AuthContext';
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 
 export function UsersTab({ state }: { state: any }) {
+  const navigate = useNavigate();
+  const { startImpersonation } = useAuth();
   const {
     activeTab, userSearch, setUserSearch, filteredUsers, userRoleEdits, setUserRoleEdits,
     saveUserRole, savingUserRole, users, setUsers, setLoginAsUserId
@@ -89,17 +94,57 @@ export function UsersTab({ state }: { state: any }) {
     }
   }, [activeTab]);
 
+  // Launch Customer Portal with Impersonation Session
+  const handleLaunchCustomerPortal = (userObj: any) => {
+    if (!userObj) return;
+    const targetUid = userObj.id || userObj.uid || userObj._id;
+    if (!targetUid) {
+      toast.error('Cannot open customer portal: Customer ID missing');
+      return;
+    }
+    const customerName = userObj.displayName || userObj.name || userObj.email || 'Customer';
+    const customerEmail = userObj.email || '';
+    
+    startImpersonation({
+      uid: targetUid,
+      email: customerEmail,
+      displayName: customerName,
+      name: customerName,
+      balance: typeof userObj.balance === 'number' ? userObj.balance : 0,
+      phone: userObj.phone || userObj.phoneNumber || '',
+      customerId: userObj.customerId || customerFullData?.customerId || ''
+    });
+    
+    toast.success(`Opening Customer Portal for ${customerName}`);
+    navigate('/profile');
+  };
+
   // Fetch Full Customer Details (Openprovider & Hosting & Transactions & Profile)
   const fetchCustomerFullDetails = async (userObj: any) => {
-    const targetUid = userObj.id || userObj.uid;
+    if (!userObj) return;
+    const targetUid = userObj.id || userObj.uid || userObj._id;
+    if (!targetUid) {
+      toast.error('Customer ID missing');
+      return;
+    }
+
     setSelectedCustomer(userObj);
     setCustomerDetailsTab('view');
     setLoadingCustomerDetails(true);
 
-    // Initialize edit form defaults
-    setEditForm({
-      name: userObj.displayName || userObj.name || '',
+    const numericId = userObj.customerId || Math.abs(String(targetUid).split('').reduce((a: number, b: string) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 90000000 + 10000000;
+
+    // Instant local initialization so modal opens immediately with no blank screen
+    const initialData = {
+      id: targetUid,
+      uid: targetUid,
+      customerId: String(numericId),
+      name: userObj.displayName || userObj.name || userObj.email || 'Customer',
+      displayName: userObj.displayName || userObj.name || 'Customer',
       email: userObj.email || '',
+      status: userObj.status || 'active',
+      statusDescription: userObj.statusDescription || 'Active Account',
+      pin: userObj.pin || '2082',
       company: userObj.company || '',
       address1: userObj.address1 || '',
       address2: userObj.address2 || '',
@@ -110,17 +155,42 @@ export function UsersTab({ state }: { state: any }) {
       country: userObj.country || 'Bangladesh',
       phone: userObj.phone || userObj.phoneNumber || '',
       mobile: userObj.mobile || userObj.phone || userObj.phoneNumber || '',
-      pin: userObj.pin || String(Math.floor(1000 + Math.random() * 9000)),
       language: userObj.language || 'English',
-      status: userObj.status || 'active',
-      statusDescription: userObj.statusDescription || 'Active Account'
+      balance: typeof userObj.balance === 'number' ? userObj.balance : 0,
+      totalReceipts: 0,
+      createdAt: userObj.createdAt || new Date().toISOString(),
+      domains: [],
+      hosting: [],
+      transactions: [],
+      orders: []
+    };
+
+    setCustomerFullData(initialData);
+
+    // Initialize edit form defaults
+    setEditForm({
+      name: initialData.name,
+      email: initialData.email,
+      company: initialData.company,
+      address1: initialData.address1,
+      address2: initialData.address2,
+      address3: initialData.address3,
+      city: initialData.city,
+      zip: initialData.zip,
+      state: initialData.state,
+      country: initialData.country,
+      phone: initialData.phone,
+      mobile: initialData.mobile,
+      pin: initialData.pin,
+      language: initialData.language,
+      status: initialData.status,
+      statusDescription: initialData.statusDescription
     });
 
     try {
       const res = await apiClient.get(`/api/customers/admin/${targetUid}/details`);
       if (res.data?.success && res.data.customer) {
         setCustomerFullData(res.data.customer);
-        // update form with fresh backend data
         const c = res.data.customer;
         setEditForm({
           name: c.name || c.displayName || '',
@@ -135,7 +205,7 @@ export function UsersTab({ state }: { state: any }) {
           country: c.country || 'Bangladesh',
           phone: c.phone || '',
           mobile: c.mobile || c.phone || '',
-          pin: c.pin || String(Math.floor(1000 + Math.random() * 9000)),
+          pin: c.pin || '2082',
           language: c.language || 'English',
           status: c.status || 'active',
           statusDescription: c.statusDescription || 'Active Account'
@@ -148,47 +218,34 @@ export function UsersTab({ state }: { state: any }) {
         const uSnap = await getDoc(doc(db, 'users', targetUid));
         const uData = uSnap.exists() ? uSnap.data() : {};
 
-        // Query domains & hosting for user
-        const domSnap = await getDocs(query(collection(db, 'domainOrders'), where('userId', '==', targetUid)));
-        const hostSnap = await getDocs(query(collection(db, 'hostingAccounts'), where('userId', '==', targetUid)));
-        const txSnap = await getDocs(query(collection(db, 'wallet_transactions'), where('userId', '==', targetUid)));
-        const ordSnap = await getDocs(query(collection(db, 'orders'), where('userId', '==', targetUid)));
+        // Query domains & hosting for user safely
+        const [domSnap, hostSnap, txSnap, ordSnap] = await Promise.all([
+          getDocs(query(collection(db, 'domainOrders'), where('userId', '==', targetUid))).catch(() => ({ docs: [] })),
+          getDocs(query(collection(db, 'hostingAccounts'), where('userId', '==', targetUid))).catch(() => ({ docs: [] })),
+          getDocs(query(collection(db, 'wallet_transactions'), where('userId', '==', targetUid))).catch(() => ({ docs: [] })),
+          getDocs(query(collection(db, 'orders'), where('userId', '==', targetUid))).catch(() => ({ docs: [] }))
+        ]);
 
-        const domainsList = domSnap.docs.map(d => ({ id: d.id, source: 'openprovider', ...d.data() }));
-        const hostingList = hostSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const txList = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const ordList = ordSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const domainsList = domSnap.docs.map((d: any) => ({ id: d.id, source: 'openprovider', ...d.data() }));
+        const hostingList = hostSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+        const txList = txSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+        const ordList = ordSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
 
         const totalRecs = txList.filter((t: any) => t.type === 'credit').reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
-        const numericId = uData.customerId || Math.abs(targetUid.split('').reduce((a: number, b: string) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 90000000 + 10000000;
 
         setCustomerFullData({
+          ...initialData,
+          ...uData,
           id: targetUid,
           uid: targetUid,
-          customerId: String(numericId),
-          name: uData.displayName || uData.name || uData.email || 'Customer',
+          customerId: String(uData.customerId || initialData.customerId),
+          name: uData.displayName || uData.name || uData.email || initialData.name,
           email: uData.email || userObj.email || '',
-          status: uData.status || 'active',
-          statusDescription: uData.statusDescription || 'Active Account',
-          pin: uData.pin || String(Math.floor(1000 + Math.random() * 9000)),
-          company: uData.company || '',
-          address1: uData.address1 || '',
-          address2: uData.address2 || '',
-          address3: uData.address3 || '',
-          city: uData.city || 'Chattogram',
-          zip: uData.zip || '4216',
-          state: uData.state || uData.region || 'Chittagong',
-          country: uData.country || 'Bangladesh',
-          phone: uData.phone || uData.phoneNumber || '',
-          mobile: uData.mobile || uData.phone || '',
-          language: uData.language || 'English',
-          balance: typeof uData.balance === 'number' ? uData.balance : (userObj.balance || 0),
-          totalReceipts: totalRecs,
-          createdAt: uData.createdAt || userObj.createdAt || new Date().toISOString(),
           domains: domainsList,
           hosting: hostingList,
           transactions: txList,
-          orders: ordList
+          orders: ordList,
+          totalReceipts: totalRecs
         });
       } catch (fErr) {
         console.error('Firestore direct details fetch error:', fErr);
@@ -777,28 +834,40 @@ export function UsersTab({ state }: { state: any }) {
 
                           <td className="py-4 px-6 text-right">
                             <div className="flex items-center justify-end gap-2">
+                              {/* Direct Launch Customer Portal Button */}
                               <button
-                                onClick={() => fetchCustomerFullDetails(user)}
-                                className="bg-blue-600 text-white hover:bg-blue-700 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all hover:-translate-y-0.5"
-                                title="Manage Customer Details & Services"
+                                onClick={() => handleLaunchCustomerPortal(user)}
+                                className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all hover:-translate-y-0.5"
+                                title="Open Customer Portal (Client Area)"
                               >
-                                <Eye size={14} /> Manage Customer
+                                <ExternalLink size={13} /> Customer Portal
                               </button>
 
                               <button
-                                onClick={() => setSelectedUserForBalance(user)}
+                                onClick={() => fetchCustomerFullDetails(user)}
+                                className="bg-slate-800 text-white hover:bg-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all hover:-translate-y-0.5"
+                                title="Manage Customer Details & Services"
+                              >
+                                <Eye size={13} /> Details
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setSelectedUserForBalance(user);
+                                  setIsBalanceModalOpen(true);
+                                }}
                                 className="bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all hover:-translate-y-0.5"
                                 title="Add/Deduct Wallet Balance"
                               >
-                                <DollarSign size={14} /> Balance
+                                <DollarSign size={13} /> Balance
                               </button>
 
                               <button
-                                onClick={() => setLoginAsUserId(user.id || user.uid)}
-                                className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 p-1.5 rounded-xl text-xs font-bold transition-all"
-                                title="Impersonate / Login to Customer Panel"
+                                onClick={() => handleLaunchCustomerPortal(user)}
+                                className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 p-2 rounded-xl text-xs font-bold transition-all"
+                                title="Login / Impersonate to Customer Portal"
                               >
-                                <LogIn size={14} />
+                                <LogIn size={15} />
                               </button>
 
                               {userRoleEdits[user.id || user.uid] && userRoleEdits[user.id || user.uid] !== user.role && (
@@ -931,8 +1000,8 @@ export function UsersTab({ state }: { state: any }) {
       )}
 
       {/* WHMCS CUSTOMER DETAILS & MANAGEMENT MODAL (MATCHING USER REFERENCE SCREENSHOT) */}
-      {selectedCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-200">
+      {selectedCustomer && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-slate-900/75 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-6xl max-h-[96vh] flex flex-col overflow-hidden text-slate-800 font-sans">
             
             {/* Top Modal Header Bar */}
@@ -957,12 +1026,23 @@ export function UsersTab({ state }: { state: any }) {
                 </div>
               </div>
 
-              <button
-                onClick={() => setSelectedCustomer(null)}
-                className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleLaunchCustomerPortal(selectedCustomer)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-md hover:scale-105 transition-all"
+                  title="Open Customer Portal (Client Area)"
+                >
+                  <ExternalLink size={14} /> Open Customer Portal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomer(null)}
+                  className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* WHMCS TOOLBAR ACTION BUTTONS HEADER (IDENTICAL TO SCREENSHOT) */}
@@ -1028,10 +1108,11 @@ export function UsersTab({ state }: { state: any }) {
 
                 {/* Login to Panel */}
                 <button
-                  onClick={() => setLoginAsUserId(selectedCustomer.id || selectedCustomer.uid)}
+                  type="button"
+                  onClick={() => handleLaunchCustomerPortal(selectedCustomer)}
                   className="px-3 py-1.5 border border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-600 hover:text-white rounded text-xs font-bold transition-all shadow-2xs flex items-center gap-1"
                 >
-                  <LogIn size={13} /> Login to Panel
+                  <LogIn size={13} /> Login to Customer Portal
                 </button>
 
                 <span className="text-slate-300 px-1">|</span>
@@ -1794,12 +1875,13 @@ export function UsersTab({ state }: { state: any }) {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL: CHANGE PASSWORD MODAL */}
-      {isPasswordModalOpen && selectedCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+      {isPasswordModalOpen && selectedCustomer && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
@@ -1855,12 +1937,13 @@ export function UsersTab({ state }: { state: any }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL: ADD CUSTOM INVOICE MODAL */}
-      {isInvoiceModalOpen && selectedCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+      {isInvoiceModalOpen && selectedCustomer && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <form onSubmit={handleCreateInvoice} className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
@@ -1915,12 +1998,13 @@ export function UsersTab({ state }: { state: any }) {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL: ADD / DEDUCT WALLET BALANCE MODAL */}
-      {(isBalanceModalOpen || selectedUserForBalance) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      {(isBalanceModalOpen || selectedUserForBalance) && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
             
             {/* Modal Header */}
@@ -2154,7 +2238,8 @@ export function UsersTab({ state }: { state: any }) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

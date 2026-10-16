@@ -18,6 +18,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DomainCrossSellModal } from '../../components/hosting/DomainCrossSellModal';
 
 const DOMAIN_DISCOUNTS: Record<number, number> = {
   1: 0,
@@ -39,6 +40,11 @@ export const HostingCart: React.FC = () => {
   const navigate = useNavigate();
 
   const items = allItems.filter((i) => i.category === 'Hosting & Domains');
+  const [crossSellDomain, setCrossSellDomain] = React.useState<string | null>(null);
+
+  const domainItem = items.find((i: any) => i.itemType === 'domain' || i.name?.toLowerCase().includes('domain'));
+  const hasHostingOrVps = items.some((i: any) => i.itemType === 'hosting' || i.itemType === 'vps' || (!i.itemType?.includes('domain') && !i.name?.toLowerCase().includes('domain')));
+  const extractedDomainName = domainItem ? (domainItem.name?.replace(/Domain Registration - /i, '').trim() || 'your-domain.com') : '';
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const taxes = 0;
@@ -133,6 +139,33 @@ export const HostingCart: React.FC = () => {
                   <Trash2 className="w-3.5 h-3.5" /> Clear Cart
                 </button>
               </div>
+
+              {/* Cross-Sell Offer Banner if cart has domain but no hosting */}
+              {domainItem && !hasHostingOrVps && (
+                <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-cyan-900 rounded-2xl p-5 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg border border-cyan-500/20">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-400/20 text-cyan-300 flex items-center justify-center shrink-0">
+                      <Sparkles size={20} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded-md border border-cyan-400/30">Bundle Offer</span>
+                      <h4 className="text-sm sm:text-base font-bold text-white mt-1">
+                        Power up {extractedDomainName} with High-Speed Hosting or Cloud VPS!
+                      </h4>
+                      <p className="text-xs text-slate-300">
+                        Get up to 40% OFF + Free SSL & Automated DNS linking when bundled today.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCrossSellDomain(extractedDomainName)}
+                    className="px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-xs transition-all shadow-md active:scale-95 shrink-0 flex items-center gap-1.5"
+                  >
+                    <Zap size={14} /> View Hosting & VPS Offers
+                  </button>
+                </div>
+              )}
 
               {items.map((item) => {
                 const isTransfer = item.itemType === 'domain_transfer';
@@ -285,6 +318,18 @@ export const HostingCart: React.FC = () => {
           </div>
         )}
       </div>
+      {/* Domain Cross-Sell Offer Modal */}
+      {crossSellDomain && (
+        <DomainCrossSellModal
+          isOpen={!!crossSellDomain}
+          onClose={() => setCrossSellDomain(null)}
+          domainName={crossSellDomain}
+          onOpenCustomBuilder={() => {
+            setCrossSellDomain(null);
+            navigate('/hosting?custom=true');
+          }}
+        />
+      )}
     </Layout>
   );
 };

@@ -35,7 +35,8 @@ interface DomainOrder {
 }
 
 export const MyServicesTab: React.FC = () => {
-  const { user } = useAuth();
+  const { user, effectiveUser } = useAuth();
+  const activeUser = effectiveUser || user;
   const { addToCart } = useCart();
   const { settings } = useSettings();
   const navigate = useNavigate();
@@ -99,9 +100,9 @@ export const MyServicesTab: React.FC = () => {
   const [submittingSsl, setSubmittingSsl] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!activeUser) return;
 
-    const qDomains = query(collection(db, 'domainOrders'), where('userId', '==', user.uid), limit(100));
+    const qDomains = query(collection(db, 'domainOrders'), where('userId', '==', activeUser.uid), limit(100));
     const unsubDomains = onSnapshot(qDomains, (snap) => {
       setDomains(snap.docs.map(d => ({ id: d.id, ...d.data() } as DomainOrder)));
       setLoading(false);
@@ -110,14 +111,14 @@ export const MyServicesTab: React.FC = () => {
       setLoading(false);
     });
 
-    const qSsl = query(collection(db, 'sslOrders'), where('userId', '==', user.uid), limit(100));
+    const qSsl = query(collection(db, 'sslOrders'), where('userId', '==', activeUser.uid), limit(100));
     const unsubSsl = onSnapshot(qSsl, (snap) => {
       setSslCerts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => {
       console.error('Error loading ssl certs:', err);
     });
 
-    const qHosting = query(collection(db, 'hostingAccounts'), where('userId', '==', user.uid), limit(100));
+    const qHosting = query(collection(db, 'hostingAccounts'), where('userId', '==', activeUser.uid), limit(100));
     const unsubHosting = onSnapshot(qHosting, (snap) => {
       setHosting(snap.docs.map(d => ({ id: d.id, ...d.data() } as HostingAccount)));
       setLoading(false);
@@ -126,7 +127,7 @@ export const MyServicesTab: React.FC = () => {
       setLoading(false);
     });
 
-    const qOrders = query(collection(db, 'orders'), where('userId', '==', user.uid), limit(100));
+    const qOrders = query(collection(db, 'orders'), where('userId', '==', activeUser.uid), limit(100));
     const unsubOrders = onSnapshot(qOrders, (snap) => {
       const hostingRelatedOrders = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as HostingOrder))
@@ -143,7 +144,7 @@ export const MyServicesTab: React.FC = () => {
       unsubHosting();
       unsubOrders();
     };
-  }, [user]);
+  }, [activeUser]);
 
   // ================= DOMAIN MANAGEMENT HANDLERS =================
   const handleToggleAutoRenew = async (type: 'domain' | 'hosting', record: DomainOrder | HostingAccount) => {
