@@ -55,6 +55,12 @@ async function startDevServer() {
         server: { 
           port: frontendPort,
           host: '0.0.0.0',
+          proxy: {
+            '/api': {
+              target: `http://localhost:${backendPort}`,
+              changeOrigin: true,
+            },
+          },
         },
         appType: "spa",
       });
@@ -77,7 +83,7 @@ async function startDevServer() {
     }
   } catch (err: any) {
     if (err.code === 'EADDRINUSE') {
-      console.warn('[Frontend Server] Port 3000 is already in use.');
+      console.warn(`[Frontend Server] Port ${frontendPort} is already in use.`);
     } else {
       console.error('Failed to start Frontend server:', err);
     }

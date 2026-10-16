@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
       host: true,
       proxy: {
         "/api": {
-          target: "http://localhost:4001",
+          target: `http://localhost:${process.env.PORT || env.PORT || 4001}`,
           changeOrigin: true,
         },
       },
@@ -35,7 +35,6 @@ export default defineConfig(({ mode }) => {
             "pdf-libs": ["jspdf", "jspdf-autotable"],
             recharts: ["recharts"],
             "framer-motion": ["framer-motion", "motion"],
-            papaparse: ["papaparse"],
             "react-helmet": ["react-helmet-async"],
             lucide: ["lucide-react"],
             "react-vendor": ["react", "react-dom", "react-router-dom"],
