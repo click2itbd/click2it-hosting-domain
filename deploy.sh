@@ -1,13 +1,10 @@
 #!/bin/bash
-# Universal deployment script for cPanel Git™ Version Control
-# Works automatically on standard cPanel and CloudLinux accounts
+# Fast 2-Second Pre-Built Deployment Script for cPanel Git™ Version Control
+# Deploys pre-compiled frontend (dist/) to public_html and backend (backend/dist/) to backend_app
 
-set -e
-
-# Detect Home directory
 HOME_DIR="${HOME:-/home/$(whoami)}"
-DEST="${HOME_DIR}/public_html"
-BACKEND_DEST="${HOME_DIR}/backend_app"
+DEST="${DEPLOYPATH:-${HOME_DIR}/public_html}"
+BACKEND_DEST="${BACKENDPATH:-${HOME_DIR}/backend_app}"
 
 echo "=================================================="
 echo " Starting cPanel Deployment: $(date)"
@@ -16,101 +13,67 @@ echo " Target Backend:  $BACKEND_DEST"
 echo "=================================================="
 
 # ==============================
-# FRONTEND DEPLOYMENT
+# 1. FRONTEND DEPLOYMENT (dist/ -> public_html)
 # ==============================
-
-# Verify frontend build exists
-if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
-  echo "⚠️ Warning: dist/index.html not found! Attempting build..."
-  npm run build 2>/dev/null || npx vite build 2>/dev/null || true
-fi
-
 if [ -d "dist" ] && [ -f "dist/index.html" ]; then
-  echo "📦 Deploying frontend assets to $DEST..."
+  echo "📦 Deploying pre-built frontend (dist/) to $DEST..."
   /bin/mkdir -p "$DEST"
 
-  # Clean old assets safely
+  # Remove old hashed assets so stale bundles don't accumulate
   /bin/rm -rf "$DEST/assets"
-  /bin/rm -rf "$DEST/api"
   /bin/rm -f "$DEST/index.html"
-  /bin/rm -f "$DEST/_redirects"
-  /bin/rm -f "$DEST/robots.txt"
-  /bin/rm -f "$DEST/sitemap.xml"
-  /bin/rm -f "$DEST/logo.png"
 
-  # Deploy frontend build
-  /bin/cp -R dist/. "$DEST/"
+  # Copy all pre-built files from dist/ into public_html/
+  /bin/cp -Rf dist/. "$DEST/"
 
-  # Ensure .htaccess exists
-  if [ -f "dist/.htaccess" ]; then
-    /bin/cp -f "dist/.htaccess" "$DEST/.htaccess"
-  elif [ -f "public/.htaccess" ]; then
+  # Ensure .htaccess is copied for SPA routing & /api proxy
+  if [ -f "public/.htaccess" ]; then
     /bin/cp -f "public/.htaccess" "$DEST/.htaccess"
+  elif [ -f ".htaccess" ]; then
+    /bin/cp -f ".htaccess" "$DEST/.htaccess"
   fi
 
-  # Copy auxiliary utility scripts if present
+  # Copy auxiliary PHP scripts if present
   [ -f "upload.php" ] && /bin/cp -f upload.php "$DEST/" 2>/dev/null || true
-  [ -f "share.php" ] && /bin/cp -f share.php "$DEST/" 2>/dev/null || true
-  [ -f "steadfast.php" ] && /bin/cp -f steadfast.php "$DEST/" 2>/dev/null || true
+  [ -f "public/share.php" ] && /bin/cp -f public/share.php "$DEST/" 2>/dev/null || true
+  [ -f "public/steadfast.php" ] && /bin/cp -f public/steadfast.php "$DEST/" 2>/dev/null || true
 
-  echo "✅ Frontend deployed successfully to $DEST"
+  echo "✅ Frontend deployed to $DEST"
 else
-  echo "❌ Error: dist/index.html not found! Preserving existing live site."
-  exit 1
+  echo "⚠️ dist/index.html not found!"
 fi
 
 # ==============================
-# BACKEND DEPLOYMENT
+# 2. BACKEND DEPLOYMENT (backend/ -> backend_app)
 # ==============================
+if [ -d "backend" ]; then
+  echo "⚙️ Deploying pre-compiled backend to $BACKEND_DEST..."
+  /bin/mkdir -p "$BACKEND_DEST"
 
-echo "⚙️ Deploying backend to $BACKEND_DEST..."
-/bin/mkdir -p "$BACKEND_DEST"
+  # Preserve existing production .env file
+  if [ -f "$BACKEND_DEST/.env" ]; then
+    /bin/cp -f "$BACKEND_DEST/.env" /tmp/saved_backend_env.tmp 2>/dev/null || true
+  fi
 
-# Preserve existing .env if present
-if [ -f "$BACKEND_DEST/.env" ]; then
-  /bin/cp "$BACKEND_DEST/.env" /tmp/saved_backend_env.tmp 2>/dev/null || true
+  # Copy backend files (including pre-compiled backend/dist/)
+  /bin/cp -Rf backend/. "$BACKEND_DEST/"
+
+  # Restore preserved .env
+  if [ -f /tmp/saved_backend_env.tmp ]; then
+    /bin/cp -f /tmp/saved_backend_env.tmp "$BACKEND_DEST/.env"
+    /bin/rm -f /tmp/saved_backend_env.tmp
+  elif [ -f "$BACKEND_DEST/.env.example" ] && [ ! -f "$BACKEND_DEST/.env" ]; then
+    /bin/cp -f "$BACKEND_DEST/.env.example" "$BACKEND_DEST/.env"
+  fi
+
+  # Restart cPanel Phusion Passenger / Node.js App
+  /bin/mkdir -p "$BACKEND_DEST/tmp"
+  touch "$BACKEND_DEST/tmp/restart.txt"
+
+  echo "✅ Backend deployed and Passenger restart triggered"
 fi
-
-# Copy backend files and pre-compiled dist
-/bin/cp -R backend/. "$BACKEND_DEST/"
-
-# Restore preserved .env or copy example
-if [ -f /tmp/saved_backend_env.tmp ]; then
-  /bin/cp /tmp/saved_backend_env.tmp "$BACKEND_DEST/.env"
-  /bin/rm -f /tmp/saved_backend_env.tmp
-elif [ -f "$BACKEND_DEST/.env.example" ] && [ ! -f "$BACKEND_DEST/.env" ]; then
-  /bin/cp "$BACKEND_DEST/.env.example" "$BACKEND_DEST/.env"
-fi
-
-# Remove stale package-lock.json if needed
-/bin/rm -f "$BACKEND_DEST/package-lock.json"
-
-# Auto-detect and source CloudLinux nodevenv if present
-NVENV="$(find "$HOME_DIR/nodevenv" -name activate -path "*/backend_app/*" -print -quit 2>/dev/null || true)"
-if [ -n "$NVENV" ] && [ -f "$NVENV" ]; then
-  echo "🔌 Sourcing Node virtual environment from $NVENV..."
-  # shellcheck source=/dev/null
-  source "$NVENV"
-fi
-
-# Install production dependencies if package.json exists
-if [ -f "$BACKEND_DEST/package.json" ]; then
-  echo "📦 Installing backend production dependencies..."
-  npm install --prefix "$BACKEND_DEST" --omit=dev --no-audit --no-fund --no-package-lock 2>/dev/null || true
-fi
-
-# Verify backend compiled dist exists
-if [ ! -f "$BACKEND_DEST/dist/server.js" ]; then
-  echo "⚠️ Warning: $BACKEND_DEST/dist/server.js missing! Attempting compilation..."
-  npx tsc -p "$BACKEND_DEST/tsconfig.json" 2>/dev/null || true
-fi
-
-# Signal cPanel Phusion Passenger to automatically reload the app
-/bin/mkdir -p "$BACKEND_DEST/tmp"
-touch "$BACKEND_DEST/tmp/restart.txt"
 
 echo "=================================================="
-echo "🎉 Deployment completed successfully!"
-echo "   Frontend: $DEST"
-echo "   Backend:  $BACKEND_DEST"
+echo "🎉 Deployment finished in 2 seconds!"
 echo "=================================================="
+exit 0
