@@ -1,22 +1,21 @@
 import { auth } from '../firebase';
 
 export function resolveApiBaseUrl(): string {
-  if (import.meta.env.DEV) return '';
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname.toLowerCase();
-    // When served from click2it.bd or click2itbd.com, use relative path to stay strictly same-origin
-    if (host.includes('click2it.bd') || host.includes('click2itbd.com')) {
-      return '';
-    }
-  }
-  return (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  // If an explicit custom API URL is provided, use it (trimmed of trailing slashes)
+  const customBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (customBase) return customBase;
+  // Always default to same-origin relative path for universal compatibility across all environments
+  return '';
 }
 
 async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const cleanBase = resolveApiBaseUrl();
   let cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-  if (cleanBase.endsWith('/api') && cleanPath.startsWith('/api/')) {
+  // Ensure /api is prefixed if caller passed an endpoint without /api (e.g., 'domains/pricing')
+  if (!cleanPath.startsWith('/api') && !cleanBase.endsWith('/api')) {
+    cleanPath = `/api${cleanPath}`;
+  } else if (cleanBase.endsWith('/api') && cleanPath.startsWith('/api/')) {
     cleanPath = cleanPath.slice(4);
   }
 

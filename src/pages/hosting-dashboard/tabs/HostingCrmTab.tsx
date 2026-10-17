@@ -10,7 +10,8 @@ import {
 import { toast } from 'react-hot-toast';
 import { doc, setDoc, getDocs, collection } from 'firebase/firestore';
 import { 
-  FunnelChart, Funnel, Tooltip, ResponsiveContainer, Cell, LabelList, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend 
+  FunnelChart, Funnel, Tooltip, ResponsiveContainer, Cell, LabelList, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+  PieChart, Pie
 } from 'recharts';
 import { db } from '../../../firebase';
 import { useStaffHosts } from '../../../hooks/useStaffHosts';
@@ -372,6 +373,10 @@ export function HostingCrmTab({ state }: { state?: any }) {
   const [dateFilterType, setDateFilterType] = useState<'all' | 'today' | '7days' | '30days' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  // Dedicated Donut Chart Date Range State (Administrator Oversight)
+  const [donutDateRange, setDonutDateRange] = useState<'all' | 'today' | '7days' | '30days' | 'custom'>('all');
+  const [donutCustomStart, setDonutCustomStart] = useState<string>('');
+  const [donutCustomEnd, setDonutCustomEnd] = useState<string>('');
   const [showModal, setShowModal] = useState<boolean>(false);
   const [editingLead, setEditingLead] = useState<HostingCrmLead | null>(null);
 
@@ -915,6 +920,156 @@ export function HostingCrmTab({ state }: { state?: any }) {
     value: leads.filter(l => normalizeStage(l.leadStage) === st.id).reduce((sum, l) => sum + (l.dealValueBdt || 0), 0) / 1000
   }));
 
+  // DEDICATED DONUT CHART FILTERING & KPI METRICS (Administrator Oversight)
+  const donutFilteredLeads = leads.filter(lead => {
+    if (donutDateRange === 'all') return true;
+    const leadDate = getLeadDate(lead);
+    const now = new Date();
+
+    if (donutDateRange === 'today') {
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return leadDate >= todayStart;
+    }
+    if (donutDateRange === '7days') {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return leadDate >= sevenDaysAgo;
+    }
+    if (donutDateRange === '30days') {
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return leadDate >= thirtyDaysAgo;
+    }
+    if (donutDateRange === 'custom') {
+      if (donutCustomStart) {
+        const start = new Date(donutCustomStart);
+        start.setHours(0, 0, 0, 0);
+        if (leadDate < start) return false;
+      }
+      if (donutCustomEnd) {
+        const end = new Date(donutCustomEnd);
+        end.setHours(23, 59, 59, 999);
+        if (leadDate > end) return false;
+      }
+      return true;
+    }
+    return true;
+  });
+
+  const donutTotalCount = donutFilteredLeads.length;
+  const donutConvertedCount = donutFilteredLeads.filter(l => ['converted', 'active_customer'].includes(normalizeStage(l.leadStage))).length;
+  const donutConversionRate = donutTotalCount > 0 ? Math.round((donutConvertedCount / donutTotalCount) * 100) : 0;
+  const donutTotalValue = donutFilteredLeads.reduce((sum, l) => sum + (l.dealValueBdt || 0), 0);
+  const donutConvertedValue = donutFilteredLeads
+    .filter(l => ['converted', 'active_customer'].includes(normalizeStage(l.leadStage)))
+    .reduce((sum, l) => sum + (l.dealValueBdt || 0), 0);
+  const donutInProgressCount = donutFilteredLeads.filter(l => ['contacted', 'domain_consultation', 'qualified', 'vps_quote_sent', 'invoice_pending'].includes(normalizeStage(l.leadStage))).length;
+  const donutInProgressValue = donutFilteredLeads
+    .filter(l => ['contacted', 'domain_consultation', 'qualified', 'vps_quote_sent', 'invoice_pending'].includes(normalizeStage(l.leadStage)))
+    .reduce((sum, l) => sum + (l.dealValueBdt || 0), 0);
+
+  // RECHARTS DONUT CHART DATA: Visualizing Lead Statuses for Administrator Oversight
+  const donutStatusData = [
+    { 
+      name: 'New', 
+      displayName: 'New Inbound',
+      value: donutFilteredLeads.filter(l => ['new', 'new_inbound'].includes(normalizeStage(l.leadStage))).length,
+      dealValue: donutFilteredLeads.filter(l => ['new', 'new_inbound'].includes(normalizeStage(l.leadStage))).reduce((sum, l) => sum + (l.dealValueBdt || 0), 0),
+      color: '#3b82f6',
+      badgeColor: 'bg-blue-100 text-blue-800'
+    },
+    { 
+      name: 'In-Progress', 
+      displayName: 'In-Progress / Quotes',
+      value: donutFilteredLeads.filter(l => ['contacted', 'domain_consultation', 'qualified', 'vps_quote_sent', 'invoice_pending'].includes(normalizeStage(l.leadStage))).length,
+      dealValue: donutFilteredLeads.filter(l => ['contacted', 'domain_consultation', 'qualified', 'vps_quote_sent', 'invoice_pending'].includes(normalizeStage(l.leadStage))).reduce((sum, l) => sum + (l.dealValueBdt || 0), 0),
+      color: '#f59e0b',
+      badgeColor: 'bg-amber-100 text-amber-800'
+    },
+    { 
+      name: 'Converted', 
+      displayName: 'Converted Customers',
+      value: donutFilteredLeads.filter(l => ['converted', 'active_customer'].includes(normalizeStage(l.leadStage))).length,
+      dealValue: donutFilteredLeads.filter(l => ['converted', 'active_customer'].includes(normalizeStage(l.leadStage))).reduce((sum, l) => sum + (l.dealValueBdt || 0), 0),
+      color: '#10b981',
+      badgeColor: 'bg-emerald-100 text-emerald-800'
+    },
+    { 
+      name: 'Renewal', 
+      displayName: 'Renewal & Upsell',
+      value: donutFilteredLeads.filter(l => ['renewal_upsell'].includes(normalizeStage(l.leadStage))).length,
+      dealValue: donutFilteredLeads.filter(l => ['renewal_upsell'].includes(normalizeStage(l.leadStage))).reduce((sum, l) => sum + (l.dealValueBdt || 0), 0),
+      color: '#ec4899',
+      badgeColor: 'bg-pink-100 text-pink-800'
+    }
+  ];
+
+  // AUTOMATED ACTIVITY LOGGING: Reassign Staff Member with User Action & Timestamp
+  const handleReassignLeadStaff = async (leadId: string, newStaffId: string) => {
+    const targetLead = leads.find(l => l.id === leadId);
+    if (!targetLead) return;
+
+    let newStaffName = 'Unassigned';
+    if (newStaffId) {
+      const staffObj = activeStaffMembers.find(s => s.id === newStaffId) || staffMembers.find(s => s.id === newStaffId);
+      if (staffObj) {
+        newStaffName = `${staffObj.name} (${staffObj.role})`;
+      } else {
+        newStaffName = newStaffId;
+      }
+    }
+
+    const oldStaffName = targetLead.assignedStaffName || 'Unassigned';
+    if (oldStaffName === newStaffName && targetLead.assignedStaffId === newStaffId) return;
+
+    const nowFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // Automatically attach log entry capturing timestamp and administrator user action
+    const reassignLogItem: LeadActivityLog = {
+      id: `tl_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+      type: 'note',
+      title: `Staff Reassigned: ${oldStaffName} ➔ ${newStaffName}`,
+      description: `Lead account manager re-assigned from "${oldStaffName}" to "${newStaffName}" by Administrator.`,
+      timestamp: nowFormatted,
+      performedBy: 'Administrator',
+      isHighPriority: false
+    };
+
+    const updatedTimeline = [reassignLogItem, ...(targetLead.timeline || [])];
+    const updatedLead: HostingCrmLead = {
+      ...targetLead,
+      assignedStaffId: newStaffId || undefined,
+      assignedStaffName: newStaffName,
+      timeline: updatedTimeline
+    };
+
+    // Immediate UI state update
+    setLeads(prev => prev.map(l => l.id === leadId ? updatedLead : l));
+    if (selectedLeadForDetail?.id === leadId) {
+      setSelectedLeadForDetail(updatedLead);
+    }
+
+    toast.success(`👤 Reassigned "${targetLead.contactName}" to ${newStaffName} (Activity logged)`);
+
+    // Synchronize attached log and new staff to backend & Firestore
+    try {
+      await fetch(`/api/crm/leads/${leadId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assignedStaffId: newStaffId || null,
+          assignedStaffName: newStaffName,
+          timeline: updatedTimeline
+        })
+      });
+      await setDoc(doc(db, 'hosting_crm_leads', leadId), {
+        assignedStaffId: newStaffId || null,
+        assignedStaffName: newStaffName,
+        timeline: updatedTimeline
+      }, { merge: true }).catch(() => null);
+    } catch (e) {
+      console.warn('Failed to sync staff reassignment log:', e);
+    }
+  };
+
   // BULK SELECTION HANDLERS
   const handleToggleSelectAll = () => {
     if (selectedLeadIds.length === filteredLeads.length) {
@@ -1251,19 +1406,62 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
     const isNew = !editingLead;
     const targetId = editingLead?.id || `lead_${Date.now()}`;
-    const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const nowFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 
-    const newTimelineItem: LeadActivityLog = {
-      id: `tl_${Date.now()}`,
-      type: 'status_change',
-      title: isNew ? 'Lead Created (Round-Robin Assigned)' : 'Lead Details Updated',
-      description: isNew ? `New lead created and assigned to ${assignedStaffName}.` : `Updated contact & package requirements.`,
-      timestamp: nowTimestamp,
-      performedBy: assignedStaffName
-    };
+    const newTimelineItems: LeadActivityLog[] = [];
+
+    if (isNew) {
+      newTimelineItems.push({
+        id: `tl_${Date.now()}`,
+        type: 'status_change',
+        title: 'Lead Created & Status Set',
+        description: `New lead created in stage "${leadStagesConfig.find(s => s.id === form.leadStage)?.label || form.leadStage}" and assigned to ${assignedStaffName}.`,
+        timestamp: nowFormatted,
+        performedBy: 'Administrator'
+      });
+    } else {
+      // Automatically attach log entry whenever status change occurs
+      if (normalizeStage(editingLead.leadStage) !== normalizeStage(form.leadStage)) {
+        const oldStageLabel = leadStagesConfig.find(s => s.id === normalizeStage(editingLead.leadStage))?.label || editingLead.leadStage;
+        const newStageLabel = leadStagesConfig.find(s => s.id === normalizeStage(form.leadStage))?.label || form.leadStage;
+        newTimelineItems.push({
+          id: `tl_${Date.now()}_status`,
+          type: 'status_change',
+          title: `Status Changed: ${oldStageLabel} ➔ ${newStageLabel}`,
+          description: `User action: Administrator updated lead workflow status from "${oldStageLabel}" to "${newStageLabel}".`,
+          timestamp: nowFormatted,
+          performedBy: 'Administrator',
+          isHighPriority: form.leadStage === 'converted'
+        });
+      }
+
+      // Automatically attach log entry whenever staff re-assignment occurs
+      if (editingLead.assignedStaffId !== assignedStaffId) {
+        const prevStaff = editingLead.assignedStaffName || 'Unassigned';
+        newTimelineItems.push({
+          id: `tl_${Date.now()}_staff`,
+          type: 'note',
+          title: `Staff Reassigned: ${prevStaff} ➔ ${assignedStaffName}`,
+          description: `User action: Administrator re-assigned lead account manager from "${prevStaff}" to "${assignedStaffName}".`,
+          timestamp: nowFormatted,
+          performedBy: 'Administrator'
+        });
+      }
+
+      if (newTimelineItems.length === 0) {
+        newTimelineItems.push({
+          id: `tl_${Date.now()}`,
+          type: 'note',
+          title: 'Lead Details Updated',
+          description: `User action: Administrator updated lead specifications.`,
+          timestamp: nowFormatted,
+          performedBy: 'Administrator'
+        });
+      }
+    }
 
     const existingTimeline = editingLead?.timeline || [];
-    const updatedTimeline = [newTimelineItem, ...existingTimeline];
+    const updatedTimeline = [...newTimelineItems, ...existingTimeline];
 
     const payload = {
       contactName: form.contactName,
@@ -1320,7 +1518,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
       await setDoc(doc(db, 'hosting_crm_leads', targetId), { ...payload, id: targetId }, { merge: true }).catch(() => null);
 
       setShowModal(false);
-      toast.success(`🎉 Lead "${form.contactName}" assigned to ${assignedStaffName}!`);
+      toast.success(`🎉 Lead "${form.contactName}" saved and logged!`);
     } catch (err: any) {
       toast.error('Failed to save lead: ' + err.message);
     }
@@ -1376,15 +1574,16 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
     const oldStageLabel = leadStagesConfig.find(s => s.id === normalizeStage(targetLead.leadStage))?.label || targetLead.leadStage;
     const newStageLabel = leadStagesConfig.find(s => s.id === newStage)?.label || newStage;
-    const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const nowFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 
+    // Automatically attach log entry capturing timestamp and user action
     const stageTimelineEntry: LeadActivityLog = {
-      id: `tl_${Date.now()}`,
+      id: `tl_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
       type: 'status_change',
-      title: `Stage Changed to ${newStageLabel}`,
-      description: `Transitioned lead from "${oldStageLabel}" to "${newStageLabel}".`,
-      timestamp: nowTimestamp,
-      performedBy: 'Alex M. (Support Admin)',
+      title: `Status Changed: ${oldStageLabel} ➔ ${newStageLabel}`,
+      description: `User action: Administrator moved lead workflow status from "${oldStageLabel}" to "${newStageLabel}".`,
+      timestamp: nowFormatted,
+      performedBy: 'Administrator',
       isHighPriority: newStage === 'converted'
     };
 
@@ -1539,6 +1738,24 @@ export function HostingCrmTab({ state }: { state?: any }) {
         body: JSON.stringify({ timeline: updatedTimeline, lastContactTime: 'Just now' })
       });
       await setDoc(doc(db, 'hosting_crm_leads', selectedLeadForDetail.id), { timeline: updatedTimeline, lastContactTime: 'Just now' }, { merge: true }).catch(() => null);
+
+      // Automatically include this chat in the WhatsApp CRM chat history
+      if (newCallType === 'whatsapp' && selectedLeadForDetail.phone) {
+        fetch('/api/whatsapp/instant-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: selectedLeadForDetail.phone,
+            contactName: selectedLeadForDetail.contactName,
+            initialMessage: newCallNote.trim(),
+            agentId: selectedLeadForDetail.assignedStaffId || 'staff_1',
+            agentName: selectedLeadForDetail.assignedStaffName || 'Alex M. (Support Admin)',
+            leadStage: selectedLeadForDetail.leadStage === 'converted' ? 'customer' : 'lead',
+            whmcsAccountId: selectedLeadForDetail.whmcsAccountId,
+            tags: ['Lead CRM Interaction', 'WhatsApp CRM']
+          })
+        }).catch(err => console.warn('Failed to sync to WhatsApp CRM chat history:', err));
+      }
     } catch (e) {
       console.warn('Backend sync failed:', e);
     }
@@ -1697,18 +1914,238 @@ export function HostingCrmTab({ state }: { state?: any }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+              {/* EXECUTIVE KPI SUMMARY CARD & DATE RANGE SELECTOR ABOVE DONUT CHART */}
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-950 text-white rounded-3xl p-5 sm:p-6 border border-slate-800 shadow-xl space-y-4">
                 
-                {/* Recharts Funnel Chart */}
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2">
+                {/* Header Row: Title & Date Range Selector */}
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shadow-inner">
+                      <TrendingUp size={20} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-black text-white tracking-tight">
+                          Lead Performance & Status Summary
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-cyan-300 border border-blue-500/30 text-[10px] font-extrabold uppercase tracking-wider">
+                          Oversight Dashboard
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Displaying total lead counts and key performance indicators like conversion percentage across selected time periods.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* DATE RANGE SELECTOR FOR LEAD STATUS DONUT CHART & OVERSIGHT */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-xs">
+                      <Calendar size={13} className="text-amber-400" />
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Time Period:</span>
+                      <select
+                        value={donutDateRange}
+                        onChange={(e) => setDonutDateRange(e.target.value as any)}
+                        className="bg-transparent font-bold text-xs text-white outline-none cursor-pointer pr-1"
+                      >
+                        <option value="all" className="bg-slate-900 text-white">All Time ({leads.length} Leads)</option>
+                        <option value="today" className="bg-slate-900 text-white">Today</option>
+                        <option value="7days" className="bg-slate-900 text-white">Last 7 Days</option>
+                        <option value="30days" className="bg-slate-900 text-white">Last 30 Days</option>
+                        <option value="custom" className="bg-slate-900 text-white">Custom Date Range...</option>
+                      </select>
+                    </div>
+
+                    {/* Custom Date Pickers */}
+                    {donutDateRange === 'custom' && (
+                      <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-700 animate-in fade-in text-xs">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">From:</span>
+                        <input
+                          type="date"
+                          value={donutCustomStart}
+                          onChange={(e) => setDonutCustomStart(e.target.value)}
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-white outline-none"
+                        />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">To:</span>
+                        <input
+                          type="date"
+                          value={donutCustomEnd}
+                          onChange={(e) => setDonutCustomEnd(e.target.value)}
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-white outline-none"
+                        />
+                      </div>
+                    )}
+
+                    {donutDateRange !== 'all' && (
+                      <button
+                        onClick={() => {
+                          setDonutDateRange('all');
+                          setDonutCustomStart('');
+                          setDonutCustomEnd('');
+                          toast.success('Reset status donut chart period to All Time');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer border border-slate-700 flex items-center gap-1"
+                      >
+                        <X size={12} />
+                        <span>Reset Time Filter</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* KPI Metrics Highlight Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  
+                  {/* KPI 1: Total Leads Count */}
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1.5 hover:bg-white/10 transition-colors">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider">Total Leads</span>
+                      <Users size={16} className="text-blue-400" />
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black font-mono text-white">{donutTotalCount}</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        {donutDateRange === 'all' ? 'All Time' : donutDateRange === 'today' ? 'Today' : donutDateRange === '7days' ? 'Last 7D' : donutDateRange === '30days' ? 'Last 30D' : 'Custom'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Total Pipeline: <strong className="text-white font-mono">{formatCurrency(donutTotalValue)}</strong>
+                    </p>
+                  </div>
+
+                  {/* KPI 2: Conversion Percentage */}
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1.5 hover:bg-white/10 transition-colors">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider">Conversion Ratio</span>
+                      <CheckCircle2 size={16} className="text-emerald-400" />
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black font-mono text-emerald-400">{donutConversionRate}%</span>
+                      <span className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">Won Ratio</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      <strong className="text-emerald-400 font-bold">{donutConvertedCount}</strong> of {donutTotalCount} inquiries won
+                    </p>
+                  </div>
+
+                  {/* KPI 3: Converted Revenue Won */}
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1.5 hover:bg-white/10 transition-colors">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider">Converted Revenue</span>
+                      <DollarSign size={16} className="text-emerald-400" />
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-black font-mono text-emerald-300">
+                        {formatCurrency(donutConvertedValue)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-400/90 font-medium">
+                      {donutConvertedCount} active hosting accounts provisioned
+                    </p>
+                  </div>
+
+                  {/* KPI 4: Active In-Progress Pipeline */}
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1.5 hover:bg-white/10 transition-colors">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider">In-Progress Pipeline</span>
+                      <Zap size={16} className="text-amber-400" />
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black font-mono text-amber-400">{donutInProgressCount}</span>
+                      <span className="text-[10px] text-amber-300 font-bold uppercase tracking-wider">Active Deals</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Potential: <strong className="text-amber-300 font-mono">{formatCurrency(donutInProgressValue)}</strong>
+                    </p>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* 3-WIDGET VISUAL DASHBOARD GRID */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-stretch">
+                
+                {/* WIDGET 1: RECHARTS DONUT CHART (Lead Statuses: New, In-Progress, Converted, Renewal) */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col justify-between space-y-3">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                      Status Distribution ({donutDateRange === 'all' ? 'All Time' : donutDateRange === 'today' ? 'Today' : donutDateRange === '7days' ? 'Last 7D' : donutDateRange === '30days' ? 'Last 30D' : 'Custom'})
+                    </span>
+                    <span className="text-emerald-700 font-mono font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">
+                      {donutConversionRate}% Won
+                    </span>
+                  </div>
+
+                  <div className="relative w-full h-[185px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Tooltip
+                          content={({ active, payload }: any) => {
+                            if (active && payload && payload.length) {
+                              const item = payload[0].payload;
+                              return (
+                                <div className="bg-slate-900 border border-slate-700 text-white p-3 rounded-xl shadow-xl text-xs space-y-1">
+                                  <p className="font-extrabold text-amber-400">{item.displayName}</p>
+                                  <p className="font-mono text-sm font-bold">{item.value} Leads ({donutTotalCount > 0 ? Math.round((item.value / donutTotalCount) * 100) : 0}%)</p>
+                                  <p className="text-slate-400 text-[10px]">Period Deal Value: {formatCurrency(item.dealValue)}</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Pie
+                          data={donutStatusData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={76}
+                          paddingAngle={3}
+                          isAnimationActive
+                        >
+                          {donutStatusData.map((entry, index) => (
+                            <Cell key={`donut-cell-${index}`} fill={entry.color} stroke="#ffffff" strokeWidth={2} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+
+                    {/* Donut Center Label */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-2xl font-black text-slate-900 font-mono leading-none">{donutTotalCount}</span>
+                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">Leads</span>
+                    </div>
+                  </div>
+
+                  {/* Administrator Oversight Status Legend Breakdown */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/80 text-[11px]">
+                    {donutStatusData.map((d) => (
+                      <div key={d.name} className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200/70 shadow-2xs">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                          <span className="font-bold text-slate-700 truncate">{d.name}</span>
+                        </div>
+                        <span className="font-mono font-black text-slate-900 ml-1 shrink-0">
+                          {d.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* WIDGET 2: RECHARTS FUNNEL CHART */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col justify-between space-y-2">
                   <div className="flex items-center justify-between text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-2">
-                    <span>Distribution Funnel (New ➔ Contacted ➔ Qualified ➔ Converted)</span>
+                    <span>Distribution Funnel (New ➔ Converted)</span>
                     <span className="text-blue-600 font-mono">{leads.length} Leads Total</span>
                   </div>
 
-                  <div className="w-full h-[260px]">
+                  <div className="w-full h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <FunnelChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                      <FunnelChart margin={{ top: 15, right: 30, left: 15, bottom: 15 }}>
                         <Tooltip 
                           content={({ active, payload }: any) => {
                             if (active && payload && payload.length) {
@@ -1733,22 +2170,26 @@ export function HostingCrmTab({ state }: { state?: any }) {
                         >
                           <LabelList position="right" fill="#0f172a" stroke="none" dataKey="name" fontWeight="bold" fontSize={11} />
                           {funnelChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                            <Cell key={`funnel-cell-${index}`} fill={entry.fill} />
                           ))}
                         </Funnel>
                       </FunnelChart>
                     </ResponsiveContainer>
                   </div>
+
+                  <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500 font-medium text-center">
+                    Pipeline Progression: Inbound ➔ Consulted ➔ Qualified ➔ Converted
+                  </div>
                 </div>
 
-                {/* Recharts Bar Chart Breakdown */}
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2">
+                {/* WIDGET 3: RECHARTS BAR CHART BREAKDOWN */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col justify-between space-y-2">
                   <div className="flex items-center justify-between text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-2">
                     <span>Deal Value by Stage (Thousands BDT ৳)</span>
                     <span className="text-emerald-600 font-mono">{formatCurrency(totalPipelineValue)}</span>
                   </div>
 
-                  <div className="w-full h-[260px]">
+                  <div className="w-full h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={stageValueData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -1761,6 +2202,10 @@ export function HostingCrmTab({ state }: { state?: any }) {
                         <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500 font-medium text-center">
+                    Estimated Deal Revenue Distribution Across Workflow Stages
                   </div>
                 </div>
 
@@ -2152,6 +2597,12 @@ export function HostingCrmTab({ state }: { state?: any }) {
                                 </div>
                               </div>
 
+                              {/* Assigned Staff & Source */}
+                              <div className="flex items-center justify-between text-[10px] text-slate-600 font-bold bg-slate-50 px-2 py-1 rounded-lg border border-slate-200/80">
+                                <span className="truncate">👤 {lead.assignedStaffName || 'Unassigned'}</span>
+                                <span className="text-[9px] text-slate-400 font-medium shrink-0">{lead.source}</span>
+                              </div>
+
                               {/* View Timeline Button */}
                               <button
                                 onClick={() => handleOpenDetailModal(lead)}
@@ -2281,9 +2732,19 @@ export function HostingCrmTab({ state }: { state?: any }) {
                             {formatCurrency(lead.dealValueBdt)}
                           </td>
                           <td className="p-4">
-                            <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 inline-block text-[11px]">
-                              👤 {lead.assignedStaffName || 'Unassigned'}
-                            </span>
+                            <select
+                              value={lead.assignedStaffId || ''}
+                              onChange={(e) => handleReassignLeadStaff(lead.id, e.target.value)}
+                              className="bg-indigo-50/90 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold px-2.5 py-1.5 rounded-xl outline-none cursor-pointer max-w-[175px] truncate"
+                              title="Re-assign account manager (automatically attaches activity log)"
+                            >
+                              <option value="">👤 Unassigned</option>
+                              {activeStaffMembers.map(staff => (
+                                <option key={staff.id} value={staff.id}>
+                                  👤 {staff.name}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
@@ -2786,13 +3247,26 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
               {/* INTERACTIVE STATUS WORKFLOW STEPPER */}
               <div className="bg-slate-900 text-white rounded-2xl p-4 space-y-3 shadow-md">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
                     <Activity size={14} /> Workflow Status Tracking
                   </span>
-                  <span className="text-[10px] font-bold text-slate-400">
-                    Assigned: {selectedLeadForDetail.assignedStaffName || 'Alex M.'}
-                  </span>
+                  <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1 rounded-xl border border-slate-700">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Assigned:</span>
+                    <select
+                      value={selectedLeadForDetail.assignedStaffId || ''}
+                      onChange={(e) => handleReassignLeadStaff(selectedLeadForDetail.id, e.target.value)}
+                      className="bg-transparent font-bold text-xs text-cyan-300 outline-none cursor-pointer"
+                      title="Re-assign staff member (automatically logs user action and timestamp)"
+                    >
+                      <option value="" className="bg-slate-900 text-white">👤 Unassigned</option>
+                      {activeStaffMembers.map(s => (
+                        <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                          👤 {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Progress Bar Steps */}

@@ -8,7 +8,10 @@ validateEnvironment();
 
 const app = createApp();
 
-const PORT = process.env.PORT || config.port || 4001;
+const rawPort = process.env.BACKEND_PORT || process.env.PORT;
+const PORT = (rawPort && rawPort !== '8080' && rawPort !== '3000') 
+  ? rawPort 
+  : (config.port || 4001);
 
 const server = app.listen(PORT, () => {
   console.log(`Backend API running on port ${PORT}`);

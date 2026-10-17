@@ -542,6 +542,150 @@ campaignRouter.post('/whatsapp/assign', async (req: any, res: Response) => {
   }
 });
 
+// Instant WhatsApp Chat with an input number (Sales & Customer Management)
+// Automatically includes and records chat in the CRM chat history
+campaignRouter.post('/whatsapp/instant-chat', async (req: any, res: Response) => {
+  try {
+    const { phone, contactName, initialMessage, agentId, agentName, tags, leadStage, whmcsAccountId } = req.body;
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Phone number is required for instant chat' });
+    }
+
+    const cleanDigits = String(phone).replace(/\D/g, '');
+    if (cleanDigits.length < 6) {
+      return res.status(400).json({ success: false, error: 'Please enter a valid phone number with country/area code' });
+    }
+
+    // Standardize phone display
+    let formattedPhone = phone.trim();
+    if (!formattedPhone.startsWith('+')) {
+      if (formattedPhone.startsWith('01') && cleanDigits.length === 11) {
+        // Bangladesh local number: 017XXXXXXXX -> +880 17XXXXXXXX
+        formattedPhone = `+880 ${formattedPhone.slice(0, 4)}-${formattedPhone.slice(4)}`;
+      } else if (cleanDigits.startsWith('880') && cleanDigits.length === 13) {
+        formattedPhone = `+880 ${cleanDigits.slice(3, 7)}-${cleanDigits.slice(7)}`;
+      } else {
+        formattedPhone = `+${cleanDigits}`;
+      }
+    }
+
+    // Check if this conversation already exists in chat history
+    let existing = whatsAppConversations.find(c => {
+      const existingDigits = c.phone.replace(/\D/g, '');
+      return existingDigits === cleanDigits || existingDigits.endsWith(cleanDigits) || cleanDigits.endsWith(existingDigits);
+    });
+
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const assignedAgentObj = agentId ? {
+      id: agentId,
+      name: agentName || 'Sales & Support Agent'
+    } : {
+      id: 'staff_1',
+      name: agentName || 'Alex M. (Support Admin)'
+    };
+
+    if (existing) {
+      // Update existing conversation
+      if (contactName && existing.contactName.startsWith('WhatsApp Lead') && !contactName.startsWith('WhatsApp Lead')) {
+        existing.contactName = contactName;
+      }
+      if (whmcsAccountId) {
+        existing.whmcsAccountId = whmcsAccountId;
+      }
+
+      if (initialMessage && initialMessage.trim()) {
+        const msgText = initialMessage.trim();
+        const newMsg: WhatsAppMessage = {
+          id: `msg_${Date.now()}`,
+          sender: 'agent',
+          senderName: assignedAgentObj.name,
+          agentId: assignedAgentObj.id,
+          text: msgText,
+          timestamp: nowTime,
+          status: 'delivered'
+        };
+        existing.messages.push(newMsg);
+        existing.lastMessageSnippet = msgText;
+        existing.lastMessageTime = 'Just now';
+      }
+
+      if (!existing.notes.some(n => n.includes('Instant chat session'))) {
+        existing.notes.push(`Instant chat accessed by ${assignedAgentObj.name} on ${new Date().toLocaleString()}`);
+      }
+
+      return res.json({
+        success: true,
+        isExisting: true,
+        conversation: existing,
+        message: `Existing chat with ${existing.contactName} (${existing.phone}) located and updated in history.`
+      });
+    }
+
+    // Create brand-new conversation and include in chat history
+    const newConvId = `conv_wa_${Date.now()}`;
+    const initialText = initialMessage && initialMessage.trim() ? initialMessage.trim() : 'Instant chat session initiated';
+
+    const messagesList: WhatsAppMessage[] = [
+      {
+        id: `msg_sys_${Date.now()}`,
+        sender: 'bot',
+        senderName: 'WA CRM System',
+        text: `Instant WhatsApp chat session opened with ${formattedPhone} by ${assignedAgentObj.name}.`,
+        timestamp: nowTime,
+        status: 'read'
+      }
+    ];
+
+    if (initialMessage && initialMessage.trim()) {
+      messagesList.push({
+        id: `msg_${Date.now() + 1}`,
+        sender: 'agent',
+        senderName: assignedAgentObj.name,
+        agentId: assignedAgentObj.id,
+        text: initialMessage.trim(),
+        timestamp: nowTime,
+        status: 'delivered'
+      });
+    }
+
+    const newConversation: WhatsAppConversation = {
+      id: newConvId,
+      contactName: (contactName && contactName.trim()) ? contactName.trim() : `WhatsApp Lead (${formattedPhone})`,
+      phone: formattedPhone,
+      email: '',
+      avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`,
+      leadStage: (leadStage as any) || 'lead',
+      tags: Array.isArray(tags) && tags.length > 0 ? tags : ['Instant Chat', 'Sales Lead', 'Direct Inbound'],
+      assignedAgent: assignedAgentObj,
+      statusLabel: 'all',
+      unreadCount: 0,
+      lastMessageSnippet: initialText,
+      lastMessageTime: 'Just now',
+      whmcsAccountId: whmcsAccountId || undefined,
+      activeServices: {
+        domains: [],
+        packages: ['Cloud NVMe Inquirer'],
+        unpaidInvoices: 0
+      },
+      notes: [
+        `Instant WhatsApp chat opened with ${formattedPhone} on ${new Date().toLocaleString()} by ${assignedAgentObj.name}.`
+      ],
+      messages: messagesList
+    };
+
+    whatsAppConversations.unshift(newConversation);
+
+    res.json({
+      success: true,
+      isExisting: false,
+      conversation: newConversation,
+      message: `New instant chat with ${newConversation.contactName} (${newConversation.phone}) added to chat history.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Sync contacts from WhatsApp Web Chrome extension
 campaignRouter.post('/whatsapp/sync', async (req: any, res: Response) => {
   try {
@@ -915,6 +1059,7 @@ interface HostingCrmLead {
   assignedStaffId?: string;
   assignedStaffName?: string;
   whmcsAccountId?: string;
+  targetDomain?: string;
   notes: string[];
   timeline?: any[];
   lastContactTime: string;

@@ -93,26 +93,12 @@ export function createApp(): Express {
 
   const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, Postman) or matched origins
-      if (!origin) {
-        return callback(null, true);
-      }
-      const normalizedOrigin = origin.trim().replace(/\/+$/, '');
-      const isAllowed =
-        allowedOrigins.some((o) => o.toLowerCase() === normalizedOrigin.toLowerCase()) ||
-        /^https?:\/\/(.+\.)?click2itbd\.com(:\d+)?$/i.test(normalizedOrigin) ||
-        /^https?:\/\/(.+\.)?click2it\.bd(:\d+)?$/i.test(normalizedOrigin) ||
-        /^https?:\/\/localhost(:\d+)?$/i.test(normalizedOrigin) ||
-        /^https?:\/\/127\.0\.0\.1(:\d+)?$/i.test(normalizedOrigin);
-
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
+      // Allow requests with no origin (like curl, Postman, mobile apps) or dynamically reflect any requesting origin
+      // This ensures seamless operation in AI Studio preview iframes, Cloud Workstations, localhost, and production domains
+      callback(null, true);
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allowedHeaders: [
       "Content-Type",
       "Authorization",
@@ -120,13 +106,19 @@ export function createApp(): Express {
       "X-Idempotency-Key",
       "X-Request-ID",
       "X-Requested-With",
+      "Accept",
+      "Origin",
     ],
+    exposedHeaders: ["Content-Length", "X-Request-ID"],
     optionsSuccessStatus: 204,
   };
 
-  // Apply CORS globally and handle preflight requests
+  // Apply CORS globally and handle preflight requests immediately
   app.use(cors(corsOptions));
   app.options("*", cors(corsOptions));
+  app.options("/api/*", cors(corsOptions), (_req, res) => {
+    res.sendStatus(204);
+  });
   app.use(express.json({ limit: config.bodyLimit }));
   app.set("trust proxy", 1);
 
@@ -202,6 +194,9 @@ export function createApp(): Express {
   app.use("/api", apiRouter);
 
   app.all("/api/*", (req, res) => {
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
     res.status(404).json({ error: "API Endpoint Not Found" });
   });
 

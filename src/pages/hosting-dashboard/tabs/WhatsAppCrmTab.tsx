@@ -85,6 +85,15 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
   const [showSimulatorModal, setShowSimulatorModal] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
 
+  // INSTANT CHAT WITH INPUT NUMBER STATE (Sales & Customer Management)
+  const [showInstantChatModal, setShowInstantChatModal] = useState(false);
+  const [instantPhone, setInstantPhone] = useState('');
+  const [instantContactName, setInstantContactName] = useState('');
+  const [instantInitialMessage, setInstantInitialMessage] = useState('');
+  const [instantLeadStage, setInstantLeadStage] = useState<'lead' | 'qualified' | 'in_discussion' | 'customer'>('lead');
+  const [instantOpenExternal, setInstantOpenExternal] = useState(true);
+  const [isStartingInstantChat, setIsStartingInstantChat] = useState(false);
+
   // Custom Data-Fetching Hook for Staff & Hosts Database Collection
   const { staffMembers: hookStaffMembers, activeStaffMembers, refetch: refetchStaffHosts } = useStaffHosts();
 
@@ -283,13 +292,104 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
       const res = await fetch('/api/whatsapp/conversations');
       const data = await res.json();
       if (data.success && data.conversations) {
-        setConversations(data.conversations);
-        if (data.conversations.length > 0 && !selectedConvId) {
-          setSelectedConvId(data.conversations[0].id);
+        let combined = [...data.conversations];
+        try {
+          const snap = await getDocs(collection(db, 'whatsapp_conversations'));
+          if (!snap.empty) {
+            snap.docs.forEach(d => {
+              const fsConv = d.data() as WhatsAppConversation;
+              if (fsConv && fsConv.id && !combined.some(c => c.id === fsConv.id)) {
+                combined.unshift(fsConv);
+              }
+            });
+          }
+        } catch (fsErr) {
+          console.warn('Firestore load warning:', fsErr);
+        }
+
+        setConversations(combined);
+        if (combined.length > 0 && !selectedConvId) {
+          setSelectedConvId(combined[0].id);
         }
       }
     } catch (err) {
       console.warn('Failed to fetch WhatsApp conversations, using fallback', err);
+    }
+  };
+
+  // Instant Chat with Input Number Handler (Records in Chat History)
+  const handleStartInstantChat = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanDigits = instantPhone.replace(/\D/g, '');
+    if (cleanDigits.length < 6) {
+      toast.error('Please enter a valid phone number (minimum 6 digits with country or area code)');
+      return;
+    }
+
+    setIsStartingInstantChat(true);
+
+    try {
+      const payload = {
+        phone: instantPhone.trim(),
+        contactName: instantContactName.trim() || undefined,
+        initialMessage: instantInitialMessage.trim() || undefined,
+        agentId: currentAgent.id,
+        agentName: `${currentAgent.name} (${currentAgent.role})`,
+        leadStage: instantLeadStage,
+        tags: ['Instant Chat', 'Sales & Customer Mgmt']
+      };
+
+      const res = await fetch('/api/whatsapp/instant-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.success && data.conversation) {
+        const returnedConv: WhatsAppConversation = data.conversation;
+
+        setConversations(prev => {
+          const exists = prev.some(c => c.id === returnedConv.id);
+          if (exists) {
+            return prev.map(c => c.id === returnedConv.id ? returnedConv : c);
+          } else {
+            return [returnedConv, ...prev];
+          }
+        });
+
+        setSelectedConvId(returnedConv.id);
+
+        // Persist to Firestore
+        try {
+          await setDoc(doc(db, 'whatsapp_conversations', returnedConv.id), returnedConv, { merge: true });
+        } catch (fsErr) {
+          console.warn('Firestore instant chat save warning:', fsErr);
+        }
+
+        toast.success(
+          data.isExisting 
+            ? `Existing chat with ${returnedConv.contactName} loaded in history!`
+            : `⚡ New instant chat with ${returnedConv.contactName} (${returnedConv.phone}) added to chat history!`
+        );
+
+        if (instantOpenExternal) {
+          const directMsg = encodeURIComponent(instantInitialMessage.trim() || 'Hello! Thank you for contacting Click2IT Hosting.');
+          const waUrl = `https://wa.me/${cleanDigits}?text=${directMsg}`;
+          window.open(waUrl, '_blank', 'noopener,noreferrer');
+        }
+
+        setInstantPhone('');
+        setInstantContactName('');
+        setInstantInitialMessage('');
+        setShowInstantChatModal(false);
+      } else {
+        toast.error(data.error || 'Failed to start instant chat');
+      }
+    } catch (err: any) {
+      toast.error('Error starting instant chat: ' + err.message);
+    } finally {
+      setIsStartingInstantChat(false);
     }
   };
 
@@ -614,6 +714,15 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
 
           {/* Quick Action Buttons matching reference image */}
           <div className="mt-6 flex flex-wrap items-center gap-3">
+            {/* INSTANT CHAT WITH NUMBER INPUT BUTTON */}
+            <button
+              onClick={() => setShowInstantChatModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 active:scale-95 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/30 transition-all cursor-pointer"
+            >
+              <Zap size={18} className="fill-slate-950" />
+              ⚡ Instant Chat (Number Input)
+            </button>
+
             <button
               onClick={() => setShowExtensionModal(true)}
               className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/30 transition-all cursor-pointer"
@@ -732,9 +841,18 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                 <Users size={16} className="text-emerald-600" />
                 Contact Management
               </h3>
-              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                {filteredConversations.length} Active Chats
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowInstantChatModal(true)}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                  title="Start instant chat with a phone number"
+                >
+                  <Plus size={13} /> Instant Chat
+                </button>
+                <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                  {filteredConversations.length}
+                </span>
+              </div>
             </div>
 
             <div className="relative">
@@ -1501,6 +1619,201 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
               )}
 
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* INSTANT WHATSAPP CHAT WITH INPUT NUMBER MODAL (Sales & Customer Management) */}
+      {showInstantChatModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
+          <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 sm:p-8 space-y-6">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-green-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <MessageSquare size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900">
+                      Instant WhatsApp Chat
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                      Sales & CRM
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Input any phone number to start an instant WhatsApp chat session and log it directly into chat history.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowInstantChatModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleStartInstantChat} className="space-y-4">
+              
+              {/* Phone Number Input */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                  Phone Number <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. +880 1712-345678 or 01712345678"
+                    value={instantPhone}
+                    onChange={(e) => setInstantPhone(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-mono"
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                  <span>Enter with country code (+880, +1, +44, +91) or BD local 01X number</span>
+                  <button
+                    type="button"
+                    onClick={() => setInstantPhone('+880 1712-')}
+                    className="text-emerald-700 hover:underline font-bold cursor-pointer"
+                  >
+                    +880 Prefix
+                  </button>
+                </div>
+              </div>
+
+              {/* Contact Name & Pipeline Stage */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                    Contact / Lead Name <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="e.g. Rafiqul Islam"
+                      value={instantContactName}
+                      onChange={(e) => setInstantContactName(e.target.value)}
+                      className="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-700">
+                    Lead Stage
+                  </label>
+                  <select
+                    value={instantLeadStage}
+                    onChange={(e) => setInstantLeadStage(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="lead">New Inbound Lead</option>
+                    <option value="qualified">Qualified Opportunity</option>
+                    <option value="in_discussion">In Active Discussion</option>
+                    <option value="customer">Existing Hosting Customer</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quick Template Selector */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-700">
+                    Initial Message <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <span className="text-[11px] text-emerald-600 font-bold">Quick Templates:</span>
+                </div>
+                
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {[
+                    { label: '👋 Welcome', text: 'Hello! Welcome to Click2IT Hosting. How can our sales and technical support team assist you today?' },
+                    { label: '🚀 VPS 40% OFF', text: 'Hi! We have an exclusive 40% discount on pure Cloud NVMe VPS with root access and 1 Gbps bandwidth. Would you like a custom quote?' },
+                    { label: '🌐 Domain Inquiry', text: 'Hello! I noticed you are inquiring about domain registration (.BD / .COM). How may we help reserve your digital identity?' },
+                    { label: '💳 Invoice Payment', text: 'Hello! Here is your secure invoice link for Click2IT Hosting: https://click2itbd.com/client-area?tab=invoices. Instant service activation!' }
+                  ].map((tpl, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setInstantInitialMessage(tpl.text)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-[11px] font-bold text-slate-600 transition-colors border border-slate-200 cursor-pointer"
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  rows={3}
+                  placeholder="Type an opening message or greeting to start the conversation..."
+                  value={instantInitialMessage}
+                  onChange={(e) => setInstantInitialMessage(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white resize-none"
+                />
+              </div>
+
+              {/* Assigned Agent & Options */}
+              <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 font-bold">Assigned Staff Member:</span>
+                  <span className="text-blue-700 font-extrabold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                    👤 {currentAgent.name} ({currentAgent.role})
+                  </span>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={instantOpenExternal}
+                    onChange={(e) => setInstantOpenExternal(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 focus:ring-0"
+                  />
+                  <span>Also open in official WhatsApp Web (<code>wa.me</code>) in a new tab</span>
+                </label>
+
+                <div className="text-[11px] text-slate-500 flex items-start gap-1.5 pt-1 border-t border-slate-200/60">
+                  <Sparkles size={13} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <span>
+                    This conversation will be permanently included in your WhatsApp CRM chat history and visible to authorized staff.
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInstantChatModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isStartingInstantChat || !instantPhone.trim()}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 active:scale-95 disabled:opacity-50 text-white font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition-all cursor-pointer"
+                >
+                  {isStartingInstantChat ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" /> Starting Instant Chat...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} /> Start Instant Chat & Add to History
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
 
           </div>
         </div>
