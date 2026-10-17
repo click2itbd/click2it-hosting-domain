@@ -1,6 +1,6 @@
 #!/bin/bash
 # Fast 2-Second Pre-Built Deployment Script for cPanel Git™ Version Control
-# Deploys pre-compiled frontend (dist/) to public_html and backend (backend/dist/) to backend_app
+# Supports cpanel_build/ (GitHub-synced) and dist/ for frontend, plus backend/compiled/ for backend
 
 HOME_DIR="${HOME:-/home/$(whoami)}"
 DEST="${DEPLOYPATH:-${HOME_DIR}/public_html}"
@@ -13,18 +13,25 @@ echo " Target Backend:  $BACKEND_DEST"
 echo "=================================================="
 
 # ==============================
-# 1. FRONTEND DEPLOYMENT (dist/ -> public_html)
+# 1. FRONTEND DEPLOYMENT -> public_html
 # ==============================
-if [ -d "dist" ] && [ -f "dist/index.html" ]; then
-  echo "📦 Deploying pre-built frontend (dist/) to $DEST..."
+FRONTEND_SRC=""
+if [ -d "cpanel_build" ] && [ -f "cpanel_build/index.html" ]; then
+  FRONTEND_SRC="cpanel_build"
+elif [ -d "dist" ] && [ -f "dist/index.html" ]; then
+  FRONTEND_SRC="dist"
+fi
+
+if [ -n "$FRONTEND_SRC" ]; then
+  echo "📦 Deploying pre-built frontend from $FRONTEND_SRC/ to $DEST..."
   /bin/mkdir -p "$DEST"
 
   # Remove old hashed assets so stale bundles don't accumulate
   /bin/rm -rf "$DEST/assets"
   /bin/rm -f "$DEST/index.html"
 
-  # Copy all pre-built files from dist/ into public_html/
-  /bin/cp -Rf dist/. "$DEST/"
+  # Copy all pre-built files into public_html/
+  /bin/cp -Rf "$FRONTEND_SRC"/. "$DEST/"
 
   # Ensure .htaccess is copied for SPA routing & /api proxy
   if [ -f "public/.htaccess" ]; then
@@ -40,11 +47,11 @@ if [ -d "dist" ] && [ -f "dist/index.html" ]; then
 
   echo "✅ Frontend deployed to $DEST"
 else
-  echo "⚠️ dist/index.html not found!"
+  echo "⚠️ No pre-built frontend folder (cpanel_build/ or dist/) found!"
 fi
 
 # ==============================
-# 2. BACKEND DEPLOYMENT (backend/ -> backend_app)
+# 2. BACKEND DEPLOYMENT -> backend_app
 # ==============================
 if [ -d "backend" ]; then
   echo "⚙️ Deploying pre-compiled backend to $BACKEND_DEST..."
@@ -55,8 +62,14 @@ if [ -d "backend" ]; then
     /bin/cp -f "$BACKEND_DEST/.env" /tmp/saved_backend_env.tmp 2>/dev/null || true
   fi
 
-  # Copy backend files (including pre-compiled backend/dist/)
+  # Copy backend files
   /bin/cp -Rf backend/. "$BACKEND_DEST/"
+
+  # Ensure backend/compiled is also mirrored to backend_app/dist for Passenger compatibility
+  if [ -d "backend/compiled" ]; then
+    /bin/mkdir -p "$BACKEND_DEST/dist"
+    /bin/cp -Rf backend/compiled/. "$BACKEND_DEST/dist/"
+  fi
 
   # Restore preserved .env
   if [ -f /tmp/saved_backend_env.tmp ]; then
