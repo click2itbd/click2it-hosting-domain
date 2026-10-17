@@ -908,6 +908,7 @@ interface HostingCrmLead {
   companyName?: string;
   email: string;
   phone: string;
+  targetDomain?: string;
   leadStage: 'new_inbound' | 'domain_consultation' | 'vps_quote_sent' | 'invoice_pending' | 'active_customer' | 'renewal_upsell';
   interestedProducts: string[];
   dealValueBdt: number;
@@ -915,6 +916,7 @@ interface HostingCrmLead {
   assignedStaffName?: string;
   whmcsAccountId?: string;
   notes: string[];
+  timeline?: any[];
   lastContactTime: string;
   source: 'WhatsApp' | 'Meta Ads' | 'Web Form' | 'Direct Referral' | 'Phone';
   createdAt: string;

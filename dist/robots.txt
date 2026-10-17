@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+
+# Disallow private user and admin paths
+Disallow: /admin
+Disallow: /admin/
+Disallow: /pos
+Disallow: /login
+Disallow: /profile
+Disallow: /checkout
+Disallow: /order-success
+Disallow: /account/
+Disallow: /hosting/cart
+Disallow: /hosting/checkout
+Disallow: /payment/
+
+# Sitemaps for both sites
+Sitemap: https://click2itbd.com/sitemap.xml
+Sitemap: https://click2it.bd/sitemap.xml
