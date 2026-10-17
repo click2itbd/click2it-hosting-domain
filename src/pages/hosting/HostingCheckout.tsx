@@ -82,17 +82,20 @@ export const HostingCheckout: React.FC = () => {
   useEffect(() => {
     const firstVps = items.find(isVpsItem);
     if (firstVps) {
-      const requestedOs = firstVps.details?.os;
+      const requestedOs = (firstVps as any).details?.os;
+      const requestedLocation = (firstVps as any).details?.serverLocation;
       const cartOs = (typeof requestedOs === 'string' && requestedOs) ||
         (firstVps.name.includes('Ubuntu 24') ? 'Ubuntu 24.04 LTS' :
          firstVps.name.includes('Ubuntu') ? 'Ubuntu 22.04 LTS' :
          firstVps.name.includes('Debian') ? 'Debian 12 Bookworm' :
          firstVps.name.includes('AlmaLinux') ? 'AlmaLinux 9' :
+         firstVps.name.includes('Rocky') ? 'Rocky Linux 9' :
          firstVps.name.includes('Windows') ? 'Windows Server 2022' : 'Ubuntu 22.04 LTS');
 
       setVpsConfig(prev => ({
         ...prev,
-        os: prev.os || cartOs
+        os: requestedOs || prev.os || cartOs,
+        serverLocation: requestedLocation || prev.serverLocation
       }));
     }
   }, [items]);
@@ -527,7 +530,7 @@ export const HostingCheckout: React.FC = () => {
       const transferItems = items.filter(item => item.itemType === 'domain_transfer');
 
 
-      const hostingItems = items.filter(item => item.itemType === 'hosting');
+      const hostingItems = items.filter(item => item.itemType === 'hosting' || item.itemType === 'vps' || isVpsItem(item));
 
       for (const domainItem of domainItems) {
         const domain = domainItem.id.replace('domain_', '');
@@ -603,6 +606,9 @@ export const HostingCheckout: React.FC = () => {
           provisioningStatus: 'pending',
           billingCycle: hostingItem.billingCycle || 'monthly',
           autoRenew: false,
+          isCustomPackage: Boolean((hostingItem as any).isCustomPackage),
+          customSpecs: (hostingItem as any).customSpecs || null,
+          priceBreakdown: (hostingItem as any).priceBreakdown || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           ...(isItemVps ? {
@@ -610,6 +616,7 @@ export const HostingCheckout: React.FC = () => {
               hostname: vpsConfig.hostname.trim(),
               os: vpsConfig.os,
               serverLocation: vpsConfig.serverLocation,
+              controlPanel: (hostingItem as any).details?.controlPanel || 'None',
               rootPassword: vpsConfig.rootPassword,
               sshKey: vpsConfig.sshKey.trim(),
               notes: vpsConfig.notes.trim(),
@@ -619,7 +626,9 @@ export const HostingCheckout: React.FC = () => {
               bandwidth: hostingItem.details?.bandwidth || '2 TB',
               ipv4: hostingItem.details?.ipv4 || '1 Dedicated IPv4'
             }
-          } : {})
+          } : {
+            cpanelDetails: typeof hostingItem.details === 'object' ? hostingItem.details : null
+          })
         });
 
         // Also write to hostingOrders collection with explicit fields
@@ -631,6 +640,9 @@ export const HostingCheckout: React.FC = () => {
           packageSlug: packageSlug,
           billingCycle: hostingItem.billingCycle || 'monthly',
           price: grandTotal,
+          isCustomPackage: Boolean((hostingItem as any).isCustomPackage),
+          customSpecs: (hostingItem as any).customSpecs || null,
+          priceBreakdown: (hostingItem as any).priceBreakdown || null,
           domain: isItemVps ? vpsConfig.hostname.trim() : (hostingConfig.domain || ''),
           customerInfo: {
             name: `${formData.firstName} ${formData.lastName}`.trim(),

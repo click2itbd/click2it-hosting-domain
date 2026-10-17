@@ -23,7 +23,7 @@ export const DomainResultCard: React.FC<DomainResultCardProps> = ({ result, pric
 
   const handleAddToCart = () => {
     if (baseAnnualPrice === null) {
-      toast.error('Live Openprovider pricing is unavailable for this domain.');
+      toast.error('Live registry pricing is unavailable for this domain.');
       return;
     }
     const tld = result.domain.split('.').pop() || '';

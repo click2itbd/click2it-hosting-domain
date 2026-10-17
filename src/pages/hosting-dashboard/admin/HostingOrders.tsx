@@ -1036,9 +1036,21 @@ export default function HostingOrders() {
                   <div className="space-y-3">
                     {selectedOrder.items?.map((item: any, idx: number) => (
                       <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start gap-3">
                           <div>
-                            <p className="font-bold text-gray-900 text-sm">{item.name}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-gray-900 text-sm">{item.name}</p>
+                              {item.isCustomPackage && (
+                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold uppercase tracking-wider">
+                                  Custom Build
+                                </span>
+                              )}
+                            </div>
+                            {(item.description || (typeof item.details === 'object' && item.details !== null)) && (
+                              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                                {item.description || Object.values(item.details).filter(Boolean).join(' • ')}
+                              </p>
+                            )}
                             {item.itemType === 'domain_transfer' && (() => {
                               const relatedDomainOrder = domainOrders.find(d => 
                                 String(d.domain || '').toLowerCase() === String(item.domain || item.id?.replace('domain_transfer_', '') || '').toLowerCase()
@@ -1073,7 +1085,7 @@ export default function HostingOrders() {
                               );
                             })()}
                           </div>
-                          <p className="font-bold text-blue-600">BDT {item.price}</p>
+                          <p className="font-bold text-blue-600 shrink-0">BDT {item.price}</p>
                         </div>
                       </div>
                     ))}
@@ -1097,9 +1109,9 @@ export default function HostingOrders() {
                     {/* Workflow Quick Action Buttons */}
                     <div className="pt-2">
                       {(() => {
-                                                  const hasDomain = selectedOrder.items?.some((i: any) => i.itemType === 'domain' || i.itemType === 'domain_renewal' || i.itemType === 'domain_transfer') || domainOrders.length > 0;
-                          const isVpsOrder = selectedOrder.items?.some((i: any) => i.itemType === 'hosting' && (i.planSlug?.startsWith('vps') || i.id?.includes('vps') || i.name?.toLowerCase().includes('vps'))) || hostingAccounts.some(h => h.type === 'vps' || h.provider === 'vps' || Boolean(h.vpsDetails)) || Boolean((selectedOrder as any).vpsConfig);
-                          const hasHosting = (selectedOrder.items?.some((i: any) => i.itemType === 'hosting' && !i.planSlug?.startsWith('vps') && !i.id?.includes('vps') && !i.name?.toLowerCase().includes('vps')) || hostingAccounts.some(h => h.type !== 'vps' && h.provider !== 'vps' && !h.vpsDetails)) && !isVpsOrder;
+                          const hasDomain = selectedOrder.items?.some((i: any) => i.itemType === 'domain' || i.itemType === 'domain_renewal' || i.itemType === 'domain_transfer') || domainOrders.length > 0;
+                          const isVpsOrder = selectedOrder.items?.some((i: any) => i.itemType === 'vps' || (i.itemType === 'hosting' && (i.planSlug?.includes('vps') || i.id?.includes('vps') || i.name?.toLowerCase().includes('vps')))) || hostingAccounts.some(h => h.type === 'vps' || h.provider === 'vps' || Boolean(h.vpsDetails)) || Boolean((selectedOrder as any).vpsConfig);
+                          const hasHosting = (selectedOrder.items?.some((i: any) => i.itemType === 'hosting' && !i.planSlug?.includes('vps') && !i.id?.includes('vps') && !i.name?.toLowerCase().includes('vps')) || hostingAccounts.some(h => h.type !== 'vps' && h.provider !== 'vps' && !h.vpsDetails)) && !isVpsOrder;
                           const hasCloudLinux = selectedOrder.items?.some((i: any) => i.itemType === 'license' && i.name.toLowerCase().includes('cloudlinux'));
                           
                           let acceptLabel = 'Accept & Process Order';

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { collection, query, orderBy, getDocs, doc, getDoc, limit } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { SEO } from '../components/SEO';
@@ -13,6 +13,7 @@ import DomainPricingSection from './hosting-sections/DomainPricingSection';
 import HostingPlansSection from './hosting-sections/HostingPlansSection';
 import WordPressCloudSection from './hosting-sections/WordPressCloudSection';
 import CloudVpsSection from './hosting-sections/CloudVpsSection';
+import CustomHostingBuilder from './hosting-sections/CustomHostingBuilder';
 import CloudLinuxLicenseSection from './hosting-sections/CloudLinuxLicenseSection';
 import ServicesGrid from './hosting-sections/ServicesGrid';
 import MiddleBannerSection from './hosting-sections/MiddleBannerSection';
@@ -27,10 +28,23 @@ export default function Hosting() {
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [bundleDiscount, setBundleDiscount] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
   const { items } = useCart();
   const { canAccessAdmin } = useAuth();
 
   const hasDomainInCart = items.some(item => item.category === 'Hosting & Domains' && item.id.startsWith('domain_'));
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('custom') === 'true' || location.hash === '#custom-package') {
+      const el = document.getElementById('custom-package');
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }, 150);
+      }
+    }
+  }, [location.search, location.hash]);
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -103,7 +117,10 @@ export default function Hosting() {
       {/* 6. High Performance KVM Cloud VPS & Dedicated Servers */}
       <CloudVpsSection />
 
-      {/* 7. CloudLinux OS License Pricing & Comparison */}
+      {/* 7. Interactive Custom Cloud & VPS Package Builder */}
+      <CustomHostingBuilder />
+
+      {/* 8. CloudLinux OS License Pricing & Comparison */}
       <CloudLinuxLicenseSection />
 
       {/* 8. Our Services — 3x2 grid */}

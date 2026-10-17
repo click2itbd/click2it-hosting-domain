@@ -67,10 +67,14 @@ export const HostingCart: React.FC = () => {
 
   const handleHostingDurationChange = (item: any, cycleStr: string) => {
     // Determine monthly base
-    let monthlyBase = item.baseMonthlyPrice;
+    let monthlyBase = item.baseMonthlyPrice || item.monthlyPrice;
     if (!monthlyBase) {
       if (item.billingCycle === 'monthly') {
         monthlyBase = item.price;
+      } else if (item.billingCycle === 'quarterly') {
+        monthlyBase = Math.round(item.price / 3 / 0.95);
+      } else if (item.billingCycle === 'semiannually') {
+        monthlyBase = Math.round(item.price / 6 / 0.90);
       } else {
         monthlyBase = Math.round(item.price / 12 / 0.8);
       }
@@ -84,6 +88,24 @@ export const HostingCart: React.FC = () => {
         termYears: 0
       });
       toast.success('Updated to Monthly billing');
+    } else if (cycleStr === 'quarterly') {
+      const calculatedPrice = Math.round(monthlyBase * 3 * 0.95);
+      updateCartItem(item.id, {
+        billingCycle: 'quarterly' as any,
+        baseMonthlyPrice: monthlyBase,
+        termYears: 0,
+        price: calculatedPrice
+      });
+      toast.success('Updated to Quarterly (3 Months) billing (5% off)');
+    } else if (cycleStr === 'semiannually') {
+      const calculatedPrice = Math.round(monthlyBase * 6 * 0.90);
+      updateCartItem(item.id, {
+        billingCycle: 'semiannually' as any,
+        baseMonthlyPrice: monthlyBase,
+        termYears: 0,
+        price: calculatedPrice
+      });
+      toast.success('Updated to Semi-Annual (6 Months) billing (10% off)');
     } else {
       const years = Number(cycleStr);
       const discount = HOSTING_YEAR_DISCOUNTS[years] || 20;
@@ -195,9 +217,9 @@ export const HostingCart: React.FC = () => {
                           )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          {isTransfer ? 'Includes 1-Year Extension & Free WHOIS Privacy' : (typeof item.details === 'object' && item.details !== null 
-                            ? 'Custom resource configuration' 
-                            : (typeof item.details === 'string' ? item.details : (item.billingCycle === 'monthly' ? 'Billed Monthly' : 'Billed Annually')))}
+                          {isTransfer ? 'Includes 1-Year Extension & Free WHOIS Privacy' : (item.description ? item.description : (typeof item.details === 'object' && item.details !== null 
+                            ? Object.values(item.details).filter(Boolean).join(' • ') 
+                            : (typeof item.details === 'string' ? item.details : (item.billingCycle === 'monthly' ? 'Billed Monthly' : 'Billed Annually'))))}
                         </p>
 
                         {/* Domain Transfer Notice */}
@@ -233,11 +255,18 @@ export const HostingCart: React.FC = () => {
                             <Zap size={14} className="text-blue-600" />
                             <span className="text-xs font-bold text-gray-700">Billing:</span>
                             <select
-                              value={item.billingCycle === 'monthly' ? 'monthly' : String(item.termYears || 1)}
+                              value={
+                                item.billingCycle === 'monthly' ? 'monthly' :
+                                (item.billingCycle as string) === 'quarterly' ? 'quarterly' :
+                                (item.billingCycle as string) === 'semiannually' ? 'semiannually' :
+                                String(item.termYears || 1)
+                              }
                               onChange={(e) => handleHostingDurationChange(item, e.target.value)}
                               className="text-xs font-bold bg-blue-50 border border-blue-200 text-blue-900 rounded-lg px-2.5 py-1 outline-none cursor-pointer hover:border-blue-400"
                             >
                               <option value="monthly">1 Month</option>
+                              <option value="quarterly">3 Months (Save 5%)</option>
+                              <option value="semiannually">6 Months (Save 10%)</option>
                               <option value="1">1 Year (Save 20%) 🔥</option>
                               <option value="2">2 Years (Save 25%)</option>
                               <option value="3">3 Years (Save 30%) ⭐</option>

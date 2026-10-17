@@ -72,7 +72,7 @@ export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClos
             nameservers: activeNs,
             nsUpdatePending: false
           });
-          toast.success('Nameservers updated successfully at BTCL!');
+          toast.success('Nameservers updated successfully!');
           onUpdate();
           onClose();
           return;
@@ -89,7 +89,7 @@ export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClos
           nsUpdatePending: true,
           requestedNs: activeNs
         });
-        toast.success('Nameserver update request submitted for BTCL manual approval!');
+        toast.success('Nameserver update request submitted! Our domain team will activate it shortly.');
         onUpdate();
         onClose();
         return;

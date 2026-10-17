@@ -76,17 +76,19 @@ export const CustomPackageBuilder: React.FC<CustomPackageBuilderProps> = ({
 
   // cPanel Specs State
   const [cpanelSpecs, setCpanelSpecs] = useState<CpanelCustomSpecs>({
-    diskGb: 20,
+    diskGb: 10,
     bandwidthGb: 100,
-    websites: 5,
-    emails: 20,
-    databases: 10,
+    cpuCores: 2,
+    ramGb: 2,
+    websites: 2,
+    emails: 15,
+    databases: 5,
     litespeed: true,
     cloudlinux: true,
-    imunify360: true,
+    imunify360: false,
     dedicatedIp: false,
-    acronisBackup: true,
-    billingCycle: 'monthly'
+    acronisBackup: false,
+    billingCycle: 'annually'
   });
 
   // Load Admin Pricing Scales
@@ -151,35 +153,70 @@ export const CustomPackageBuilder: React.FC<CustomPackageBuilderProps> = ({
   // Handle Add To Cart (Customer Mode)
   const handleAddToCart = () => {
     const isVps = activeType === 'vps';
+    const selectedOsObj = osList.find(o => o.id === vpsSpecs.os);
+    const selectedCpObj = cpList.find(c => c.id === vpsSpecs.controlPanel);
+    const selectedLocObj = locationList.find(l => l.id === vpsSpecs.location);
+
     const name = customPackageName || (isVps 
       ? `Custom KVM VPS (${vpsSpecs.cores} vCPU, ${vpsSpecs.ramGb}GB RAM, ${vpsSpecs.storageGb}GB NVMe)`
-      : `Custom cPanel Web Hosting (${cpanelSpecs.diskGb}GB NVMe, ${cpanelSpecs.websites} Sites)`
+      : `Custom Cloud cPanel Plan (${cpanelSpecs.diskGb}GB NVMe, ${cpanelSpecs.cpuCores || 2} Core, ${cpanelSpecs.ramGb || 2}GB RAM)`
     );
 
     const description = isVps
-      ? `${vpsSpecs.cores} vCPU Cores, ${vpsSpecs.ramGb}GB DDR4 RAM, ${vpsSpecs.storageGb}GB NVMe Storage, ${vpsSpecs.bandwidthTb}TB Bandwidth, ${vpsSpecs.ips} IPv4, OS: ${vpsSpecs.os.toUpperCase()}, Control Panel: ${vpsSpecs.controlPanel.toUpperCase()}, Location: ${vpsSpecs.location}`
-      : `${cpanelSpecs.diskGb}GB NVMe Storage, ${cpanelSpecs.bandwidthGb}GB Bandwidth, ${cpanelSpecs.websites} Addon Domains, ${cpanelSpecs.emails} Emails, ${cpanelSpecs.databases} MySQL DBs, LiteSpeed: ${cpanelSpecs.litespeed ? 'Yes' : 'No'}, CloudLinux: ${cpanelSpecs.cloudlinux ? 'Yes' : 'No'}, Imunify360: ${cpanelSpecs.imunify360 ? 'Yes' : 'No'}`;
+      ? `${vpsSpecs.cores} vCPU Cores • ${vpsSpecs.ramGb}GB DDR4 RAM • ${vpsSpecs.storageGb}GB NVMe Storage • ${vpsSpecs.bandwidthTb}TB Bandwidth • ${vpsSpecs.ips} IPv4 • OS: ${selectedOsObj?.name || vpsSpecs.os} • Panel: ${selectedCpObj?.name || vpsSpecs.controlPanel} • Location: ${selectedLocObj?.name || vpsSpecs.location}`
+      : `${cpanelSpecs.diskGb}GB NVMe SSD • ${cpanelSpecs.cpuCores || 2} vCPU Cores • ${cpanelSpecs.ramGb || 2}GB RAM • ${cpanelSpecs.bandwidthGb}GB Bandwidth • ${cpanelSpecs.websites} Website(s) • ${cpanelSpecs.emails} Emails • ${cpanelSpecs.databases} MySQL DBs`;
+
+    const cycle = currentResult.billingCycle;
+    const mappedBillingCycle = cycle === 'annually' ? 'yearly' : cycle;
 
     const cartItem = {
       id: `custom_${activeType}_${Date.now()}`,
       name,
       description,
+      details: isVps
+        ? {
+            cores: `${vpsSpecs.cores} vCPU`,
+            ram: `${vpsSpecs.ramGb} GB DDR4`,
+            storage: `${vpsSpecs.storageGb} GB NVMe`,
+            bandwidth: `${vpsSpecs.bandwidthTb} TB`,
+            ipv4: `${vpsSpecs.ips} Dedicated IPv4`,
+            os: selectedOsObj?.name || 'Ubuntu 22.04 LTS',
+            controlPanel: selectedCpObj?.name || 'None (Root SSH)',
+            serverLocation: selectedLocObj?.name || 'Dhaka, Bangladesh (BDIX Peering)'
+          }
+        : {
+            disk: `${cpanelSpecs.diskGb} GB Pure NVMe SSD`,
+            websites: `${cpanelSpecs.websites} Website(s)`,
+            cpu: `${cpanelSpecs.cpuCores || 2} vCPU Core(s)`,
+            ram: `${cpanelSpecs.ramGb || 2} GB DDR4 RAM`,
+            bandwidth: `${cpanelSpecs.bandwidthGb} GB Bandwidth`,
+            email: `${cpanelSpecs.emails} Email Accounts`,
+            databases: `${cpanelSpecs.databases} MySQL Databases`,
+            addons: [
+              cpanelSpecs.litespeed ? 'LiteSpeed Enterprise' : null,
+              cpanelSpecs.cloudlinux ? 'CloudLinux LVE' : null,
+              cpanelSpecs.imunify360 ? 'Imunify360 Security' : null,
+              cpanelSpecs.acronisBackup ? 'Acronis Daily Backup' : null,
+              cpanelSpecs.dedicatedIp ? 'Dedicated IPv4' : null,
+            ].filter(Boolean).join(', ')
+          },
       price: currentResult.totalPrice,
       monthlyPrice: currentResult.monthlyRate,
-      billingCycle: currentResult.billingCycle,
+      baseMonthlyPrice: currentResult.monthlyRate,
+      billingCycle: mappedBillingCycle,
+      termYears: cycle === 'annually' ? 1 : 0,
+      planSlug: isVps ? 'custom-vps' : 'custom-package',
       itemType: isVps ? 'vps' : 'hosting',
-      category: isVps ? 'VPS Servers' : 'Web Hosting',
+      category: 'Hosting & Domains',
       isCustomPackage: true,
       customSpecs: isVps ? vpsSpecs : cpanelSpecs,
       priceBreakdown: currentResult.breakdown,
       quantity: 1,
-      image: isVps 
-        ? 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&q=80'
-        : 'https://images.unsplash.com/photo-1618401471353-b98afee0b2eb?w=400&q=80'
+      image: '/logo.png'
     };
 
     addToCart(cartItem as any);
-    toast.success(`Custom ${activeType.toUpperCase()} package added to cart!`);
+    toast.success(`Custom ${isVps ? 'KVM VPS' : 'Cloud Hosting'} package added to cart!`);
     navigate('/hosting/cart');
   };
 
@@ -709,6 +746,59 @@ export const CustomPackageBuilder: React.FC<CustomPackageBuilderProps> = ({
                     <span>250 GB</span>
                     <span>500 GB</span>
                     <span>1000 GB (1TB)</span>
+                  </div>
+                </div>
+
+                {/* CPU & RAM Sliders */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                        <Cpu size={14} className="text-purple-600" /> CPU Processing Power
+                      </span>
+                      <span className="px-2.5 py-0.5 bg-purple-100 text-purple-900 rounded-lg font-mono font-black text-xs">
+                        {cpanelSpecs.cpuCores || 2} Core{(cpanelSpecs.cpuCores || 2) > 1 ? 's' : ''} ({(cpanelSpecs.cpuCores || 2) * 100}%)
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="8"
+                      step="1"
+                      value={cpanelSpecs.cpuCores || 2}
+                      onChange={e => setCpanelSpecs({ ...cpanelSpecs, cpuCores: parseInt(e.target.value) || 1 })}
+                      className="w-full accent-purple-600 cursor-pointer h-2 bg-slate-200 rounded-lg"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-400 font-bold">
+                      <span>1 Core</span>
+                      <span>4 Cores</span>
+                      <span>8 Cores</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                        <Zap size={14} className="text-amber-600" /> Physical RAM Memory
+                      </span>
+                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-lg font-mono font-black text-xs">
+                        {cpanelSpecs.ramGb || 2} GB DDR4 RAM
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="16"
+                      step="1"
+                      value={cpanelSpecs.ramGb || 2}
+                      onChange={e => setCpanelSpecs({ ...cpanelSpecs, ramGb: parseInt(e.target.value) || 1 })}
+                      className="w-full accent-amber-600 cursor-pointer h-2 bg-slate-200 rounded-lg"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-400 font-bold">
+                      <span>1 GB</span>
+                      <span>8 GB</span>
+                      <span>16 GB</span>
+                    </div>
                   </div>
                 </div>
 

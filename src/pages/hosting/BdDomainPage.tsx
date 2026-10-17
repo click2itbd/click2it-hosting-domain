@@ -7,9 +7,11 @@ import { sendEmail } from '../../services/emailService';
 import { collection, addDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../../firebase';
+import { useSettings } from '../../context/SettingsContext';
 import toast from 'react-hot-toast';
 
 export default function BdDomainPage() {
+  const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [pricing, setPricing] = useState<DomainPricing[]>([]);
   
@@ -121,9 +123,9 @@ export default function BdDomainPage() {
   return (
     <Layout fullWidth={true}>
       <SEO 
-        title=".BD Domain Registration & BTCL Approval | Click2IT"
-        description="Register official .bd, .com.bd, .net.bd, .edu.bd, .org.bd domains easily. Fast BTCL verification, manual paperwork processing, and dedicated support in Bangladesh."
-        keywords="bd domain registration, com bd domain, btcl domain registration, buy bd domain bangladesh, .bd domain price, official bd domain"
+        title=".BD Domain Registration in Bangladesh | Click2IT"
+        description="Register official .bd, .com.bd, .net.bd, .edu.bd, .org.bd domains easily with Click2IT. Fast registry verification, full DNS management, and dedicated 24/7 support in Bangladesh."
+        keywords="bd domain registration, com bd domain, buy bd domain bangladesh, .bd domain price, official bd domain"
         canonical="https://click2itbd.com/domain/bd"
       />
       
@@ -138,7 +140,7 @@ export default function BdDomainPage() {
         <div className="relative z-10 max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-6 tracking-tight drop-shadow-lg">Apply For Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">.BD</span> Domain</h1>
           <p className="text-lg md:text-xl text-gray-200 max-w-2xl mx-auto mb-10 drop-shadow-md">
-            Secure your local identity in Bangladesh. Submit your desired name, and our experts will manually verify availability and handle all BTCL paperwork.
+            Secure your official Bangladeshi brand identity. Submit your desired name and our domain specialists will handle verification, compliance documentation, and complete DNS activation for you.
           </p>
           
           <form onSubmit={handleApplyClick} className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center bg-black/30 backdrop-blur-md p-2 rounded-2xl md:rounded-full border border-white/15 mb-6 shadow-2xl focus-within:bg-black/40 transition-all">
@@ -184,10 +186,10 @@ export default function BdDomainPage() {
             <div className="hidden md:block absolute top-[52px] left-[12%] right-[12%] h-[3px] bg-gradient-to-r from-green-300 via-emerald-400 to-green-600 rounded-full"></div>
             
             {[
-              { step: '01', icon: <Globe size={28} />, title: 'Apply Online', desc: 'Enter your desired domain name and submit the application form with your details.', color: 'from-green-500 to-emerald-600' },
-              { step: '02', icon: <Shield size={28} />, title: 'We Check BTCL', desc: 'Our team manually verifies domain availability directly with the BTCL registry.', color: 'from-emerald-500 to-teal-600' },
-              { step: '03', icon: <FileText size={28} />, title: 'Submit Documents', desc: 'If available, we contact you to collect NID, Trade License, and process payment.', color: 'from-teal-500 to-green-600' },
-              { step: '04', icon: <CheckCircle size={28} />, title: 'Domain Active!', desc: 'BTCL reviews and activates your domain. Goes live within 24-48 working hours.', color: 'from-green-600 to-[#006a4e]' },
+              { step: '01', icon: <Globe size={28} />, title: 'Choose & Apply', desc: 'Enter your desired .BD domain name and submit your online application in seconds.', color: 'from-green-500 to-emerald-600' },
+              { step: '02', icon: <Shield size={28} />, title: 'Registry Verification', desc: 'Our domain specialists verify name eligibility and reserve your domain slot.', color: 'from-emerald-500 to-teal-600' },
+              { step: '03', icon: <FileText size={28} />, title: 'Document & Payment', desc: 'Upload your NID & Trade License securely and complete payment via bKash, Nagad, or Card.', color: 'from-teal-500 to-green-600' },
+              { step: '04', icon: <CheckCircle size={28} />, title: 'Domain Activated!', desc: 'Your .BD domain is activated with full DNS management within 24–48 working hours.', color: 'from-green-600 to-[#006a4e]' },
             ].map((item, i) => (
               <div key={i} className="flex flex-col items-center text-center px-4 group">
                 {/* Step Circle */}
@@ -210,7 +212,7 @@ export default function BdDomainPage() {
           <div className="text-center mb-14">
             <span className="inline-block px-4 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold uppercase tracking-wider mb-4">Important</span>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900">Required Legal Documents</h2>
-            <p className="text-gray-500 mt-3 max-w-2xl mx-auto">BTCL strictly enforces eligibility to protect Bangladeshi brands. Choose your domain category below to see what documents you'll need.</p>
+            <p className="text-gray-500 mt-3 max-w-2xl mx-auto">Official national registry guidelines require identity verification to protect Bangladeshi brands. Choose your domain category below to see what documents you'll need.</p>
           </div>
           
           <div className="grid md:grid-cols-3 gap-8">
@@ -366,7 +368,7 @@ export default function BdDomainPage() {
               </div>
               <span className="mt-1">What if I don't have a Trade License?</span>
             </h4>
-            <p className="text-gray-600 ml-12 leading-relaxed">Unfortunately, BTCL strictly requires a valid Trade License to register a .com.bd or .net.bd domain. You cannot register these extensions for personal use without a registered entity.</p>
+            <p className="text-gray-600 ml-12 leading-relaxed">A valid Trade License is required for business extensions like .com.bd or .net.bd. However, individuals can register personal .bd or .info.bd domains using only their National ID (NID) card.</p>
           </div>
           {/* FAQ 2 */}
           <div className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow group">
@@ -376,7 +378,7 @@ export default function BdDomainPage() {
               </div>
               <span className="mt-1">Can I register a .bd domain for 1 year?</span>
             </h4>
-            <p className="text-gray-600 ml-12 leading-relaxed">No, the Bangladesh Telecommunication Company Limited (BTCL) mandates a minimum registration period of 2 years for all .bd domain extensions. Our pricing reflects this 2-year total.</p>
+            <p className="text-gray-600 ml-12 leading-relaxed">All official .bd domain extensions require a minimum initial registration period of 2 years under national registry policy. Our displayed packages include full 2-year registration and DNS management.</p>
           </div>
           {/* FAQ 3 */}
           <div className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow group">
@@ -386,7 +388,7 @@ export default function BdDomainPage() {
               </div>
               <span className="mt-1">How long does the activation process take?</span>
             </h4>
-            <p className="text-gray-600 ml-12 leading-relaxed">After we verify availability and collect your payment and documents, we process the application with BTCL. It typically takes 24 to 48 working hours for BTCL to review the paperwork and activate the domain.</p>
+            <p className="text-gray-600 ml-12 leading-relaxed">Once your application and documents are submitted, our domain compliance team processes your registration priority-first. Your domain typically goes live within 24 to 48 working hours with full nameserver control.</p>
           </div>
         </div>
       </div>
@@ -401,10 +403,10 @@ export default function BdDomainPage() {
           
           <div className="relative z-10">
             <h3 className="text-2xl md:text-3xl font-black text-white mb-3">Need help with the paperwork?</h3>
-            <p className="text-green-100 text-lg max-w-xl">Our dedicated BTCL domain experts are here to help you navigate the registration process. Don't hesitate to reach out if you have any questions.</p>
+            <p className="text-green-100 text-lg max-w-xl">Our dedicated .BD domain specialists are here to guide you through every step of the registration process. Reach out anytime for instant assistance.</p>
           </div>
           
-          <a href="tel:+880123456789" className="relative z-10 shrink-0 bg-white hover:bg-gray-50 text-[#006a4e] px-8 py-4 rounded-2xl font-bold flex items-center gap-3 transition-transform hover:scale-105 shadow-xl shadow-black/10">
+          <a href={`tel:${settings.contactPhone || '+8801729887777'}`} className="relative z-10 shrink-0 bg-white hover:bg-gray-50 text-[#006a4e] px-8 py-4 rounded-2xl font-bold flex items-center gap-3 transition-transform hover:scale-105 shadow-xl shadow-black/10">
             <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
               <PhoneCall size={16} />
             </div>
@@ -426,13 +428,13 @@ export default function BdDomainPage() {
               <div className="relative z-10">
                 <Globe size={36} className="mb-4 text-green-300" />
                 <h3 className="text-2xl font-black mb-2">Apply for .BD Domain</h3>
-                <p className="text-green-200 text-sm leading-relaxed">We'll verify availability with BTCL and contact you within 24 hours.</p>
+                <p className="text-green-200 text-sm leading-relaxed">Our domain specialists will verify eligibility and contact you within 24 hours.</p>
               </div>
               
               <div className="relative z-10 mt-8 space-y-3 hidden md:block">
                 <div className="flex items-center gap-3 text-sm text-green-200">
                   <CheckCircle size={16} className="text-green-300 shrink-0" />
-                  <span>Manual BTCL verification</span>
+                  <span>Priority registry verification</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-green-200">
                   <CheckCircle size={16} className="text-green-300 shrink-0" />
@@ -562,7 +564,7 @@ export default function BdDomainPage() {
                     required
                   />
                   <label htmlFor="terms" className="text-xs text-gray-600 leading-relaxed">
-                    I confirm that the provided documents are authentic and I agree to <a href="#" className="text-green-600 font-bold hover:underline">BTCL's Terms & Conditions</a> for domain registration.
+                    I confirm that the provided documents are authentic and I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-green-600 font-bold hover:underline">Official .BD Domain Registration Terms & Conditions</a>.
                   </label>
                 </div>
 

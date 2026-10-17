@@ -37,16 +37,16 @@ export function BdTransferModal({ isOpen, onClose, initialDomain = '' }: BdTrans
   const handleDownloadTemplate = () => {
     const targetDomain = domain.trim() || 'yourdomain.com.bd';
     const templateContent = `================================================================================
-OFFICIAL BTCL DOMAIN TECHNICAL CONTACT CHANGE FORWARDING LETTER TEMPLATE
+OFFICIAL .BD DOMAIN TECHNICAL CONTACT CHANGE AUTHORIZATION LETTER TEMPLATE
 (Print on your Company Official Letterhead or Plain Paper for Personal Domain)
 ================================================================================
 
 Date: ${new Date().toLocaleDateString('en-GB')}
 
 To:
-The Divisional Engineer (DE-1)
-BTCL (Bangladesh Telecommunications Company Limited)
-Moghbazar Telephone Bhaban, Dhaka-1217, Bangladesh.
+The Domain Compliance & Registry Team
+Click2IT (Official .BD Domain Partner)
+Dhaka, Bangladesh.
 
 Subject: Request for changing Technical & Billing Contact for Domain: ${targetDomain}
 
@@ -54,7 +54,7 @@ Dear Sir,
 
 I, the undersigned ${applicantName || '[Your Full Name]'}, am the legal and registered owner of the .BD domain "${targetDomain}".
 
-I would like to authorize Click2IT (Web: click2it.bd / info@click2itbd.com) as the authorized technical management partner for our domain. Kindly update the Technical and Billing contact details in your central registry database as follows:
+I would like to authorize Click2IT (Web: click2it.bd / info@click2itbd.com) as the authorized technical management partner for our domain. Kindly update the Technical and Billing contact details in the central registry database as follows:
 
 Domain Name: ${targetDomain}
 New Technical Contact ID / Partner: Click2IT
@@ -80,12 +80,12 @@ Email: ${applicantEmail || '[Your Email Address]'}
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `BTCL_Transfer_Forwarding_Letter_${targetDomain.replace(/[^a-zA-Z0-9.-]/g, '_')}.txt`;
+    link.download = `BD_Domain_Transfer_Authorization_${targetDomain.replace(/[^a-zA-Z0-9.-]/g, '_')}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success('BTCL Forwarding Letter Template downloaded!');
+    toast.success('.BD Transfer Authorization Letter Template downloaded!');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,7 +161,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
                  <p><strong>Phone:</strong> ${applicantPhone}</p>
                  <p><strong>Current Registrar:</strong> ${existingRegistrar || 'None'}</p>
                  <p><strong>Document Status:</strong> ${willSendLater ? 'Customer will send later via email/WhatsApp' : 'Uploaded online'}</p>
-                 <p>Please review in Admin Panel under BTCL Applications.</p>`,
+                 <p>Please review in Admin Panel under .BD Domain Applications.</p>`,
         });
       } catch (mailErr) {
         console.warn('Admin notification email failed (non-blocking):', mailErr);
@@ -193,14 +193,14 @@ Email: ${applicantEmail || '[Your Email Address]'}
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xl">🇧🇩</span>
             <span className="text-xs font-bold tracking-wider uppercase bg-white/20 px-2.5 py-0.5 rounded-full">
-              BTCL (.BD Registry) Manual Transfer
+              Official .BD Domain Transfer
             </span>
           </div>
           <h2 className="text-2xl font-bold tracking-tight">
             .BD Domain Transfer Assistance
           </h2>
           <p className="text-emerald-100 text-sm mt-1">
-            BTCL domains do not use automated EPP codes. We handle the official documentation and BTCL registry coordination for you.
+            .BD domains use document verification instead of EPP codes. Our specialists handle all official documentation and registry processing for you.
           </p>
         </div>
 
@@ -213,21 +213,21 @@ Email: ${applicantEmail || '[Your Email Address]'}
               </div>
               <h3 className="text-2xl font-bold text-slate-800">Transfer Request Submitted!</h3>
               <p className="text-slate-600 max-w-md mx-auto text-sm leading-relaxed">
-                Thank you, <strong>{applicantName}</strong>. Our dedicated BTCL domain specialists have received your request for <strong>{domain}</strong> and will contact you within 24 working hours.
+                Thank you, <strong>{applicantName}</strong>. Our dedicated .BD domain specialists have received your request for <strong>{domain}</strong> and will contact you within 24 working hours.
               </p>
               
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 max-w-md mx-auto text-left text-xs text-emerald-900 space-y-2">
                 <div className="flex items-center gap-2 font-semibold text-emerald-800">
                   <Shield size={16} /> What happens next?
                 </div>
-                <p>1. Our team will verify the current BTCL ownership and status of {domain}.</p>
-                <p>2. We will assist you in preparing and submitting the required BTCL paperwork.</p>
-                <p>3. Once approved by BTCL, your domain technical contact and nameservers will be updated.</p>
+                <p>1. Our team will verify the current registry ownership and status of {domain}.</p>
+                <p>2. We will assist you in preparing and validating the required authorization documents.</p>
+                <p>3. Once processed, your domain technical contact and nameservers will be updated seamlessly.</p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
                 <a
-                  href={`https://wa.me/8801729887777?text=Hello%20Click2IT,%20I%20just%20submitted%20a%20BTCL%20transfer%20request%20for%20${encodeURIComponent(domain)}.`}
+                  href={`https://wa.me/8801729887777?text=Hello%20Click2IT,%20I%20just%20submitted%20a%20.BD%20domain%20transfer%20request%20for%20${encodeURIComponent(domain)}.`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-sm transition-colors shadow-md shadow-emerald-600/20"
@@ -249,7 +249,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
                 <Shield size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <strong className="font-semibold block text-emerald-800 mb-0.5">How .BD Transfer Works:</strong>
-                  BTCL requires physical or scanned verification documents (NID / Trade License & Official Forwarding Letter). No automated authorization code is needed. Our team handles the entire registry liaison.
+                  Official .BD domain transfers require scanned verification documents (NID / Trade License & Official Authorization Letter). No EPP code is needed—our compliance team handles the entire transfer process.
                 </div>
               </div>
 
@@ -261,6 +261,8 @@ Email: ${applicantEmail || '[Your Email Address]'}
                   </label>
                   <input
                     type="text"
+                    name="bd_transfer_domain"
+                    autoComplete="off"
                     value={domain}
                     onChange={(e) => setDomain(e.target.value.toLowerCase().trim())}
                     placeholder="e.g. click2it.bd or company.com.bd"
@@ -291,7 +293,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
                         <span className="text-sm font-bold text-slate-800">Technical Move</span>
                       </div>
                       <p className="text-xs text-slate-500 leading-relaxed pl-5">
-                        Keep same legal owner; move technical control and hosting to Click2IT.
+                        Keep same legal owner; move technical control, billing, and DNS management to Click2IT.
                       </p>
                     </label>
 
@@ -312,7 +314,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
                         <span className="text-sm font-bold text-slate-800">Ownership Transfer</span>
                       </div>
                       <p className="text-xs text-slate-500 leading-relaxed pl-5">
-                        Transfer legal rights from one party/company to another via BTCL deed.
+                        Transfer legal ownership rights from one company or individual to another.
                       </p>
                     </label>
                   </div>
@@ -366,13 +368,13 @@ Email: ${applicantEmail || '[Your Email Address]'}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Current Provider / BTCL Username (Optional)
+                      Current Provider / Account Ref (Optional)
                     </label>
                     <input
                       type="text"
                       value={existingRegistrar}
                       onChange={(e) => setExistingRegistrar(e.target.value)}
-                      placeholder="e.g. Dianahost / BTCL ID"
+                      placeholder="e.g. Previous Hosting Provider"
                       className="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 text-sm"
                     />
                   </div>
@@ -383,7 +385,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2.5 text-slate-700">
                   <FileText size={18} className="text-emerald-600 flex-shrink-0" />
-                  <span>Need the official BTCL application format?</span>
+                  <span>Need the official .BD transfer authorization format?</span>
                 </div>
                 <button
                   type="button"
@@ -458,7 +460,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
                     className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                   />
                   <span className="text-xs text-slate-600 leading-relaxed">
-                    I confirm that I am the legal owner or authorized representative for <strong>{domain || 'this domain'}</strong>, and authorize Click2IT to represent the transfer paperwork with BTCL.
+                    I confirm that I am the legal owner or authorized representative for <strong>{domain || 'this domain'}</strong>, and authorize Click2IT to process the official .BD domain transfer on my behalf.
                   </span>
                 </label>
               </div>

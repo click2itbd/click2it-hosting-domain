@@ -20,6 +20,8 @@ export interface CpanelCostScale {
   baseCpanelPrice: number;
   perGbDisk: number;
   per10GbBandwidth: number;
+  perCoreCpu: number;
+  perGbRam: number;
   perWebsite: number;
   per10Emails: number;
   per5Databases: number;
@@ -93,15 +95,17 @@ export const DEFAULT_PRICING_SCALES: PackagePricingScales = {
     },
   },
   cpanel: {
-    baseCpanelPrice: 120,
+    baseCpanelPrice: 100,
     perGbDisk: 35,
     per10GbBandwidth: 20,
+    perCoreCpu: 120,
+    perGbRam: 80,
     perWebsite: 30,
     per10Emails: 20,
     per5Databases: 25,
-    litespeedPrice: 120,
-    cloudlinuxPrice: 180,
-    imunify360Price: 220,
+    litespeedPrice: 0,
+    cloudlinuxPrice: 0,
+    imunify360Price: 150,
     dedicatedIpPrice: 300,
     acronisBackupPrice: 150,
   },
@@ -130,6 +134,8 @@ export interface VpsCustomSpecs {
 export interface CpanelCustomSpecs {
   diskGb: number;
   bandwidthGb: number;
+  cpuCores?: number;
+  ramGb?: number;
   websites: number;
   emails: number;
   databases: number;
@@ -265,38 +271,48 @@ export function calculateCpanelPrice(
   const diskCost = (Number(specs.diskGb) || 1) * (Number(cScale.perGbDisk) || 0);
   breakdown.push({ item: `${specs.diskGb} GB Pure NVMe SSD Storage`, cost: diskCost, desc: `৳${cScale.perGbDisk}/GB` });
 
+  // CPU Cores
+  const cpuCores = Number(specs.cpuCores) || 1;
+  const cpuCost = Math.max(0, cpuCores - 1) * (Number(cScale.perCoreCpu) || 120);
+  breakdown.push({ item: `${cpuCores} vCPU Core${cpuCores > 1 ? 's' : ''} (${cpuCores * 100}% LVE)`, cost: cpuCost, desc: `1st Core Free, +৳${cScale.perCoreCpu || 120}/core` });
+
+  // Physical RAM
+  const ramGb = Number(specs.ramGb) || 1;
+  const ramCost = Math.max(0, ramGb - 1) * (Number(cScale.perGbRam) || 80);
+  breakdown.push({ item: `${ramGb} GB Physical DDR4 RAM`, cost: ramCost, desc: `1st GB Free, +৳${cScale.perGbRam || 80}/GB` });
+
   // Bandwidth
   const bwBlocks = Math.ceil((Number(specs.bandwidthGb) || 10) / 10);
   const bwCost = bwBlocks * (Number(cScale.per10GbBandwidth) || 0);
   breakdown.push({ item: `${specs.bandwidthGb} GB Monthly Bandwidth`, cost: bwCost, desc: `৳${cScale.per10GbBandwidth} per 10GB` });
 
   // Websites / Domains
-  const siteCost = (Number(specs.websites) || 1) * (Number(cScale.perWebsite) || 0);
-  breakdown.push({ item: `${specs.websites} Hosted Websites / Addon Domains`, cost: siteCost, desc: `৳${cScale.perWebsite}/domain` });
+  const siteCost = Math.max(0, (Number(specs.websites) || 1) - 1) * (Number(cScale.perWebsite) || 0);
+  breakdown.push({ item: `${specs.websites} Hosted Website${specs.websites > 1 ? 's' : ''} / Domain${specs.websites > 1 ? 's' : ''}`, cost: siteCost, desc: `1st Site Free, +৳${cScale.perWebsite}/domain` });
 
   // Emails
-  const emailBlocks = Math.ceil((Number(specs.emails) || 5) / 10);
+  const emailBlocks = Math.ceil(Math.max(0, (Number(specs.emails) || 5) - 5) / 10);
   const emailCost = emailBlocks * (Number(cScale.per10Emails) || 0);
-  breakdown.push({ item: `${specs.emails} Professional Business Email Inboxes`, cost: emailCost, desc: `৳${cScale.per10Emails} per 10 inboxes` });
+  breakdown.push({ item: `${specs.emails} Business Email Inboxes`, cost: emailCost, desc: `৳${cScale.per10Emails} per 10 inboxes` });
 
   // Databases
-  const dbBlocks = Math.ceil((Number(specs.databases) || 5) / 5);
+  const dbBlocks = Math.ceil(Math.max(0, (Number(specs.databases) || 5) - 5) / 5);
   const dbCost = dbBlocks * (Number(cScale.per5Databases) || 0);
   breakdown.push({ item: `${specs.databases} MySQL / MariaDB Databases`, cost: dbCost, desc: `৳${cScale.per5Databases} per 5 DBs` });
 
   // LiteSpeed
   if (specs.litespeed) {
-    breakdown.push({ item: 'LiteSpeed Web Server Enterprise + LSCache Acceleration', cost: Number(cScale.litespeedPrice) || 0 });
+    breakdown.push({ item: 'LiteSpeed Web Server Enterprise + LSCache', cost: Number(cScale.litespeedPrice) || 0 });
   }
 
   // CloudLinux
   if (specs.cloudlinux) {
-    breakdown.push({ item: 'CloudLinux OS Isolated LVE Governor (CPU & RAM Isolation)', cost: Number(cScale.cloudlinuxPrice) || 0 });
+    breakdown.push({ item: 'CloudLinux OS Isolated LVE CageFS', cost: Number(cScale.cloudlinuxPrice) || 0 });
   }
 
   // Imunify360
   if (specs.imunify360) {
-    breakdown.push({ item: 'Imunify360 Proactive Security & Real-Time Anti-Malware', cost: Number(cScale.imunify360Price) || 0 });
+    breakdown.push({ item: 'Imunify360 Proactive Anti-Malware & WAF', cost: Number(cScale.imunify360Price) || 0 });
   }
 
   // Dedicated IP
@@ -342,17 +358,47 @@ export function calculateCpanelPrice(
 
 export async function loadPricingScales(): Promise<PackagePricingScales> {
   try {
-    const snap = await getDoc(doc(db, 'pricing_scales', 'hosting_vps_cost_scale'));
-    if (snap.exists()) {
-      const data = snap.data() as PackagePricingScales;
-      return {
-        ...DEFAULT_PRICING_SCALES,
+    const [scaleSnap, customHostingSnap] = await Promise.all([
+      getDoc(doc(db, 'pricing_scales', 'hosting_vps_cost_scale')),
+      getDoc(doc(db, 'settings', 'custom_hosting_pricing')),
+    ]);
+
+    let merged: PackagePricingScales = {
+      ...DEFAULT_PRICING_SCALES,
+      vps: { ...DEFAULT_PRICING_SCALES.vps },
+      cpanel: { ...DEFAULT_PRICING_SCALES.cpanel },
+      discounts: { ...DEFAULT_PRICING_SCALES.discounts },
+    };
+
+    if (customHostingSnap.exists()) {
+      const ch = customHostingSnap.data();
+      merged.cpanel = {
+        ...merged.cpanel,
+        baseCpanelPrice: Number(ch.basePrice) || merged.cpanel.baseCpanelPrice,
+        perGbDisk: Number(ch.perGbDisk) || merged.cpanel.perGbDisk,
+        perWebsite: Number(ch.perWebsite) || merged.cpanel.perWebsite,
+        perCoreCpu: Number(ch.perCoreCpu) || merged.cpanel.perCoreCpu,
+        perGbRam: Number(ch.perGbRam) || merged.cpanel.perGbRam,
+        per10Emails: ch.perEmail ? Number(ch.perEmail) * 10 : merged.cpanel.per10Emails,
+        per5Databases: ch.perDatabase ? Number(ch.perDatabase) * 5 : merged.cpanel.per5Databases,
+      };
+      if (ch.annualDiscountPercent) {
+        merged.discounts.annualPercent = Number(ch.annualDiscountPercent);
+      }
+    }
+
+    if (scaleSnap.exists()) {
+      const data = scaleSnap.data() as PackagePricingScales;
+      merged = {
+        ...merged,
         ...data,
-        vps: { ...DEFAULT_PRICING_SCALES.vps, ...(data.vps || {}) },
-        cpanel: { ...DEFAULT_PRICING_SCALES.cpanel, ...(data.cpanel || {}) },
-        discounts: { ...DEFAULT_PRICING_SCALES.discounts, ...(data.discounts || {}) },
+        vps: { ...merged.vps, ...(data.vps || {}) },
+        cpanel: { ...merged.cpanel, ...(data.cpanel || {}) },
+        discounts: { ...merged.discounts, ...(data.discounts || {}) },
       };
     }
+
+    return merged;
   } catch (err) {
     console.warn('Failed to load pricing scales from Firestore, using default:', err);
   }

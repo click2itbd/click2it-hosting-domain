@@ -365,7 +365,7 @@ export const DomainOwnershipModal: React.FC<DomainOwnershipModalProps> = ({
                   <Globe size={15} className="text-blue-600" /> ICANN Change of Registrant Policy
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Updating legal registrant contact information changes the registered owner at the international registry (Openprovider / ICANN).
+                  Updating legal registrant contact information changes the registered owner at the international ICANN registry.
                 </p>
               </div>
 

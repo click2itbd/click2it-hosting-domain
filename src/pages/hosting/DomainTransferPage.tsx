@@ -215,7 +215,7 @@ const DomainTransferPage = () => {
       
       <PageHeader 
         title="Transfer Your Domain to Us" 
-        subtitle="Consolidate your digital assets with automated Openprovider API integration, live transparent wholesale pricing, and 1-year renewal extension." 
+        subtitle="Consolidate your digital assets with seamless domain migration, transparent pricing, and a free 1-year renewal extension." 
       />
 
       {/* Transfer Form Section */}
@@ -227,7 +227,7 @@ const DomainTransferPage = () => {
               <div className="md:w-5/12 bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-800 p-6 sm:p-8 md:p-10 text-white flex flex-col justify-between">
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-xs font-semibold tracking-wide uppercase mb-4 text-blue-200">
-                    <Sparkles size={14} /> Automated Reseller API
+                    <Sparkles size={14} /> Seamless Migration
                   </div>
                   <h3 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Why transfer to Click2IT?</h3>
                   <ul className="space-y-4 sm:space-y-5">
@@ -245,7 +245,7 @@ const DomainTransferPage = () => {
                     </li>
                     <li className="flex items-start gap-3">
                       <ShieldCheck className="text-blue-300 flex-shrink-0 mt-0.5 sm:w-5 sm:h-5" size={18} />
-                      <span className="text-sm sm:text-base">Live Openprovider Registry Pricing in BDT. No hidden markup.</span>
+                      <span className="text-sm sm:text-base"><strong>Transparent BDT Pricing</strong> with full DNS & Nameserver control.</span>
                     </li>
                   </ul>
                 </div>
@@ -337,8 +337,8 @@ const DomainTransferPage = () => {
                       <div className="flex items-start gap-2.5">
                         <span className="text-xl">🇧🇩</span>
                         <div>
-                          <p className="text-xs sm:text-sm font-bold text-emerald-900">.BD Domain (BTCL) Detected</p>
-                          <p className="text-xs text-emerald-700">BTCL domains require official manual paperwork (no EPP code needed).</p>
+                          <p className="text-xs sm:text-sm font-bold text-emerald-900">.BD Domain Detected</p>
+                          <p className="text-xs text-emerald-700">.BD domains are transferred via document verification (no EPP code needed).</p>
                         </div>
                       </div>
                       <button
@@ -480,13 +480,13 @@ const DomainTransferPage = () => {
               </div>
               <div>
                 <h4 className="text-base sm:text-lg font-bold text-emerald-950 flex flex-wrap items-center gap-2">
-                  Transferring a .BD (BTCL) Domain?
+                  Transferring a .BD Domain?
                   <span className="text-[11px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-800">
-                    Official BTCL Liaison
+                    Managed .BD Transfer
                   </span>
                 </h4>
                 <p className="text-xs sm:text-sm text-emerald-800 mt-1 max-w-2xl leading-relaxed">
-                  BTCL domains (.bd, .com.bd, .net.bd, etc.) require physical/scanned verification letters, NID copies, and registry coordination. Our dedicated team handles the entire forwarding paperwork for you.
+                  National .BD domains (.bd, .com.bd, .net.bd, etc.) require scanned verification documents, NID copies, and authorization letters instead of EPP codes. Our dedicated domain team handles the entire transfer process for you.
                 </p>
               </div>
             </div>
