@@ -81,6 +81,8 @@ export default function App() {
                 <Routes>
                   {/* --- AUTH & ACCOUNT --- */}
                   <Route path="/login" element={<LazyWrapper><Login /></LazyWrapper>} />
+                  <Route path="/register" element={<LazyWrapper><Login /></LazyWrapper>} />
+                  <Route path="/signup" element={<LazyWrapper><Login /></LazyWrapper>} />
                   <Route path="/account/services" element={<ProtectedRoute><LazyWrapper><MyServices /></LazyWrapper></ProtectedRoute>} />
                   <Route path="/my-services" element={<Navigate to="/account/services" replace />} />
                   <Route path="/client-area" element={<Navigate to="/profile" replace />} />

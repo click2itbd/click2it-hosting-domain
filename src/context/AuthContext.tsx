@@ -3,7 +3,6 @@ import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { UserProfile, UserPermission } from '../types';
-import { resolveApiBaseUrl } from '../services/apiClient';
 
 export interface ImpersonatedCustomer {
   uid: string;
@@ -29,7 +28,6 @@ interface AuthContextType {
   startImpersonation: (customer: ImpersonatedCustomer) => void;
   stopImpersonation: () => void;
   hasPermission: (permission: UserPermission) => boolean;
-  setLocalSession: (userObj: any, profileObj: UserProfile) => void;
   logout: () => Promise<void>;
 }
 
@@ -48,38 +46,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  // Restore local session fallback if stored
+  // Clear any legacy instant-login session storage on mount for security
   useEffect(() => {
     try {
-      const savedSession = sessionStorage.getItem('custom_auth_session') || localStorage.getItem('custom_auth_session');
-      if (savedSession) {
-        const parsed = JSON.parse(savedSession);
-        if (parsed?.user && parsed?.profile) {
-          setUser(parsed.user);
-          setProfile(parsed.profile);
-        }
-      }
-    } catch (e) {
+      sessionStorage.removeItem('custom_auth_session');
+      localStorage.removeItem('custom_auth_session');
+    } catch {
       // ignore
     }
   }, []);
 
-  const setLocalSession = (userObj: any, profileObj: UserProfile) => {
-    setUser(userObj);
-    setProfile(profileObj);
-    try {
-      const payload = JSON.stringify({ user: userObj, profile: profileObj });
-      sessionStorage.setItem('custom_auth_session', payload);
-      localStorage.setItem('custom_auth_session', payload);
-    } catch (e) {
-      console.warn('Failed to save custom auth session:', e);
-    }
-  };
-
   const logout = async () => {
     try {
       await signOut(auth).catch(() => null);
-    } catch (e) {
+    } catch {
       // ignore
     }
     setUser(null);
@@ -88,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem('custom_auth_session');
       localStorage.removeItem('custom_auth_session');
       sessionStorage.removeItem('impersonated_customer');
-    } catch (e) {
+    } catch {
       // ignore
     }
   };
@@ -140,9 +120,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => null);
             setProfile(newProfile);
           }
+        } else {
+          setUser(null);
+          setProfile(null);
         }
       } catch (error) {
-        console.warn("Auth context background listener warning:", error);
+        console.warn('Auth context background listener warning:', error);
       } finally {
         setLoading(false);
       }
@@ -179,7 +162,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         startImpersonation,
         stopImpersonation,
         hasPermission,
-        setLocalSession,
         logout,
       }}
     >

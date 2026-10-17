@@ -1,28 +1,177 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'firebase/auth';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
+} from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { LogIn, Mail, Lock, User, ArrowRight, Server, Shield, Zap, Eye, EyeOff, ShoppingBag, ShieldCheck, Truck, Cpu, Settings, Star, Sparkles, UserCheck } from 'lucide-react';
+import {
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  Server,
+  Shield,
+  Zap,
+  Eye,
+  EyeOff,
+  ShoppingBag,
+  ShieldCheck,
+  Truck,
+  Cpu,
+  Settings,
+  Star,
+  Check,
+  Circle,
+  RefreshCw,
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSettings } from '../context/SettingsContext';
 import { useSiteContext } from '../hooks/useSiteContext';
-import { useAuth } from '../context/AuthContext';
+
+interface PasswordEvaluation {
+  score: number; // 0 to 4
+  label: string;
+  colorClass: string;
+  textColorClass: string;
+  checks: {
+    minLength: boolean;
+    hasMixedCase: boolean;
+    hasNumber: boolean;
+    hasSpecial: boolean;
+  };
+  feedback: string;
+}
+
+function evaluatePasswordStrength(pwd: string): PasswordEvaluation {
+  const checks = {
+    minLength: pwd.length >= 8,
+    hasMixedCase: /[a-z]/.test(pwd) && /[A-Z]/.test(pwd),
+    hasNumber: /[0-9]/.test(pwd),
+    hasSpecial: /[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/']/.test(pwd),
+  };
+
+  if (!pwd) {
+    return {
+      score: 0,
+      label: 'Enter a password',
+      colorClass: 'bg-gray-200',
+      textColorClass: 'text-gray-400',
+      checks,
+      feedback: 'Use 8+ characters with a mix of letters, numbers & symbols.',
+    };
+  }
+
+  const passedCount = Object.values(checks).filter(Boolean).length;
+
+  // Penalize very short passwords (< 6 chars) even if they have mixed characters
+  let score = passedCount;
+  if (pwd.length < 6) {
+    score = 1;
+  } else if (pwd.length >= 12 && passedCount >= 3) {
+    score = 4;
+  }
+
+  switch (score) {
+    case 1:
+      return {
+        score: 1,
+        label: 'Weak',
+        colorClass: 'bg-rose-500',
+        textColorClass: 'text-rose-600',
+        checks,
+        feedback: 'Easy to guess. Add more characters, numbers, or symbols.',
+      };
+    case 2:
+      return {
+        score: 2,
+        label: 'Fair',
+        colorClass: 'bg-amber-500',
+        textColorClass: 'text-amber-600',
+        checks,
+        feedback: 'Getting better. Include uppercase letters and symbols for higher security.',
+      };
+    case 3:
+      return {
+        score: 3,
+        label: 'Good',
+        colorClass: 'bg-blue-500',
+        textColorClass: 'text-blue-600',
+        checks,
+        feedback: 'Strong password. Add a special character or extra length to make it unbreakable.',
+      };
+    case 4:
+    default:
+      return {
+        score: 4,
+        label: 'Strong',
+        colorClass: 'bg-emerald-500',
+        textColorClass: 'text-emerald-600',
+        checks,
+        feedback: 'Excellent! Your password meets all security recommendations.',
+      };
+  }
+}
 
 export const Login: React.FC = () => {
+  const location = useLocation();
+  const isRegisterRoute =
+    location.pathname === '/register' ||
+    location.pathname === '/signup' ||
+    new URLSearchParams(location.search).get('mode') === 'register' ||
+    new URLSearchParams(location.search).get('mode') === 'signup';
+
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(isRegisterRoute);
   const [isResetting, setIsResetting] = useState(false);
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  
+
+  useEffect(() => {
+    if (isRegisterRoute) {
+      setIsSignUp(true);
+    }
+  }, [isRegisterRoute]);
+
   const navigate = useNavigate();
   const { settings } = useSettings();
   const siteContext = useSiteContext();
-  const { setLocalSession } = useAuth();
+
+  const passwordStrength = useMemo(() => evaluatePasswordStrength(password), [password]);
+
+  const handleGenerateStrongPassword = () => {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnopqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$%^&*-_+=';
+    const all = upper + lower + digits + symbols;
+
+    const required = [
+      upper[Math.floor(Math.random() * upper.length)],
+      lower[Math.floor(Math.random() * lower.length)],
+      digits[Math.floor(Math.random() * digits.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+    ];
+
+    for (let i = 4; i < 14; i++) {
+      required.push(all[Math.floor(Math.random() * all.length)]);
+    }
+
+    // Shuffle characters
+    const generated = required.sort(() => Math.random() - 0.5).join('');
+    setPassword(generated);
+    setShowPassword(true);
+    navigator.clipboard?.writeText(generated).catch(() => null);
+    toast.success('Strong password generated & copied to clipboard!');
+  };
 
   const getContextContent = () => {
     switch (siteContext) {
@@ -33,8 +182,8 @@ export const Login: React.FC = () => {
           features: [
             { icon: <ShoppingBag className="text-orange-400" />, title: 'Vast Selection', desc: 'Find everything from gadgets to premium accessories.' },
             { icon: <ShieldCheck className="text-blue-400" />, title: '100% Authentic', desc: 'Genuine products with official brand warranties.' },
-            { icon: <Truck className="text-emerald-400" />, title: 'Fast Delivery', desc: 'Secure and express shipping across the country.' }
-          ]
+            { icon: <Truck className="text-emerald-400" />, title: 'Fast Delivery', desc: 'Secure and express shipping across the country.' },
+          ],
         };
       case 'pc-build':
         return {
@@ -43,8 +192,8 @@ export const Login: React.FC = () => {
           features: [
             { icon: <Cpu className="text-purple-400" />, title: 'Premium Components', desc: 'Latest processors, GPUs, and motherboards.' },
             { icon: <Settings className="text-slate-400" />, title: 'Expert Assembly', desc: 'Professional cable management and stress testing.' },
-            { icon: <Star className="text-yellow-400" />, title: '3 Years Warranty', desc: 'Comprehensive warranty on all custom builds.' }
-          ]
+            { icon: <Star className="text-yellow-400" />, title: '3 Years Warranty', desc: 'Comprehensive warranty on all custom builds.' },
+          ],
         };
       default:
         return {
@@ -53,8 +202,8 @@ export const Login: React.FC = () => {
           features: [
             { icon: <Zap className="text-yellow-400" />, title: 'Lightning Fast', desc: 'NVMe SSDs and global CDN for unmatched speed.' },
             { icon: <Shield className="text-blue-400" />, title: 'Enterprise Security', desc: 'Free SSL, DDoS protection, and automated backups.' },
-            { icon: <Server className="text-red-400" />, title: '99.9% Uptime', desc: 'Reliable infrastructure guaranteed to keep you online.' }
-          ]
+            { icon: <Server className="text-red-400" />, title: '99.9% Uptime', desc: 'Reliable infrastructure guaranteed to keep you online.' },
+          ],
         };
     }
   };
@@ -66,23 +215,19 @@ export const Login: React.FC = () => {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
-      toast.success('Successfully logged in with Google!');
-      navigate('/');
+      const userCred = await signInWithPopup(auth, provider);
+      const userDoc = await getDoc(doc(db, 'users', userCred.user.uid)).catch(() => null);
+      const role = userDoc?.exists() ? userDoc.data()?.role : 'user';
+      toast.success('Successfully signed in with Google!');
+      navigate(role === 'admin' || role === 'staff' || role === 'manager' ? '/admin' : '/profile');
     } catch (error: any) {
-      if (error?.message?.includes('api-key-not-valid') || error?.code?.includes('api-key')) {
-        // Smooth local session fallback if client Firebase key is offline
-        handleQuickDemoLogin('admin@click2it.bd', 'admin123', 'Alex M. (Support Admin)', 'admin');
-        return;
-      }
       if (error?.code === 'auth/unauthorized-domain') {
         const hostname = window.location.hostname;
-        toast.error(`Domain "${hostname}" is not authorized in Firebase Console. Using Quick Demo Sign In below.`);
+        toast.error(`Domain "${hostname}" is not authorized in Firebase Console. Please sign in with Email and Password.`);
       } else if (error?.code === 'auth/popup-blocked') {
-        toast.error('Pop-up blocked. Please use Email / Password or Quick Demo buttons below.');
-      } else {
-        toast.error('Google sign in unavailable. Logging in with Quick Demo.');
-        handleQuickDemoLogin('admin@click2it.bd', 'admin123', 'Alex M. (Support Admin)', 'admin');
+        toast.error('Pop-up was blocked by your browser. Please allow pop-ups or sign in with Email and Password.');
+      } else if (error?.code !== 'auth/popup-closed-by-user') {
+        toast.error(error?.message || 'Google sign-in failed. Please use Email and Password.');
       }
     } finally {
       setLoading(false);
@@ -92,156 +237,59 @@ export const Login: React.FC = () => {
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      toast.error('Please enter email and password.');
+      toast.error('Please enter your email and password.');
       return;
     }
+
+    if (isSignUp && passwordStrength.score < 2) {
+      toast.error('Please choose a stronger password that meets at least 2 security requirements.');
+      return;
+    }
+
     setLoading(true);
     try {
       if (isSignUp) {
-        try {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          if (displayName) {
-            await updateProfile(userCredential.user, { displayName }).catch(() => null);
-          }
-        } catch (authErr: any) {
-          if (authErr?.message?.includes('api-key-not-valid')) {
-            const role = email.includes('admin') ? 'admin' : 'user';
-            setLocalSession({
-              uid: `local_${Date.now()}`,
-              email,
-              displayName: displayName || email.split('@')[0]
-            }, {
-              uid: `local_${Date.now()}`,
-              email,
-              displayName: displayName || email.split('@')[0],
-              role: role as any,
-              permissions: role === 'admin' ? ['all'] : [],
-              createdAt: new Date().toISOString()
-            });
-            toast.success('Account created and logged in!');
-            navigate(role === 'admin' ? '/admin' : '/profile');
-            return;
-          }
-          throw authErr;
+        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        if (displayName) {
+          await updateProfile(userCredential.user, { displayName: displayName.trim() }).catch(() => null);
         }
+        await setDoc(
+          doc(db, 'users', userCredential.user.uid),
+          {
+            uid: userCredential.user.uid,
+            email: email.trim(),
+            displayName: displayName.trim() || email.split('@')[0],
+            role: 'user',
+            permissions: [],
+            createdAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ).catch(() => null);
         toast.success('Account created successfully!');
+        navigate('/profile');
       } else {
-        try {
-          await signInWithEmailAndPassword(auth, email, password);
-          toast.success('Successfully logged in!');
-        } catch (signInErr: any) {
-          if (signInErr?.message?.includes('api-key-not-valid') || signInErr?.code?.includes('api-key')) {
-            const role = email.includes('admin') ? 'admin' : 'user';
-            setLocalSession({
-              uid: `local_${Date.now()}`,
-              email,
-              displayName: email.split('@')[0]
-            }, {
-              uid: `local_${Date.now()}`,
-              email,
-              displayName: email.split('@')[0],
-              role: role as any,
-              permissions: role === 'admin' ? ['all'] : [],
-              createdAt: new Date().toISOString()
-            });
-            toast.success('Logged in successfully!');
-            navigate(role === 'admin' ? '/admin' : '/profile');
-            return;
-          }
-
-          if (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential') {
-            try {
-              const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-              if (displayName) {
-                await updateProfile(userCredential.user, { displayName: displayName || email.split('@')[0] }).catch(() => null);
-              }
-              toast.success('Account created and logged in!');
-            } catch (err2: any) {
-              const role = email.includes('admin') ? 'admin' : 'user';
-              setLocalSession({
-                uid: `local_${Date.now()}`,
-                email,
-                displayName: email.split('@')[0]
-              }, {
-                uid: `local_${Date.now()}`,
-                email,
-                displayName: email.split('@')[0],
-                role: role as any,
-                permissions: role === 'admin' ? ['all'] : [],
-                createdAt: new Date().toISOString()
-              });
-              toast.success('Logged in successfully!');
-              navigate(role === 'admin' ? '/admin' : '/profile');
-              return;
-            }
-          } else {
-            throw signInErr;
-          }
-        }
+        const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid)).catch(() => null);
+        const role = userDoc?.exists() ? userDoc.data()?.role : 'user';
+        toast.success('Successfully signed in!');
+        navigate(role === 'admin' || role === 'staff' || role === 'manager' ? '/admin' : '/profile');
       }
-      navigate('/');
     } catch (error: any) {
-      toast.error('Authentication completed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickDemoLogin = async (demoEmail: string, demoPass: string, name: string, role: string) => {
-    setLoading(true);
-    try {
-      let userCred: any = null;
-      try {
-        userCred = await signInWithEmailAndPassword(auth, demoEmail, demoPass);
-      } catch (err: any) {
-        try {
-          userCred = await createUserWithEmailAndPassword(auth, demoEmail, demoPass);
-          await updateProfile(userCred.user, { displayName: name }).catch(() => null);
-        } catch (e2) {
-          // If Firebase client API key is offline, use local session
-        }
+      if (
+        error?.code === 'auth/invalid-credential' ||
+        error?.code === 'auth/wrong-password' ||
+        error?.code === 'auth/user-not-found'
+      ) {
+        toast.error('Invalid email or password. Please check your credentials and try again.');
+      } else if (error?.code === 'auth/email-already-in-use') {
+        toast.error('An account with this email already exists. Please sign in instead.');
+      } else if (error?.code === 'auth/weak-password') {
+        toast.error('Password should be at least 6 characters long.');
+      } else if (error?.code === 'auth/too-many-requests') {
+        toast.error('Too many failed login attempts. Please try again later or reset your password.');
+      } else {
+        toast.error(error?.message || 'Authentication failed. Please try again.');
       }
-
-      const localProfile = {
-        uid: userCred?.user?.uid || (role === 'admin' ? 'admin_demo_uid' : 'cust_demo_uid'),
-        email: demoEmail,
-        displayName: name,
-        role: role as any,
-        permissions: role === 'admin' ? ['all'] : [],
-        createdAt: new Date().toISOString()
-      };
-
-      setLocalSession({
-        uid: localProfile.uid,
-        email: demoEmail,
-        displayName: name
-      }, localProfile);
-
-      // Attempt Firestore sync in background without throwing
-      if (userCred?.user) {
-        const userRef = doc(db, 'users', userCred.user.uid);
-        await setDoc(userRef, localProfile, { merge: true }).catch(() => null);
-      }
-
-      toast.success(`Logged in as ${name} (${role.toUpperCase()})`);
-      navigate(role === 'admin' ? '/admin' : '/profile');
-    } catch (e: any) {
-      const localProfile = {
-        uid: role === 'admin' ? 'admin_demo_uid' : 'cust_demo_uid',
-        email: demoEmail,
-        displayName: name,
-        role: role as any,
-        permissions: role === 'admin' ? ['all'] : [],
-        createdAt: new Date().toISOString()
-      };
-      setLocalSession({
-        uid: localProfile.uid,
-        email: demoEmail,
-        displayName: name
-      }, localProfile);
-
-      toast.success(`Logged in as ${name} (${role.toUpperCase()})`);
-      navigate(role === 'admin' ? '/admin' : '/profile');
     } finally {
       setLoading(false);
     }
@@ -254,25 +302,30 @@ export const Login: React.FC = () => {
     }
     setIsResetting(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email.trim());
       toast.success('Password reset email sent! Please check your inbox.');
     } catch (error: any) {
-      toast.error('Password reset email dispatched.');
+      toast.error(error?.message || 'Failed to send password reset email.');
     } finally {
       setIsResetting(false);
     }
   };
 
+  const requirementItems = [
+    { key: 'minLength', label: 'At least 8 characters', met: passwordStrength.checks.minLength },
+    { key: 'hasMixedCase', label: 'Uppercase & lowercase letters', met: passwordStrength.checks.hasMixedCase },
+    { key: 'hasNumber', label: 'At least one number (0-9)', met: passwordStrength.checks.hasNumber },
+    { key: 'hasSpecial', label: 'Special symbol (!@#$%^&*)', met: passwordStrength.checks.hasSpecial },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
-      
       {/* LEFT SIDE - VISUALS */}
       <div className="hidden md:flex flex-col justify-between w-1/2 bg-[#081621] p-12 text-white relative overflow-hidden">
-        
         {/* Background Gradients/Elements */}
         <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-500/20 rounded-full blur-[100px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-red-500/20 rounded-full blur-[100px]" />
-        
+
         <div className="relative z-10">
           <Link to="/" className="inline-block">
             {settings?.logoUrl ? (
@@ -282,7 +335,7 @@ export const Login: React.FC = () => {
             )}
           </Link>
         </div>
-        
+
         <div className="relative z-10 max-w-md">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-6">
             {contextData.title}
@@ -305,7 +358,7 @@ export const Login: React.FC = () => {
             ))}
           </div>
         </div>
-        
+
         <div className="relative z-10 text-sm text-gray-500">
           &copy; {new Date().getFullYear()} {settings?.companyName || 'Click2IT'}. All rights reserved.
         </div>
@@ -316,45 +369,20 @@ export const Login: React.FC = () => {
         <Link to="/" className="md:hidden absolute top-6 left-6">
           <img src="/logo.png" alt="Logo" className="h-8 object-contain" />
         </Link>
-        
-        <div className="w-full max-w-md mt-12 md:mt-0">
-          
-          {/* Quick Demo Login Bar */}
-          <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-lg border border-white/10">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-cyan-300 mb-2">
-              <Sparkles size={14} className="text-yellow-300" /> 1-Click Instant Login
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('admin@click2it.bd', 'admin123', 'Alex M. (Support Admin)', 'admin')}
-                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                👑 Admin Portal
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('customer@click2it.bd', 'customer123', 'Tanvir Ahmed', 'user')}
-                className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                👤 Client Area
-              </button>
-            </div>
-          </div>
 
+        <div className="w-full max-w-md mt-12 md:mt-0">
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-900 mb-2">
               {isSignUp ? 'Create an account' : 'Welcome back'}
             </h2>
             <p className="text-gray-500 text-sm">
-              {isSignUp 
-                ? 'Sign up to manage web hosting, domains, and cloud servers.' 
+              {isSignUp
+                ? 'Sign up to manage web hosting, domains, and cloud servers.'
                 : 'Enter your credentials to access your dashboard.'}
             </p>
           </div>
 
           <form onSubmit={handleEmailAuth} className="space-y-4">
-            
             {isSignUp && (
               <div className="space-y-1">
                 <label className="block text-xs font-bold text-gray-700">Full Name</label>
@@ -366,14 +394,14 @@ export const Login: React.FC = () => {
                     type="text"
                     required
                     value={displayName}
-                    onChange={e => setDisplayName(e.target.value)}
+                    onChange={(e) => setDisplayName(e.target.value)}
                     className="block w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50"
                     placeholder="John Doe"
                   />
                 </div>
               </div>
             )}
-            
+
             <div className="space-y-1">
               <label className="block text-xs font-bold text-gray-700">Email Address</label>
               <div className="relative">
@@ -384,35 +412,102 @@ export const Login: React.FC = () => {
                   type="email"
                   required
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50"
                   placeholder="you@example.com"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-gray-700">Password</label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-gray-700">Password</label>
+                {isSignUp && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateStrongPassword}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Suggest strong password
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-4 w-4 text-gray-400" />
                 </div>
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
+                  aria-describedby={isSignUp ? 'password-strength-meter' : undefined}
                   className="block w-full pl-9 pr-9 py-2.5 border border-gray-200 rounded-xl text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50"
-                  placeholder="••••••••"
+                  placeholder={isSignUp ? 'Create a strong password (8+ chars)' : '••••••••'}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+
+              {/* REAL-TIME PASSWORD STRENGTH METER (Registration View) */}
+              {isSignUp && (
+                <div
+                  id="password-strength-meter"
+                  aria-live="polite"
+                  className="pt-2 space-y-2.5"
+                >
+                  {/* 4-Segment Strength Bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 font-medium">Password strength</span>
+                      <span className={`font-bold ${passwordStrength.textColorClass}`}>
+                        {passwordStrength.label}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 h-1.5" role="progressbar" aria-valuenow={passwordStrength.score} aria-valuemin={0} aria-valuemax={4}>
+                      {[1, 2, 3, 4].map((segment) => (
+                        <div
+                          key={segment}
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            passwordStrength.score >= segment
+                              ? passwordStrength.colorClass
+                              : 'bg-gray-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                      {passwordStrength.feedback}
+                    </p>
+                  </div>
+
+                  {/* Live Security Criteria Checklist */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 pt-0.5">
+                    {requirementItems.map((item) => (
+                      <div
+                        key={item.key}
+                        className={`flex items-center gap-1.5 text-[11px] transition-colors ${
+                          item.met ? 'text-emerald-700 font-medium' : 'text-gray-500'
+                        }`}
+                      >
+                        {item.met ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <Circle className="h-3 w-3 text-gray-300 shrink-0" />
+                        )}
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {!isSignUp && (
@@ -430,8 +525,8 @@ export const Login: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-xs font-extrabold text-white bg-slate-900 hover:bg-black transition-all disabled:opacity-70 group cursor-pointer"
+              disabled={loading || (isSignUp && password.length > 0 && passwordStrength.score < 2)}
+              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-xs font-extrabold text-white bg-slate-900 hover:bg-black transition-all disabled:opacity-60 disabled:cursor-not-allowed group cursor-pointer"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -482,7 +577,7 @@ export const Login: React.FC = () => {
               </button>
             </div>
           </div>
-          
+
           <div className="mt-6 text-center text-xs">
             <span className="text-gray-600">
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}
@@ -494,10 +589,8 @@ export const Login: React.FC = () => {
               {isSignUp ? 'Sign in' : 'Sign up'}
             </button>
           </div>
-          
         </div>
       </div>
-      
     </div>
   );
 };
