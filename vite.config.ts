@@ -23,16 +23,28 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            "firebase-core": ["firebase/app", "firebase/firestore"],
-            "firebase-auth": ["firebase/auth"],
-            "firebase-storage": ["firebase/storage"],
-            "pdf-libs": ["jspdf", "jspdf-autotable"],
-            recharts: ["recharts"],
-            "framer-motion": ["framer-motion", "motion"],
-            "react-helmet": ["react-helmet-async"],
-            lucide: ["lucide-react"],
-            "react-vendor": ["react", "react-dom", "react-router-dom"],
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return undefined;
+            if (id.includes("firebase/auth") || id.includes("@firebase/auth")) {
+              return "firebase-auth";
+            }
+            if (id.includes("firebase/storage") || id.includes("@firebase/storage")) {
+              return "firebase-storage";
+            }
+            if (id.includes("firebase/") || id.includes("@firebase/")) {
+              return "firebase-core";
+            }
+            if (id.includes("lucide-react")) {
+              return "lucide";
+            }
+            if (
+              id.includes("react-dom") ||
+              id.includes("react-router") ||
+              /[\\/]node_modules[\\/](react|scheduler)[\\/]/.test(id)
+            ) {
+              return "react-vendor";
+            }
+            return undefined;
           },
         },
       },
