@@ -6,7 +6,7 @@ import {
   DashboardTab, DomainSearchListTab, ServerAccountsTab, AllOrdersTab, TicketsTab,
   DomainOffersTab, DomainRenewalsTab, UsersTab, FinancialTab, SalesTab, ApiSettingsTab, ModuleTabs,
   BdDomainApplicationsTab, NameserverRequestsTab, SslCertificatesTab, DnsManagementTab,
-  WhatsAppCrmTab, MetaCampaignsTab
+  WhatsAppCrmTab, MetaCampaignsTab, StaffHostsTab, HostingCrmTab
 } from './tabs';
 
 export function HostingBillingDashboard() {
@@ -31,8 +31,10 @@ export function HostingBillingDashboard() {
             <BdDomainApplicationsTab state={state} />
             <NameserverRequestsTab state={state} />
             <SslCertificatesTab state={state} />
-              <DnsManagementTab state={state} />
+            <DnsManagementTab state={state} />
             <UsersTab state={state} />
+            {state.activeTab === 'staff-hosts' && <StaffHostsTab state={state} />}
+            {state.activeTab === 'hosting-crm' && <HostingCrmTab state={state} />}
             <FinancialTab state={state} />
             <SalesTab state={state} />
             <ApiSettingsTab state={state} />
@@ -45,9 +47,3 @@ export function HostingBillingDashboard() {
     </div>
   );
 }
-
-
-
-
-
-

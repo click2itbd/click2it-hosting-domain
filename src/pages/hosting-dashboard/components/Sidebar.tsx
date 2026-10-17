@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, FileEdit, Folder, Package, PlusSquare, Tag, Server, Settings, Globe, LogOut, Users, DollarSign, HardDrive, RefreshCw, HeadphonesIcon, LayoutDashboard, ShoppingCart, Shield, MessageSquare, Megaphone } from 'lucide-react';
+import { X, FileEdit, Folder, Package, PlusSquare, Tag, Server, Settings, Globe, LogOut, Users, UserCheck, UserPlus, DollarSign, HardDrive, RefreshCw, HeadphonesIcon, LayoutDashboard, ShoppingCart, Shield, MessageSquare, Megaphone } from 'lucide-react';
 import { auth } from '../../../firebase';
 import { cn } from '../../../lib/utils';
 import { useAuth } from '../../../context/AuthContext';
@@ -44,6 +44,8 @@ export function Sidebar({ state }) {
             { icon: LayoutDashboard, label: 'Dashboard', id: 'dashboard' },
             { icon: ShoppingCart, label: 'Hosting Orders', id: 'all-orders' },
             { icon: Users, label: 'Customers & Wallet', id: 'users' },
+            { icon: UserPlus, label: 'Hosting Leads & CRM', id: 'hosting-crm' },
+            { icon: UserCheck, label: 'Staff & Hosts', id: 'staff-hosts' },
             { icon: Server, label: 'Active Accounts', id: 'server-accounts' },
             { icon: Tag, label: 'Domain Offer Request', id: 'domain-offers' },
             { icon: RefreshCw, label: 'Domain Renewals', id: 'domain-renewals' },
@@ -52,7 +54,7 @@ export function Sidebar({ state }) {
             { icon: HeadphonesIcon, label: 'Support Tickets', id: 'tickets' },
               { icon: Shield, label: 'SSL Certificates', id: 'ssl-certificates' },
               { icon: Globe, label: 'DNS Management', id: 'dns-management' },
-              { icon: MessageSquare, label: 'WhatsApp CRM (WAPlus)', id: 'whatsapp-crm' },
+              { icon: MessageSquare, label: 'WhatsApp CRM (WA)', id: 'whatsapp-crm' },
               { icon: Megaphone, label: 'Meta Ads (FB & IG)', id: 'meta-campaigns' },
           ].map((item, idx) => {
             const isActive = activeTab === item.id;
@@ -85,6 +87,7 @@ export function Sidebar({ state }) {
         <div className="px-6 mb-3 text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.2em]">Modules & Settings</div>
         <ul className="space-y-1.5 px-3 pb-6">
           {[
+            { icon: UserPlus, label: 'Lead Management Module', id: 'hosting-crm' },
             { icon: FileEdit, label: 'Pages Editor', id: 'pages-editor' },
             { icon: Folder, label: 'Categories', id: 'categories' },
             { icon: Package, label: 'Hosting Packages', id: 'plan-packages' },

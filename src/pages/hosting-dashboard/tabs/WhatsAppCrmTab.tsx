@@ -3,11 +3,15 @@ import {
   MessageSquare, Phone, User, Users, Search, Plus, Send, Check, CheckCheck, 
   Sparkles, Download, ExternalLink, Chrome, Shield, Clock, Star, Bell, 
   Settings, RefreshCw, FileText, Globe, Server, AlertCircle, Bookmark,
-  ChevronDown, Filter, Zap, ArrowRight, Tag, HelpCircle, Laptop
+  ChevronDown, Filter, Zap, ArrowRight, Tag, HelpCircle, Laptop, Edit3, Trash2, Sliders, CheckSquare
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
+import { db } from '../../../firebase';
+import { useAuth } from '../../../context/AuthContext';
+import { useStaffHosts } from '../../../hooks/useStaffHosts';
 
 interface WhatsAppMessage {
   id: string;
@@ -47,6 +51,28 @@ interface WhatsAppConversation {
   messages: WhatsAppMessage[];
 }
 
+export interface StaffMember {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+  status?: string;
+  avatar?: string;
+}
+
+export interface WhatsAppChannel {
+  id: string;
+  name: string;
+  phoneNumber: string;
+  wabaId?: string;
+  accessToken?: string;
+  webhookSecret?: string;
+  enabled: boolean;
+  defaultAssignedStaffId?: string;
+  assignedStaffIds: string[];
+}
+
 export function WhatsAppCrmTab({ state }: { state?: any }) {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string>('');
@@ -58,18 +84,89 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
   const [showExtensionModal, setShowExtensionModal] = useState(false);
   const [showSimulatorModal, setShowSimulatorModal] = useState(false);
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
-  const [currentAgent, setCurrentAgent] = useState({
-    id: 'agent_1',
+
+  // Custom Data-Fetching Hook for Staff & Hosts Database Collection
+  const { staffMembers: hookStaffMembers, activeStaffMembers, refetch: refetchStaffHosts } = useStaffHosts();
+
+  // Dynamic Staff & Hosts State
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+
+  useEffect(() => {
+    if (hookStaffMembers && hookStaffMembers.length > 0) {
+      setStaffList(hookStaffMembers);
+    }
+  }, [hookStaffMembers]);
+
+  const { user, profile } = useAuth();
+
+  const [currentAgent, setCurrentAgent] = useState<StaffMember>({
+    id: 'staff_1',
     name: 'Alex M.',
+    email: 'alex@click2itbd.com',
     role: 'Support Admin'
   });
 
-  const availableAgents = [
-    { id: 'agent_1', name: 'Alex M.', role: 'Support Admin' },
-    { id: 'agent_2', name: 'Sarah K.', role: 'Sales Lead' },
-    { id: 'agent_3', name: 'Imran H.', role: 'Technical Support' },
-    { id: 'agent_4', name: 'Kamal R.', role: 'Billing Specialist' }
-  ];
+  // Automatically match currentAgent with authenticated Firebase Auth user profile
+  useEffect(() => {
+    if (user && profile) {
+      const userEmail = user.email?.toLowerCase();
+      const matched = staffList.find(s => s.email?.toLowerCase() === userEmail);
+      if (matched) {
+        setCurrentAgent(matched);
+      } else if (profile.role === 'admin' || profile.role === 'staff' || profile.role === 'manager') {
+        setCurrentAgent({
+          id: user.uid,
+          name: profile.displayName || user.displayName || user.email?.split('@')[0] || 'Support Agent',
+          email: user.email || '',
+          role: profile.role === 'admin' ? 'Support Admin' : (profile.role === 'manager' ? 'Sales Lead' : 'Technical Support')
+        });
+      }
+    }
+  }, [user, profile, staffList]);
+
+  // Settings & Channels Modal State
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'channels' | 'staff'>('channels');
+  const [channels, setChannels] = useState<WhatsAppChannel[]>([
+    {
+      id: 'chan_1',
+      name: 'Official Sales & Support Line',
+      phoneNumber: '+880 1700-000000',
+      wabaId: 'waba_90412849102',
+      enabled: true,
+      defaultAssignedStaffId: 'staff_1',
+      assignedStaffIds: ['staff_1', 'staff_2', 'staff_3']
+    },
+    {
+      id: 'chan_2',
+      name: 'VIP Enterprise Cloud VPS Line',
+      phoneNumber: '+880 1800-000000',
+      wabaId: 'waba_90412849103',
+      enabled: true,
+      defaultAssignedStaffId: 'staff_2',
+      assignedStaffIds: ['staff_2', 'staff_4']
+    }
+  ]);
+
+  // Channel Creation / Modification Form State
+  const [editingChannel, setEditingChannel] = useState<WhatsAppChannel | null>(null);
+  const [channelForm, setChannelForm] = useState({
+    name: '',
+    phoneNumber: '',
+    wabaId: '',
+    accessToken: '',
+    defaultAssignedStaffId: '',
+    assignedStaffIds: [] as string[]
+  });
+
+  // New Staff & Hosts Creation Form State
+  const [newStaffForm, setNewStaffForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'staff'
+  });
+  const [isSavingStaff, setIsSavingStaff] = useState(false);
 
   const cannedReplies = [
     { label: '👋 Welcome', text: 'Hello! Welcome to Click2IT Hosting. How can our technical support team assist you today?' },
@@ -79,10 +176,107 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
     { label: '🚀 VPS Provisioned', text: 'Your Cloud NVMe VPS has been deployed successfully. Root credentials and dedicated IP have been sent to your email.' }
   ];
 
-  // Fetch initial WhatsApp CRM state
+  // Fetch initial conversations, dynamic staff members, and channels
   useEffect(() => {
     fetchConversations();
+    fetchStaffAndChannels();
   }, []);
+
+  const fetchStaffAndChannels = async () => {
+    let loadedStaff: StaffMember[] = [];
+
+    // 1. Fetch Staff from /api/staff-hosts (Single Source of Truth)
+    try {
+      const res = await fetch('/api/staff-hosts');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.staffHosts) && data.staffHosts.length > 0) {
+        loadedStaff = data.staffHosts.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          phone: s.phone || '',
+          role: s.role || 'Technical Support',
+          status: s.status || 'active',
+          avatar: s.avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80`
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to load staff from /api/staff-hosts:', err);
+    }
+
+    // 2. Fetch Staff from Firestore staff_hosts collection
+    if (loadedStaff.length === 0) {
+      try {
+        const snap = await getDocs(collection(db, 'staff_hosts'));
+        if (!snap.empty) {
+          snap.docs.forEach(d => {
+            const data = d.data();
+            if (data && data.name) {
+              loadedStaff.push({
+                id: d.id,
+                name: data.name,
+                email: data.email || '',
+                phone: data.phone || '',
+                role: data.role || 'Technical Support',
+                status: data.status || 'active',
+                avatar: data.avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80`
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load staff_hosts from Firestore:', err);
+      }
+    }
+
+    // 3. Fetch Staff from Firestore users collection
+    if (loadedStaff.length === 0) {
+      try {
+        const q = query(collection(db, 'users'));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          snap.docs.forEach(d => {
+            const data = d.data();
+            if (data && (data.role === 'admin' || data.role === 'staff' || data.role === 'manager')) {
+              loadedStaff.push({
+                id: d.id,
+                name: data.displayName || data.name || data.email?.split('@')[0] || 'Staff Member',
+                email: data.email || '',
+                phone: data.phone || '',
+                role: data.role === 'admin' ? 'Support Admin' : (data.role === 'manager' ? 'Sales Lead' : 'Technical Support'),
+                status: data.status || 'active',
+                avatar: data.avatar || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80`
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load staff list from Firestore users:', err);
+      }
+    }
+
+    if (loadedStaff.length > 0) {
+      setStaffList(loadedStaff);
+      setCurrentAgent(loadedStaff[0]);
+    }
+
+    // 4. Fetch Channels & Staff from /api/whatsapp/channels
+    try {
+      const res = await fetch('/api/whatsapp/channels');
+      const data = await res.json();
+      if (data.success) {
+        if (Array.isArray(data.channels) && data.channels.length > 0) {
+          setChannels(data.channels);
+        }
+        if (loadedStaff.length === 0 && Array.isArray(data.staff) && data.staff.length > 0) {
+          setStaffList(data.staff);
+          setCurrentAgent(data.staff[0]);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch WhatsApp channels from API:', err);
+    }
+  };
 
   const fetchConversations = async () => {
     try {
@@ -205,7 +399,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
   };
 
   const handleAssignAgent = async (convId: string, agentId: string) => {
-    const agent = availableAgents.find(a => a.id === agentId);
+    const agent = staffList.find(a => a.id === agentId);
     setConversations(prev => prev.map(c => {
       if (c.id === convId) {
         return {
@@ -277,20 +471,129 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
       zip.file('README.md', readmeText);
 
       const blob = await zip.generateAsync({ type: 'blob' });
-      saveAs(blob, 'waplus-hosting-crm-chrome-extension.zip');
+      saveAs(blob, 'wa-hosting-crm-chrome-extension.zip');
       toast.success('📦 Chrome Extension ZIP downloaded successfully!');
     } catch (err: any) {
       console.error('Failed to create extension zip:', err);
-      toast.error('Failed to download ZIP file. You can load from public/waplus-extension directory.');
+      toast.error('Failed to download ZIP file. You can load from extension directory.');
     } finally {
       setIsDownloadingExtension(false);
+    }
+  };
+
+  // Channel Creation & Modification Submit
+  const handleSaveChannelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!channelForm.name || !channelForm.phoneNumber) {
+      toast.error('Please enter channel name and phone number');
+      return;
+    }
+
+    const payload = {
+      name: channelForm.name,
+      phoneNumber: channelForm.phoneNumber,
+      wabaId: channelForm.wabaId,
+      accessToken: channelForm.accessToken,
+      defaultAssignedStaffId: channelForm.defaultAssignedStaffId || (staffList[0]?.id || ''),
+      assignedStaffIds: channelForm.assignedStaffIds.length > 0 ? channelForm.assignedStaffIds : [staffList[0]?.id || '']
+    };
+
+    try {
+      if (editingChannel) {
+        // Update existing channel
+        const res = await fetch(`/api/whatsapp/channels/${editingChannel.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, enabled: editingChannel.enabled })
+        });
+        const data = await res.json();
+        if (data.success && data.channels) {
+          setChannels(data.channels);
+          toast.success(`WhatsApp Channel "${payload.name}" modified successfully!`);
+        }
+      } else {
+        // Create new channel
+        const res = await fetch('/api/whatsapp/channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success && data.channels) {
+          setChannels(data.channels);
+          toast.success(`New WhatsApp Channel "${payload.name}" added successfully!`);
+        }
+      }
+
+      setEditingChannel(null);
+      setChannelForm({
+        name: '',
+        phoneNumber: '',
+        wabaId: '',
+        accessToken: '',
+        defaultAssignedStaffId: '',
+        assignedStaffIds: []
+      });
+    } catch (err: any) {
+      toast.error('Failed to save channel: ' + err.message);
+    }
+  };
+
+  // Add Team Member to Staff & Hosts Submit
+  const handleAddStaffSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffForm.name || !newStaffForm.email) {
+      toast.error('Please enter name and email');
+      return;
+    }
+
+    setIsSavingStaff(true);
+    try {
+      // 1. Post to /api/staff-hosts
+      const payload = {
+        name: newStaffForm.name,
+        email: newStaffForm.email,
+        phone: newStaffForm.phone || '',
+        role: newStaffForm.role === 'admin' ? 'Support Admin' : (newStaffForm.role === 'manager' ? 'Sales Lead' : 'Technical Support Specialist'),
+        status: 'active'
+      };
+
+      await fetch('/api/staff-hosts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => null);
+
+      // 2. Add to Firestore users and staff_hosts collections
+      const newUid = `staff_${Date.now()}`;
+      await setDoc(doc(db, 'staff_hosts', newUid), { ...payload, id: newUid }).catch(() => null);
+      await setDoc(doc(db, 'users', newUid), {
+        uid: newUid,
+        displayName: newStaffForm.name,
+        name: newStaffForm.name,
+        email: newStaffForm.email,
+        phone: newStaffForm.phone || '',
+        role: newStaffForm.role,
+        status: 'active',
+        createdAt: new Date().toISOString()
+      }).catch(() => null);
+
+      // 3. Refetch hook
+      await refetchStaffHosts();
+
+      toast.success(`🎉 Added ${newStaffForm.name} to Staff & Hosts system!`);
+      setNewStaffForm({ name: '', email: '', phone: '', role: 'staff' });
+    } catch (err: any) {
+      toast.error('Failed to add staff member: ' + err.message);
+    } finally {
+      setIsSavingStaff(false);
     }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
-      {/* Top Hero Section matching WAPlus attached screenshot */}
+      {/* Top Hero Section matching WA screenshot */}
       <div className="relative rounded-3xl bg-gradient-to-r from-[#0B132B] via-[#1C2541] to-[#14213d] text-white p-6 sm:p-8 md:p-10 overflow-hidden shadow-2xl border border-white/10">
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -298,15 +601,15 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
         <div className="relative z-10 max-w-4xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold uppercase tracking-wider mb-4">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            Official WhatsApp CRM & Webhook Integration
+            Official WA WhatsApp CRM & Webhook Integration
           </div>
 
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
-            WAPlus: WhatsApp CRM for Sales and Customer Management
+            WA: WhatsApp CRM for Sales and Customer Management
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-300 font-normal leading-relaxed max-w-3xl">
-            WAPlus is a multi-agent WhatsApp CRM built for hosting teams. Multiple agents can collaborate, receive, and answer customer queries in real-time, automate replies and follow-ups, and sync customer data with hosting accounts and WHMCS.
+            WA is a multi-agent WhatsApp CRM built for hosting teams. Multiple agents from the Staff & Hosts list can collaborate, receive, and answer customer queries in real-time, automate replies and follow-ups, and sync customer data with hosting accounts and WHMCS.
           </p>
 
           {/* Quick Action Buttons matching reference image */}
@@ -316,41 +619,48 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
               className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/30 transition-all cursor-pointer"
             >
               <Chrome size={18} />
-              Add WAPlus to Chrome
+              Add WA to Chrome
+            </button>
+
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Settings size={18} /> ⚙️ Settings & Channels
             </button>
 
             <button
               onClick={() => setShowSimulatorModal(true)}
               className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-sm border border-white/20 transition-all cursor-pointer"
             >
-              Explore WAPlus Workspace <ArrowRight size={16} />
+              Explore WA Workspace <ArrowRight size={16} />
             </button>
 
             <button
               onClick={handleSimulateIncomingQuery}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md ml-auto"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md ml-auto cursor-pointer"
               title="Test multi-agent queue with a simulated WhatsApp customer"
             >
               <Zap size={15} /> Simulate Incoming Customer Query
             </button>
           </div>
 
-          {/* Active Agent Selector */}
+          {/* Active Agent Selector - Dynamically Connected to Staff & Hosts */}
           <div className="mt-6 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-300">
             <div className="flex items-center gap-3">
-              <span className="font-semibold text-slate-400">Current Logged-in Agent:</span>
+              <span className="font-semibold text-slate-400">Active Staff Member (Staff & Hosts):</span>
               <select
                 value={currentAgent.id}
                 onChange={(e) => {
-                  const agent = availableAgents.find(a => a.id === e.target.value);
+                  const agent = staffList.find(a => a.id === e.target.value);
                   if (agent) {
                     setCurrentAgent(agent);
-                    toast.success(`Switched active agent to ${agent.name}`);
+                    toast.success(`Switched active staff to ${agent.name}`);
                   }
                 }}
                 className="bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white font-bold outline-none cursor-pointer"
               >
-                {availableAgents.map(a => (
+                {staffList.map(a => (
                   <option key={a.id} value={a.id} className="bg-slate-900 text-white">
                     {a.name} — {a.role}
                   </option>
@@ -365,14 +675,14 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
-                <span className="text-slate-200 font-semibold">4 Support Agents Online</span>
+                <span className="text-slate-200 font-semibold">{staffList.length} Active Staff Connected</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Workspace Tabs matching screenshot (All 350, Unread 110, Starred 89, etc.) */}
+      {/* Workspace Tabs matching screenshot */}
       <div className="bg-white rounded-2xl p-2 shadow-sm border border-slate-200 flex items-center justify-between overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-1">
           {[
@@ -403,13 +713,13 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
 
         <button 
           onClick={() => toast.success('Custom Workspace Label created!')}
-          className="text-xs font-bold text-emerald-700 hover:text-emerald-800 px-3 py-1.5 rounded-lg border border-dashed border-emerald-300 hover:border-emerald-500 transition-colors whitespace-nowrap flex items-center gap-1.5 ml-2 shrink-0"
+          className="text-xs font-bold text-emerald-700 hover:text-emerald-800 px-3 py-1.5 rounded-lg border border-dashed border-emerald-300 hover:border-emerald-500 transition-colors whitespace-nowrap flex items-center gap-1.5 ml-2 shrink-0 cursor-pointer"
         >
           <Plus size={14} /> Add Label
         </button>
       </div>
 
-      {/* Main 3-Column Workspace matching WAPlus Reference Design */}
+      {/* Main 3-Column Workspace matching WA Reference Design */}
       <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[720px]">
         
         {/* COLUMN 1: Contact Management (4 Cols) */}
@@ -484,7 +794,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                       {conv.lastMessageSnippet}
                     </p>
 
-                    {/* Tags & Assigned Agent */}
+                    {/* Tags & Assigned Staff Member */}
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       {conv.tags.slice(0, 2).map((tag, idx) => (
                         <span key={idx} className="text-[10px] font-semibold bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-md">
@@ -531,16 +841,16 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
               </div>
             </div>
 
-            {/* Reassign Agent Dropdown */}
+            {/* Reassign Agent Dropdown - Dynamically populated from Staff & Hosts */}
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">Assigned:</span>
+              <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">Assigned Staff:</span>
               <select
                 value={selectedConv?.assignedAgent?.id || 'unassigned'}
                 onChange={(e) => selectedConv && handleAssignAgent(selectedConv.id, e.target.value)}
                 className="bg-slate-800 border border-slate-700 rounded-lg text-xs text-white px-2 py-1.5 font-bold outline-none cursor-pointer"
               >
                 <option value="unassigned">Unassigned</option>
-                {availableAgents.map(a => (
+                {staffList.map(a => (
                   <option key={a.id} value={a.id}>
                     {a.name} ({a.role})
                   </option>
@@ -622,17 +932,16 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                 key={idx}
                 type="button"
                 onClick={() => setNewMessageText(reply.text)}
-                className="text-[11px] font-semibold bg-white hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg shrink-0 transition-colors shadow-2xs"
+                className="text-[11px] font-semibold bg-white hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg shrink-0 transition-colors shadow-2xs cursor-pointer"
               >
                 {reply.label}
               </button>
             ))}
 
-            {/* AI Translator / Smart Reply Button (matching screenshot purple button) */}
             <button
               type="button"
               onClick={handleAiSmartReply}
-              className="text-[11px] font-black bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-3 py-1 rounded-lg shrink-0 shadow-sm flex items-center gap-1.5 ml-auto hover:opacity-95 active:scale-95 transition-all"
+              className="text-[11px] font-black bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-3 py-1 rounded-lg shrink-0 shadow-sm flex items-center gap-1.5 ml-auto hover:opacity-95 active:scale-95 transition-all cursor-pointer"
             >
               <Sparkles size={12} className="text-yellow-300" />
               AI Translator / Smart Reply
@@ -662,7 +971,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
             <button
               type="submit"
               disabled={!newMessageText.trim()}
-              className={`p-2.5 rounded-xl text-white transition-all shadow-md shrink-0 disabled:opacity-50 ${
+              className={`p-2.5 rounded-xl text-white transition-all shadow-md shrink-0 disabled:opacity-50 cursor-pointer ${
                 isInternalNote ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
               }`}
             >
@@ -671,20 +980,18 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
           </form>
         </div>
 
-        {/* COLUMN 3: Contact Information & Hosting CRM Sync (3 Cols) matching reference screenshot */}
+        {/* COLUMN 3: Contact Information & Hosting CRM Sync */}
         <div className="lg:col-span-3 border-l border-slate-200 flex flex-col bg-white">
           
-          {/* Header */}
           <div className="p-4 border-b border-slate-200">
             <h3 className="font-extrabold text-sm text-slate-800 tracking-tight">
               Contact Information
             </h3>
             <p className="text-[11px] text-slate-500">
-              Synced with InHostBilling & WhatsApp CRM
+              Synced with InHostBilling & WA CRM
             </p>
           </div>
 
-          {/* Subtabs matching screenshot: Profile, Notes, Company Info, Hosting */}
           <div className="flex border-b border-slate-200 px-3 pt-2">
             {[
               { id: 'profile', label: 'Profile' },
@@ -780,14 +1087,6 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                     className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg p-2 font-medium text-xs text-slate-800"
                   />
                 </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">Company Size</label>
-                  <input
-                    type="text"
-                    defaultValue="25 - 50 Employees"
-                    className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-lg p-2 font-medium text-xs text-slate-800"
-                  />
-                </div>
               </div>
             )}
 
@@ -803,7 +1102,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                 </div>
                 <button
                   onClick={() => toast.success('Note saved to CRM profile')}
-                  className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-black transition-colors"
+                  className="w-full py-2 bg-slate-900 text-white rounded-lg font-bold text-xs hover:bg-black transition-colors cursor-pointer"
                 >
                   + Add New Note
                 </button>
@@ -845,14 +1144,14 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                 <div className="pt-2 border-t border-slate-100 space-y-2">
                   <button
                     onClick={() => toast.success('WHMCS invoice link sent to WhatsApp chat!')}
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <FileText size={14} /> Send WHMCS Invoice on WhatsApp
                   </button>
 
                   <button
                     onClick={() => toast.success('cPanel login credentials dispatched')}
-                    className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Server size={14} /> Send cPanel Login Credentials
                   </button>
@@ -861,17 +1160,351 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
             )}
           </div>
 
-          {/* CRM Sync Action Bar */}
           <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
             <button
               onClick={() => toast.success('Contact synced with HubSpot / Salesforce / InHostBilling!')}
-              className="w-full py-2.5 bg-[#0f172a] hover:bg-black text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 transition-transform active:scale-95"
+              className="w-full py-2.5 bg-[#0f172a] hover:bg-black text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
             >
               <RefreshCw size={13} /> Sync to External CRM
             </button>
           </div>
         </div>
       </div>
+
+      {/* WHATSAPP SETTINGS & CHANNELS MODAL */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in">
+          <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col max-h-[92vh]">
+            
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+              <div>
+                <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
+                  <Settings size={20} className="text-cyan-400" />
+                  WA WhatsApp Channel & Team Settings Manager
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Configure WhatsApp Cloud API channels and map staff members directly from the Staff & Hosts section.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowSettingsModal(false);
+                  setEditingChannel(null);
+                }}
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Subtabs */}
+            <div className="flex border-b border-slate-200 bg-slate-100 px-6 pt-3 shrink-0">
+              <button
+                onClick={() => setSettingsTab('channels')}
+                className={`px-5 py-2.5 text-xs font-black rounded-t-xl border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+                  settingsTab === 'channels'
+                    ? 'bg-white border-indigo-600 text-indigo-700 shadow-xs'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Phone size={15} /> Add & Modify WhatsApp Channels ({channels.length})
+              </button>
+
+              <button
+                onClick={() => setSettingsTab('staff')}
+                className={`px-5 py-2.5 text-xs font-black rounded-t-xl border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+                  settingsTab === 'staff'
+                    ? 'bg-white border-indigo-600 text-indigo-700 shadow-xs'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Users size={15} /> Staff & Hosts Team Members ({staffList.length})
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6 bg-slate-50/50 text-xs">
+              
+              {/* TAB 1: WHATSAPP CHANNELS MANAGEMENT */}
+              {settingsTab === 'channels' && (
+                <div className="space-y-6">
+                  
+                  {/* Channels List */}
+                  <div className="space-y-3">
+                    <h4 className="font-extrabold text-slate-800 uppercase tracking-wider text-[11px]">
+                      Configured WhatsApp Channels
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {channels.map((chan) => {
+                        const defaultStaff = staffList.find(s => s.id === chan.defaultAssignedStaffId);
+                        return (
+                          <div key={chan.id} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h5 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                                  {chan.name}
+                                  <span className={`w-2 h-2 rounded-full ${chan.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                </h5>
+                                <p className="font-mono text-xs text-slate-500 font-bold mt-0.5">
+                                  {chan.phoneNumber}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingChannel(chan);
+                                    setChannelForm({
+                                      name: chan.name,
+                                      phoneNumber: chan.phoneNumber,
+                                      wabaId: chan.wabaId || '',
+                                      accessToken: chan.accessToken || '',
+                                      defaultAssignedStaffId: chan.defaultAssignedStaffId || '',
+                                      assignedStaffIds: chan.assignedStaffIds || []
+                                    });
+                                  }}
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                  title="Modify Channel"
+                                >
+                                  <Edit3 size={14} />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100 space-y-1.5 text-[11px] text-slate-600">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-500">Default Assigned Staff:</span>
+                                <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                  👤 {defaultStaff?.name || 'First Available Staff'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-500">WABA Account ID:</span>
+                                <span className="font-mono">{chan.wabaId || 'waba_default'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* ADD / MODIFY CHANNEL FORM */}
+                  <form onSubmit={handleSaveChannelSubmit} className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                      <Plus size={16} className="text-indigo-600" />
+                      {editingChannel ? `Modify WhatsApp Channel "${editingChannel.name}"` : 'Add New WhatsApp Channel'}
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Channel Display Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={channelForm.name}
+                          onChange={(e) => setChannelForm({ ...channelForm, name: e.target.value })}
+                          placeholder="e.g. Official Technical Support Line"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">WhatsApp Phone Number</label>
+                        <input
+                          type="text"
+                          required
+                          value={channelForm.phoneNumber}
+                          onChange={(e) => setChannelForm({ ...channelForm, phoneNumber: e.target.value })}
+                          placeholder="e.g. +880 1700-000000"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">
+                          Default Assigned Staff Member (From Staff & Hosts)
+                        </label>
+                        <select
+                          value={channelForm.defaultAssignedStaffId}
+                          onChange={(e) => setChannelForm({ ...channelForm, defaultAssignedStaffId: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                        >
+                          <option value="">Select Staff Member...</option>
+                          {staffList.map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} — {s.role} ({s.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">WhatsApp Business Account ID (WABA ID)</label>
+                        <input
+                          type="text"
+                          value={channelForm.wabaId}
+                          onChange={(e) => setChannelForm({ ...channelForm, wabaId: e.target.value })}
+                          placeholder="e.g. waba_90412849102"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">WhatsApp Meta Access Token</label>
+                      <input
+                        type="password"
+                        value={channelForm.accessToken}
+                        onChange={(e) => setChannelForm({ ...channelForm, accessToken: e.target.value })}
+                        placeholder="EAAB..."
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-2">
+                      {editingChannel && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingChannel(null);
+                            setChannelForm({ name: '', phoneNumber: '', wabaId: '', accessToken: '', defaultAssignedStaffId: '', assignedStaffIds: [] });
+                          }}
+                          className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                        >
+                          Cancel Editing
+                        </button>
+                      )}
+
+                      <button
+                        type="submit"
+                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-md transition-colors cursor-pointer"
+                      >
+                        {editingChannel ? 'Save Modified Channel' : 'Add WhatsApp Channel'}
+                      </button>
+                    </div>
+                  </form>
+
+                </div>
+              )}
+
+              {/* TAB 2: STAFF & HOSTS TEAM MEMBERS */}
+              {settingsTab === 'staff' && (
+                <div className="space-y-6">
+                  
+                  {/* Current Active Staff Members */}
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 uppercase tracking-wider text-[11px] mb-3">
+                      Connected Staff Members (Loaded from Staff & Hosts Module)
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {staffList.map((member) => (
+                        <div key={member.id} className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={member.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80'}
+                              alt=""
+                              className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                            />
+                            <div>
+                              <h5 className="font-bold text-slate-900 text-xs">{member.name}</h5>
+                              <p className="text-[11px] text-slate-500 font-medium">{member.email}</p>
+                            </div>
+                          </div>
+
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shrink-0">
+                            {member.role}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Add New Team Member into Staff & Hosts Form */}
+                  <form onSubmit={handleAddStaffSubmit} className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    <h4 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                      <Plus size={16} className="text-indigo-600" />
+                      Add New Team Member to Staff & Hosts System
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Staff Member Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={newStaffForm.name}
+                          onChange={(e) => setNewStaffForm({ ...newStaffForm, name: e.target.value })}
+                          placeholder="e.g. Mahmudul Hasan"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Official Email Address</label>
+                        <input
+                          type="email"
+                          required
+                          value={newStaffForm.email}
+                          onChange={(e) => setNewStaffForm({ ...newStaffForm, email: e.target.value })}
+                          placeholder="e.g. mahmudul@click2itbd.com"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Phone Number</label>
+                        <input
+                          type="text"
+                          value={newStaffForm.phone}
+                          onChange={(e) => setNewStaffForm({ ...newStaffForm, phone: e.target.value })}
+                          placeholder="e.g. +880 1712-345678"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Staff Role</label>
+                        <select
+                          value={newStaffForm.role}
+                          onChange={(e) => setNewStaffForm({ ...newStaffForm, role: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                        >
+                          <option value="staff">Technical Support Staff</option>
+                          <option value="manager">Sales & Operations Lead</option>
+                          <option value="admin">Support Admin</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={isSavingStaff}
+                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-md transition-colors cursor-pointer"
+                      >
+                        {isSavingStaff ? 'Saving to Staff & Hosts...' : 'Add Team Member'}
+                      </button>
+                    </div>
+                  </form>
+
+                </div>
+              )}
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Chrome Extension Modal */}
       {showExtensionModal && (
@@ -884,7 +1517,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                 </div>
                 <div>
                   <h3 className="text-xl font-extrabold text-slate-900">
-                    WAPlus: WhatsApp CRM Chrome Extension
+                    WA: WhatsApp CRM Chrome Extension
                   </h3>
                   <p className="text-xs text-slate-500">
                     Manifest V3 • Integrates directly with WhatsApp Web (`web.whatsapp.com`)
@@ -893,19 +1526,19 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
               </div>
               <button
                 onClick={() => setShowExtensionModal(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4 text-xs">
+              <h4 className="font-black uppercase tracking-wider text-slate-700">
                 Installation in 3 Simple Steps:
               </h4>
-              <ol className="list-decimal list-inside space-y-2.5 text-xs text-slate-700 font-medium">
+              <ol className="list-decimal list-inside space-y-2.5 text-slate-700 font-medium">
                 <li>
-                  Click the button below to download the ready-to-load <strong>waplus-hosting-crm-chrome-extension.zip</strong> file and extract it.
+                  Click the button below to download the ready-to-load <strong>wa-hosting-crm-chrome-extension.zip</strong> file and extract it.
                 </li>
                 <li>
                   Open your browser and navigate to <code className="bg-slate-200 px-1.5 py-0.5 rounded text-slate-900 font-bold">chrome://extensions/</code> in Chrome, Brave, or Edge.
@@ -920,7 +1553,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
               <button
                 onClick={handleDownloadExtensionZip}
                 disabled={isDownloadingExtension}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all"
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#25D366] hover:bg-[#20ba59] active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
               >
                 {isDownloadingExtension ? (
                   <>
@@ -935,7 +1568,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
 
               <button
                 onClick={() => setShowExtensionModal(false)}
-                className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+                className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
               >
                 Close
               </button>
@@ -951,14 +1584,14 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
             <div className="p-4 bg-slate-900 border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Laptop size={18} className="text-emerald-400" />
-                <span className="font-bold text-sm">WAPlus Extension Overlay Simulator (WhatsApp Web Mode)</span>
+                <span className="font-bold text-sm">WA Extension Overlay Simulator (WhatsApp Web Mode)</span>
               </div>
-              <button onClick={() => setShowSimulatorModal(false)} className="text-slate-400 hover:text-white">✕</button>
+              <button onClick={() => setShowSimulatorModal(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
             </div>
 
             <div className="p-6 flex-1 overflow-y-auto space-y-6">
               <div className="p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/30 text-emerald-200 text-xs">
-                💡 <strong>Live Simulation:</strong> This shows how your support team experiences the WAPlus floating dock right inside <code>web.whatsapp.com</code> while responding to clients.
+                💡 <strong>Live Simulation:</strong> This shows how your support team experiences the WA floating dock right inside <code>web.whatsapp.com</code> while responding to clients.
               </div>
 
               <div className="relative border border-slate-700 rounded-2xl bg-[#0B141A] p-6 min-h-[350px] flex items-center justify-center text-center">
@@ -975,7 +1608,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                       setShowSimulatorModal(false);
                       toast.success('Dock active in browser!');
                     }}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs"
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs cursor-pointer"
                   >
                     Return to Multi-Agent CRM
                   </button>

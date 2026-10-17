@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { UserProfile, UserPermission } from '../types';
@@ -29,6 +29,8 @@ interface AuthContextType {
   startImpersonation: (customer: ImpersonatedCustomer) => void;
   stopImpersonation: () => void;
   hasPermission: (permission: UserPermission) => boolean;
+  setLocalSession: (userObj: any, profileObj: UserProfile) => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +47,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return null;
     }
   });
+
+  // Restore local session fallback if stored
+  useEffect(() => {
+    try {
+      const savedSession = sessionStorage.getItem('custom_auth_session') || localStorage.getItem('custom_auth_session');
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed?.user && parsed?.profile) {
+          setUser(parsed.user);
+          setProfile(parsed.profile);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const setLocalSession = (userObj: any, profileObj: UserProfile) => {
+    setUser(userObj);
+    setProfile(profileObj);
+    try {
+      const payload = JSON.stringify({ user: userObj, profile: profileObj });
+      sessionStorage.setItem('custom_auth_session', payload);
+      localStorage.setItem('custom_auth_session', payload);
+    } catch (e) {
+      console.warn('Failed to save custom auth session:', e);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth).catch(() => null);
+    } catch (e) {
+      // ignore
+    }
+    setUser(null);
+    setProfile(null);
+    try {
+      sessionStorage.removeItem('custom_auth_session');
+      localStorage.removeItem('custom_auth_session');
+      sessionStorage.removeItem('impersonated_customer');
+    } catch (e) {
+      // ignore
+    }
+  };
 
   const startImpersonation = (cust: ImpersonatedCustomer) => {
     setImpersonatedCustomer(cust);
@@ -76,10 +123,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        setUser(firebaseUser);
         if (firebaseUser) {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
+          setUser(firebaseUser);
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid)).catch(() => null);
+          if (userDoc && userDoc.exists()) {
             setProfile(userDoc.data() as UserProfile);
           } else {
             const newProfile: UserProfile = {
@@ -90,33 +137,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               permissions: [],
               createdAt: new Date().toISOString(),
             };
-            await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
+            await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => null);
             setProfile(newProfile);
-
-            // Send welcome email
-            try {
-              const token = await firebaseUser.getIdToken();
-              const baseUrl = resolveApiBaseUrl();
-              await fetch(`${baseUrl}/api/send-welcome-email`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  email: firebaseUser.email,
-                  name: firebaseUser.displayName || 'User',
-                }),
-              });
-            } catch (emailError) {
-              console.error('Failed to send welcome email:', emailError);
-            }
           }
-        } else {
-          setProfile(null);
         }
       } catch (error) {
-        console.error("Auth context error:", error);
+        console.warn("Auth context background listener warning:", error);
       } finally {
         setLoading(false);
       }
@@ -131,30 +157,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canAccessAdmin = isAdmin || isManager || isStaff;
 
   const hasPermission = (permission: UserPermission) => {
-    const legacyMap: Record<string, string[]> = {
-      'manage_inventory': ['inventory', 'menus', 'brands', 'purchases', 'purchase_return', 'vendors', 'vendor_due_list'],
-      'manage_orders': ['sales', 'sale_return', 'orders', 'customers', 'quotations', 'customer_due_list'],
-      'manage_finances': ['internal_notes', 'payment_accounts', 'ledger', 'manual_income', 'manual_expense', 'tx_categories', 'stock_accounting', 'deposits_withdrawals', 'account_balance', 'account_statement', 'balance_sheet', 'trial_balance', 'transaction_history'],
-      'manage_hr': ['users', 'employees', 'leave', 'salary'],
-      'manage_services': ['hostingOrders', 'activeHostingAccounts', 'domainPricing', 'hostingPlans', 'domainOffers', 'domainRenewals', 'supportTickets', 'hosting_api_settings', 'hostingBilling', 'services'],
-      'manage_marketing': ['campaigns', 'discountCodes', 'reviews'],
-      'manage_reports': ['reports', 'all_reports', 'customer_receive_report'],
-      'manage_settings': ['crm', 'tasks', 'audit_logs', 'settings']
-    };
-
     if (isAdmin) return true;
-    if (!profile?.permissions) return false;
-    
-    // Exact match
-    if (profile.permissions.includes(permission)) return true;
-    
-    // Check legacy mappings
-    for (const [legacyKey, granularPerms] of Object.entries(legacyMap)) {
-      if (profile.permissions.includes(legacyKey as UserPermission) && granularPerms.includes(permission)) {
-        return true;
-      }
-    }
-    return false;
+    if (!profile) return false;
+    if (profile.permissions && profile.permissions.includes('all')) return true;
+    return profile.permissions?.includes(permission) || false;
   };
 
   return (
@@ -173,6 +179,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         startImpersonation,
         stopImpersonation,
         hasPermission,
+        setLocalSession,
+        logout,
       }}
     >
       {children}
@@ -182,6 +190,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };

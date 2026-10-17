@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
+import { getAdminDb } from '../firebase/admin.js';
 
 const campaignRouter = Router();
 
@@ -459,7 +460,7 @@ campaignRouter.get('/whatsapp/conversations', async (req: any, res: Response) =>
     res.json({
       success: true,
       conversations: whatsAppConversations,
-      agents: availableAgents
+      agents: staffHostsList
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -529,7 +530,7 @@ campaignRouter.post('/whatsapp/assign', async (req: any, res: Response) => {
     if (!agentId || agentId === 'unassigned') {
       conv.assignedAgent = null;
     } else {
-      const agent = availableAgents.find(a => a.id === agentId);
+      const agent = staffHostsList.find(a => a.id === agentId) || availableAgents.find(a => a.id === agentId);
       if (agent) {
         conv.assignedAgent = { id: agent.id, name: `${agent.name} (${agent.role})`, avatar: agent.avatar };
       }
@@ -699,6 +700,524 @@ campaignRouter.post('/send-whatsapp-campaign', requireFirebaseAuth, async (req: 
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to send WhatsApp campaign' });
+  }
+});
+
+// --- STAFF & HOSTS ENDPOINTS WITH REAL-TIME SYNC TO WA WHATSAPP CRM ---
+interface StaffHostMember {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: string;
+  status: 'active' | 'inactive' | 'on_leave';
+  avatar?: string;
+  assignedHosts: string[];
+  assignedChannels: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+let staffHostsList: StaffHostMember[] = [
+  {
+    id: 'staff_1',
+    name: 'Alex M.',
+    email: 'alex@click2itbd.com',
+    phone: '+880 1711-000111',
+    role: 'Support Admin',
+    status: 'active',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+    assignedHosts: ['Server Host BDIX #1 (Dhaka)', 'cPanel USA NVMe #2 (Dallas)', 'KVM VPS Node #1'],
+    assignedChannels: ['chan_main', 'chan_vip'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'staff_2',
+    name: 'Sarah K.',
+    email: 'sarah@click2itbd.com',
+    phone: '+880 1711-000222',
+    role: 'Sales & Operations Lead',
+    status: 'active',
+    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100&auto=format&fit=crop&q=80',
+    assignedHosts: ['cPanel USA NVMe #2 (Dallas)', 'Enterprise WordPress Cloud'],
+    assignedChannels: ['chan_main', 'chan_vip'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'staff_3',
+    name: 'Imran H.',
+    email: 'imran@click2itbd.com',
+    phone: '+880 1711-000333',
+    role: 'Technical Support Specialist',
+    status: 'active',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80',
+    assignedHosts: ['Server Host BDIX #1 (Dhaka)', 'KVM VPS Node #1 (Germany)'],
+    assignedChannels: ['chan_main'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'staff_4',
+    name: 'Kamal R.',
+    email: 'kamal@click2itbd.com',
+    phone: '+880 1711-000444',
+    role: 'Billing & Accounting Specialist',
+    status: 'active',
+    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80',
+    assignedHosts: ['WHMCS Billing Node #1'],
+    assignedChannels: ['chan_vip'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+campaignRouter.get('/staff-hosts', async (req: any, res: Response) => {
+  try {
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        const snap = await db.collection('staff_hosts').get();
+        if (!snap.empty) {
+          const loaded: any[] = [];
+          snap.docs.forEach((d: any) => {
+            loaded.push({ id: d.id, ...d.data() });
+          });
+          if (loaded.length > 0) {
+            staffHostsList = loaded;
+          }
+        }
+      }
+    } catch (fsErr) {
+      // Fallback
+    }
+
+    res.json({
+      success: true,
+      staffHosts: staffHostsList,
+      hostsSummary: [
+        { id: 'host_bdix_1', name: 'Server Host BDIX #1 (Dhaka)', provider: 'cPanel BDIX DataCenter', status: 'healthy', assignedStaffCount: 2 },
+        { id: 'host_usa_2', name: 'cPanel USA NVMe #2 (Dallas)', provider: 'CloudLinux NVMe Node', status: 'healthy', assignedStaffCount: 2 },
+        { id: 'host_kvm_1', name: 'KVM VPS Node #1 (Germany)', provider: 'Proxmox VE Cluster', status: 'healthy', assignedStaffCount: 2 },
+        { id: 'host_whmcs_1', name: 'WHMCS Billing Node #1', provider: 'InHostBilling Hub', status: 'healthy', assignedStaffCount: 1 }
+      ]
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+campaignRouter.post('/staff-hosts', async (req: any, res: Response) => {
+  try {
+    const { name, email, phone, role, status, assignedHosts, assignedChannels, avatar } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ success: false, error: 'Name and email are required' });
+    }
+
+    const id = `staff_${Date.now()}`;
+    const newMember: StaffHostMember = {
+      id,
+      name,
+      email,
+      phone: phone || '',
+      role: role || 'Technical Support Specialist',
+      status: status || 'active',
+      avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
+      assignedHosts: Array.isArray(assignedHosts) ? assignedHosts : [],
+      assignedChannels: Array.isArray(assignedChannels) ? assignedChannels : ['chan_main'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    staffHostsList.push(newMember);
+
+    // Sync into Firestore 'staff_hosts' and 'users' collection
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        await db.collection('staff_hosts').doc(id).set(newMember);
+        await db.collection('users').doc(id).set({
+          uid: id,
+          displayName: name,
+          name,
+          email,
+          phone: phone || '',
+          role: role?.toLowerCase().includes('admin') ? 'admin' : (role?.toLowerCase().includes('lead') ? 'manager' : 'staff'),
+          status: status || 'active',
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    } catch (fsErr) {
+      console.warn('[StaffHosts] Firestore sync error:', fsErr);
+    }
+
+    res.json({ success: true, member: newMember, staffHosts: staffHostsList });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+campaignRouter.put('/staff-hosts/:id', async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    const member = staffHostsList.find(s => s.id === id);
+    if (!member) {
+      return res.status(404).json({ success: false, error: 'Staff member not found' });
+    }
+
+    const { name, email, phone, role, status, assignedHosts, assignedChannels, avatar } = req.body;
+    if (name !== undefined) member.name = name;
+    if (email !== undefined) member.email = email;
+    if (phone !== undefined) member.phone = phone;
+    if (role !== undefined) member.role = role;
+    if (status !== undefined) member.status = status;
+    if (avatar !== undefined) member.avatar = avatar;
+    if (assignedHosts !== undefined) member.assignedHosts = Array.isArray(assignedHosts) ? assignedHosts : [];
+    if (assignedChannels !== undefined) member.assignedChannels = Array.isArray(assignedChannels) ? assignedChannels : [];
+    member.updatedAt = new Date().toISOString();
+
+    // Sync into Firestore
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        await db.collection('staff_hosts').doc(id).set(member, { merge: true });
+        await db.collection('users').doc(id).set({
+          displayName: member.name,
+          name: member.name,
+          email: member.email,
+          phone: member.phone,
+          role: member.role?.toLowerCase().includes('admin') ? 'admin' : (member.role?.toLowerCase().includes('lead') ? 'manager' : 'staff'),
+          status: member.status
+        }, { merge: true });
+      }
+    } catch (fsErr) {
+      console.warn('[StaffHosts] Firestore sync error on update:', fsErr);
+    }
+
+    res.json({ success: true, member, staffHosts: staffHostsList });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// --- DOMAIN & HOSTING BUSINESS CRM ENDPOINTS ---
+interface HostingCrmLead {
+  id: string;
+  contactName: string;
+  companyName?: string;
+  email: string;
+  phone: string;
+  leadStage: 'new_inbound' | 'domain_consultation' | 'vps_quote_sent' | 'invoice_pending' | 'active_customer' | 'renewal_upsell';
+  interestedProducts: string[];
+  dealValueBdt: number;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
+  whmcsAccountId?: string;
+  notes: string[];
+  lastContactTime: string;
+  source: 'WhatsApp' | 'Meta Ads' | 'Web Form' | 'Direct Referral' | 'Phone';
+  createdAt: string;
+  updatedAt: string;
+}
+
+let hostingCrmLeads: HostingCrmLead[] = [
+  {
+    id: 'lead_1',
+    contactName: 'Tanvir Ahmed',
+    companyName: 'Prime Tech Solutions Ltd',
+    email: 'tanvir@primetechbd.com',
+    phone: '+880 1712-345678',
+    leadStage: 'active_customer',
+    interestedProducts: ['Cloud NVMe VPS - 4 vCPU / 8GB RAM', 'primetechbd.com (.COM)'],
+    dealValueBdt: 18500,
+    assignedStaffId: 'staff_1',
+    assignedStaffName: 'Alex M. (Support Admin)',
+    whmcsAccountId: 'CUST-10492',
+    notes: ['Converted from Meta Ad campaign.', 'Wants automatic weekly VPS snapshots.'],
+    lastContactTime: '10:42 AM Today',
+    source: 'Meta Ads',
+    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'lead_2',
+    contactName: 'Nusrat Jahan',
+    companyName: 'Dhaka Designs Studio',
+    email: 'nusrat@dhakadesigns.net',
+    phone: '+880 1891-987654',
+    leadStage: 'invoice_pending',
+    interestedProducts: ['Pro cPanel Web Hosting (Annual)', 'dhakadesigns.net (.NET)'],
+    dealValueBdt: 6200,
+    assignedStaffId: 'staff_2',
+    assignedStaffName: 'Sarah K. (Sales Lead)',
+    whmcsAccountId: 'CUST-10811',
+    notes: ['Invoice INV-8491 generated on bKash merchant link.'],
+    lastContactTime: '11:15 AM Today',
+    source: 'WhatsApp',
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'lead_3',
+    contactName: 'Rashid Al-Mamun',
+    companyName: 'Green Bazaar E-Commerce',
+    email: 'rashid@greenbazaar.org',
+    phone: '+880 1622-114477',
+    leadStage: 'vps_quote_sent',
+    interestedProducts: ['Custom Enterprise KVM Node - 6 vCPU / 16GB RAM', 'greenbazaar.org (.ORG)'],
+    dealValueBdt: 34000,
+    assignedStaffId: 'staff_3',
+    assignedStaffName: 'Imran H. (Technical Support)',
+    whmcsAccountId: 'CUST-10994',
+    notes: ['Requested custom quote with BDIX high-speed bandwidth.'],
+    lastContactTime: '09:05 AM Today',
+    source: 'Web Form',
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'lead_4',
+    contactName: 'Mahbubur Rahman',
+    companyName: 'BENGAL ERP Systems',
+    email: 'mahbub@bengalerp.com',
+    phone: '+880 1715-998877',
+    leadStage: 'domain_consultation',
+    interestedProducts: ['.BD Official Domain (.COM.BD)', 'cPanel Business Starter'],
+    dealValueBdt: 4500,
+    assignedStaffId: 'staff_1',
+    assignedStaffName: 'Alex M. (Support Admin)',
+    notes: ['Consulting on BTCL NID verification documents for .com.bd domain.'],
+    lastContactTime: 'Yesterday 4:20 PM',
+    source: 'Direct Referral',
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'lead_5',
+    contactName: 'Sultana Parveen',
+    companyName: 'Chittagong Maritime Logistics',
+    email: 'sultana@cml-bd.com',
+    phone: '+880 1819-223344',
+    leadStage: 'renewal_upsell',
+    interestedProducts: ['Renewal: cPanel Premier Hosting + .COM', 'SSL Certificate Upgrade'],
+    dealValueBdt: 12800,
+    assignedStaffId: 'staff_4',
+    assignedStaffName: 'Kamal R. (Billing Specialist)',
+    whmcsAccountId: 'CUST-10112',
+    notes: ['Annual hosting renewal due in 7 days.'],
+    lastContactTime: 'Yesterday 2:10 PM',
+    source: 'Phone',
+    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+campaignRouter.get('/crm/leads', async (req: any, res: Response) => {
+  try {
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        const snap = await db.collection('hosting_crm_leads').get();
+        if (!snap.empty) {
+          const loaded: any[] = [];
+          snap.docs.forEach((d: any) => {
+            loaded.push({ id: d.id, ...d.data() });
+          });
+          if (loaded.length > 0) {
+            hostingCrmLeads = loaded;
+          }
+        }
+      }
+    } catch (fsErr) {
+      // Fallback
+    }
+
+    const totalPipelineValue = hostingCrmLeads.reduce((acc, l) => acc + (l.dealValueBdt || 0), 0);
+    const convertedLeads = hostingCrmLeads.filter(l => l.leadStage === 'active_customer').length;
+    const conversionRatePercent = hostingCrmLeads.length > 0 ? Math.round((convertedLeads / hostingCrmLeads.length) * 100) : 0;
+
+    res.json({
+      success: true,
+      leads: hostingCrmLeads,
+      summary: {
+        totalLeadsCount: hostingCrmLeads.length,
+        totalPipelineValue,
+        conversionRatePercent,
+        stageCounts: {
+          new_inbound: hostingCrmLeads.filter(l => l.leadStage === 'new_inbound').length,
+          domain_consultation: hostingCrmLeads.filter(l => l.leadStage === 'domain_consultation').length,
+          vps_quote_sent: hostingCrmLeads.filter(l => l.leadStage === 'vps_quote_sent').length,
+          invoice_pending: hostingCrmLeads.filter(l => l.leadStage === 'invoice_pending').length,
+          active_customer: hostingCrmLeads.filter(l => l.leadStage === 'active_customer').length,
+          renewal_upsell: hostingCrmLeads.filter(l => l.leadStage === 'renewal_upsell').length
+        }
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+let lastAssignedStaffIndex = 0;
+
+async function getNextRoundRobinStaff() {
+  const fallbackStaff = [
+    { id: 'staff_1', name: 'Alex M. (Support Admin)', email: 'alex@click2itbd.com' },
+    { id: 'staff_2', name: 'Sarah K. (Sales Lead)', email: 'sarah@click2itbd.com' },
+    { id: 'staff_3', name: 'Imran H. (Technical Support)', email: 'imran@click2itbd.com' },
+    { id: 'staff_4', name: 'Kamal R. (Billing Specialist)', email: 'kamal@click2itbd.com' }
+  ];
+
+  try {
+    const db = getAdminDb();
+    if (db && typeof db.collection === 'function') {
+      const snap = await db.collection('users').get();
+      if (!snap.empty) {
+        const activeStaffList: any[] = [];
+        snap.docs.forEach((d: any) => {
+          const data = d.data();
+          if (data.role === 'admin' || data.role === 'staff' || data.role === 'manager') {
+            activeStaffList.push({
+              id: d.id,
+              name: `${data.displayName || data.name || data.email?.split('@')[0] || 'Support Agent'} (${data.role === 'admin' ? 'Support Admin' : 'Sales Lead'})`,
+              email: data.email || ''
+            });
+          }
+        });
+
+        if (activeStaffList.length > 0) {
+          lastAssignedStaffIndex = (lastAssignedStaffIndex + 1) % activeStaffList.length;
+          return activeStaffList[lastAssignedStaffIndex];
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[RoundRobin] Error querying staff, using fallback:', err);
+  }
+
+  lastAssignedStaffIndex = (lastAssignedStaffIndex + 1) % fallbackStaff.length;
+  return fallbackStaff[lastAssignedStaffIndex];
+}
+
+campaignRouter.post('/crm/leads', async (req: any, res: Response) => {
+  try {
+    const { contactName, companyName, email, phone, targetDomain, leadStage, interestedProducts, dealValueBdt, assignedStaffId, assignedStaffName, notes, timeline, source, useRoundRobin } = req.body;
+    if (!contactName || !email) {
+      return res.status(400).json({ success: false, error: 'Contact name and email are required' });
+    }
+
+    let finalStaffId = assignedStaffId;
+    let finalStaffName = assignedStaffName;
+
+    if (!finalStaffId || useRoundRobin) {
+      const roundRobinStaff = await getNextRoundRobinStaff();
+      finalStaffId = roundRobinStaff.id;
+      finalStaffName = roundRobinStaff.name;
+    }
+
+    const newLead: any = {
+      id: `lead_${Date.now()}`,
+      contactName,
+      companyName: companyName || '',
+      email,
+      phone: phone || '',
+      targetDomain: targetDomain || '',
+      leadStage: leadStage || 'new_inbound',
+      interestedProducts: Array.isArray(interestedProducts) ? interestedProducts : ['cPanel Hosting + Domain'],
+      dealValueBdt: Number(dealValueBdt) || 5000,
+      assignedStaffId: finalStaffId,
+      assignedStaffName: finalStaffName,
+      notes: Array.isArray(notes) ? notes : ['New lead added from Domain & Hosting CRM.'],
+      timeline: Array.isArray(timeline) ? timeline : [{
+        id: `tl_${Date.now()}`,
+        type: 'status_change',
+        title: 'Lead Created (Round-Robin Assigned)',
+        description: `Lead created and automatically assigned to ${finalStaffName} via Round-Robin queue.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today',
+        performedBy: 'Automated Round-Robin Engine'
+      }],
+      lastContactTime: 'Just now',
+      source: source || 'Web Form',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    hostingCrmLeads.unshift(newLead);
+
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        await db.collection('hosting_crm_leads').doc(newLead.id).set(newLead);
+      }
+    } catch (fsErr) {
+      console.warn('[HostingCRM] Firestore sync error:', fsErr);
+    }
+
+    res.json({ success: true, lead: newLead, leads: hostingCrmLeads });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+campaignRouter.put('/crm/leads/:id', async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    const lead = hostingCrmLeads.find(l => l.id === id);
+    if (!lead) {
+      return res.status(404).json({ success: false, error: 'CRM Lead not found' });
+    }
+
+    const { contactName, companyName, email, phone, targetDomain, leadStage, interestedProducts, dealValueBdt, assignedStaffId, assignedStaffName, notes, timeline, source, whmcsAccountId } = req.body;
+    if (contactName !== undefined) lead.contactName = contactName;
+    if (companyName !== undefined) lead.companyName = companyName;
+    if (email !== undefined) lead.email = email;
+    if (phone !== undefined) lead.phone = phone;
+    if (targetDomain !== undefined) lead.targetDomain = targetDomain;
+    if (leadStage !== undefined) lead.leadStage = leadStage;
+    if (interestedProducts !== undefined) lead.interestedProducts = Array.isArray(interestedProducts) ? interestedProducts : [];
+    if (dealValueBdt !== undefined) lead.dealValueBdt = Number(dealValueBdt);
+    if (assignedStaffId !== undefined) lead.assignedStaffId = assignedStaffId;
+    if (assignedStaffName !== undefined) lead.assignedStaffName = assignedStaffName;
+    if (notes !== undefined) lead.notes = Array.isArray(notes) ? notes : [notes];
+    if (timeline !== undefined) lead.timeline = Array.isArray(timeline) ? timeline : lead.timeline || [];
+    if (source !== undefined) lead.source = source;
+    if (whmcsAccountId !== undefined) lead.whmcsAccountId = whmcsAccountId;
+    lead.lastContactTime = 'Just now';
+    lead.updatedAt = new Date().toISOString();
+
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        await db.collection('hosting_crm_leads').doc(id).set(lead, { merge: true });
+      }
+    } catch (fsErr) {
+      console.warn('[HostingCRM] Firestore update error:', fsErr);
+    }
+
+    res.json({ success: true, lead, leads: hostingCrmLeads });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+campaignRouter.delete('/crm/leads/:id', async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    hostingCrmLeads = hostingCrmLeads.filter(l => l.id !== id);
+
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        await db.collection('hosting_crm_leads').doc(id).delete();
+      }
+    } catch (fsErr) {
+      console.warn('[HostingCRM] Firestore delete error:', fsErr);
+    }
+
+    res.json({ success: true, leads: hostingCrmLeads });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

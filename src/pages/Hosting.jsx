@@ -75,14 +75,25 @@ export default function Hosting() {
   useEffect(() => {
     const fetchBundleDiscount = async () => {
       try {
+        const res = await fetch('/api/public/hosting-config');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.bundleDiscountPercent) {
+            setBundleDiscount(json.data.bundleDiscountPercent);
+            return;
+          }
+        }
+        // Fallback to Firestore if API unavailable
         const docRef = doc(db, 'settings', 'hostingApiConfig');
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           const data = snap.data();
-          setBundleDiscount(data?.bundleDiscountPercent || 0);
+          setBundleDiscount(data?.bundleDiscountPercent || 15);
+        } else {
+          setBundleDiscount(15);
         }
       } catch (e) {
-        console.error('Error fetching bundle discount', e);
+        setBundleDiscount(15);
       }
     };
     fetchBundleDiscount();

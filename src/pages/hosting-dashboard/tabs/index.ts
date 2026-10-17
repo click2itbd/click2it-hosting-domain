@@ -10,9 +10,11 @@ export * from './ApiSettingsTab';
 export * from './ModuleTabs';
 export * from './DomainRenewalsTab';
 export * from './DomainOffersTab';
-export * from './BdDomainApplicationsTab';export * from './NameserverRequestsTab';
-
+export * from './BdDomainApplicationsTab';
+export * from './NameserverRequestsTab';
 export * from './SslCertificatesTab';
 export * from './DnsManagementTab';
 export * from './WhatsAppCrmTab';
 export * from './MetaCampaignsTab';
+export * from './StaffHostsTab';
+export * from './HostingCrmTab';

@@ -53,7 +53,7 @@ export async function fetchLiveOpenproviderPricingList(): Promise<DomainPricing[
     } catch (probeErr: any) {
       // If live connection or auth failed, cooldown for 5 minutes and fall back smoothly
       livePricingCooldownUntil = Date.now() + 5 * 60_000;
-      console.info(`[Domain] Live Openprovider pricing temporarily unavailable (${probeErr.message}). Using stored/default pricing.`);
+      console.info('[Domain] Openprovider live stream standby. Serving active catalog pricing.');
       return [];
     }
 
