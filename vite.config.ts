@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
       hmr: process.env.DISABLE_HMR !== "true",
     },
     build: {
+      modulePreload: false,
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
@@ -31,15 +32,23 @@ export default defineConfig(({ mode }) => {
             if (id.includes("firebase/storage") || id.includes("@firebase/storage")) {
               return "firebase-storage";
             }
+            if (id.includes("firebase/firestore") || id.includes("@firebase/firestore")) {
+              return "firebase-firestore";
+            }
             if (id.includes("firebase/") || id.includes("@firebase/")) {
-              return "firebase-core";
+              return "firebase-app";
+            }
+            if (id.includes("framer-motion") || /[\\/]node_modules[\\/]motion[\\/]/.test(id)) {
+              return "framer-motion";
             }
             if (id.includes("lucide-react")) {
               return "lucide";
             }
+            if (id.includes("react-router")) {
+              return "react-router";
+            }
             if (
               id.includes("react-dom") ||
-              id.includes("react-router") ||
               /[\\/]node_modules[\\/](react|scheduler)[\\/]/.test(id)
             ) {
               return "react-vendor";

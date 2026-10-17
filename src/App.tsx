@@ -11,38 +11,54 @@ import { ChatWidget } from './components/ChatWidget';
 import { TrackingScripts } from './components/TrackingScripts';
 import { ReferralTracker } from './components/ReferralTracker';
 
-import Hosting from './pages/Hosting';
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await factory();
+      } catch (err) {
+        lastError = err;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    throw lastError;
+  });
+}
 
-const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const HostingDetails = lazy(() => import('./pages/HostingDetails').then(m => ({ default: m.HostingDetails })));
-const HostingBillingDashboard = lazy(() => import('./pages/hosting-dashboard/HostingBillingDashboard').then(m => ({ default: m.HostingBillingDashboard })));
-const MyServices = lazy(() => import('./pages/MyServices').then(m => ({ default: m.MyServices })));
-const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const Hosting = lazyWithRetry(() => import('./pages/Hosting'));
+const Login = lazyWithRetry(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const HostingDetails = lazyWithRetry(() => import('./pages/HostingDetails').then(m => ({ default: m.HostingDetails })));
+const HostingBillingDashboard = lazyWithRetry(() => import('./pages/hosting-dashboard/HostingBillingDashboard').then(m => ({ default: m.HostingBillingDashboard })));
+const MyServices = lazyWithRetry(() => import('./pages/MyServices').then(m => ({ default: m.MyServices })));
+const Profile = lazyWithRetry(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 
-const ServicesPage = lazy(() => import('./pages/hosting/ServicesPage'));
-const PricingPage = lazy(() => import('./pages/hosting/PricingPage'));
-const VpsPage = lazy(() => import('./pages/hosting/VpsPage'));
-const DomainPage = lazy(() => import('./pages/hosting/DomainPage'));
-const DomainSecurityPage = lazy(() => import('./pages/domain/DomainSecurityPage'));
-const DomainSearchResults = lazy(() => import('./pages/hosting/DomainSearchResults'));
-const BulkDomainSearch = lazy(() => import('./pages/hosting/BulkDomainSearch'));
-const SslPage = lazy(() => import('./pages/hosting/SslPage'));
-const BdDomainPage = lazy(() => import('./pages/hosting/BdDomainPage'));
-const SupportPage = lazy(() => import('./pages/hosting/SupportPage'));
-const TermsOfService = lazy(() => import('./pages/policies/TermsOfService'));
-const PrivacyPolicy = lazy(() => import('./pages/policies/PrivacyPolicy'));
-const NotFound = lazy(() => import('./pages/NotFound'));
-const RefundPolicy = lazy(() => import('./pages/policies/RefundPolicy'));
-const AboutUs = lazy(() => import('./pages/AboutUs'));
-const ContactUs = lazy(() => import('./pages/ContactUs'));
-const DomainTransferPage = lazy(() => import('./pages/hosting/DomainTransferPage'));
-const PaymentSimulation = lazy(() => import('./pages/PaymentSimulation'));
-const PaymentCallback = lazy(() => import('./pages/PaymentCallback'));
-const PaymentReturn = lazy(() => import('./pages/PaymentReturn').then(m => ({ default: m.default || m.PaymentReturn })));
+const ServicesPage = lazyWithRetry(() => import('./pages/hosting/ServicesPage'));
+const PricingPage = lazyWithRetry(() => import('./pages/hosting/PricingPage'));
+const VpsPage = lazyWithRetry(() => import('./pages/hosting/VpsPage'));
+const DomainPage = lazyWithRetry(() => import('./pages/hosting/DomainPage'));
+const DomainSecurityPage = lazyWithRetry(() => import('./pages/domain/DomainSecurityPage'));
+const DomainSearchResults = lazyWithRetry(() => import('./pages/hosting/DomainSearchResults'));
+const BulkDomainSearch = lazyWithRetry(() => import('./pages/hosting/BulkDomainSearch'));
+const SslPage = lazyWithRetry(() => import('./pages/hosting/SslPage'));
+const BdDomainPage = lazyWithRetry(() => import('./pages/hosting/BdDomainPage'));
+const SupportPage = lazyWithRetry(() => import('./pages/hosting/SupportPage'));
+const TermsOfService = lazyWithRetry(() => import('./pages/policies/TermsOfService'));
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/policies/PrivacyPolicy'));
+const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
+const RefundPolicy = lazyWithRetry(() => import('./pages/policies/RefundPolicy'));
+const AboutUs = lazyWithRetry(() => import('./pages/AboutUs'));
+const ContactUs = lazyWithRetry(() => import('./pages/ContactUs'));
+const DomainTransferPage = lazyWithRetry(() => import('./pages/hosting/DomainTransferPage'));
+const PaymentSimulation = lazyWithRetry(() => import('./pages/PaymentSimulation'));
+const PaymentCallback = lazyWithRetry(() => import('./pages/PaymentCallback'));
+const PaymentReturn = lazyWithRetry(() => import('./pages/PaymentReturn').then(m => ({ default: m.default || m.PaymentReturn })));
 
-const HostingCart = lazy(() => import('./pages/hosting/HostingCart').then(m => ({ default: m.HostingCart })));
-const HostingCheckout = lazy(() => import('./pages/hosting/HostingCheckout').then(m => ({ default: m.HostingCheckout })));
-const DomainRenewal = lazy(() => import('./pages/hosting/DomainRenewal'));
+const HostingCart = lazyWithRetry(() => import('./pages/hosting/HostingCart').then(m => ({ default: m.HostingCart })));
+const HostingCheckout = lazyWithRetry(() => import('./pages/hosting/HostingCheckout').then(m => ({ default: m.HostingCheckout })));
+const DomainRenewal = lazyWithRetry(() => import('./pages/hosting/DomainRenewal'));
 
 import { PageLoader } from './components/Loading';
 
@@ -80,9 +96,9 @@ export default function App() {
                   <Route path="/campaigns" element={<Navigate to="/admin?tab=meta-campaigns" replace />} />
 
                   {/* --- ROOT & HOSTING PAGES --- */}
-                  <Route path="/" element={<Hosting />} />
-                  <Route path="/hosting" element={<Hosting />} />
-                  <Route path="/hosting/:serviceId" element={<HostingDetails />} />
+                  <Route path="/" element={<LazyWrapper><Hosting /></LazyWrapper>} />
+                  <Route path="/hosting" element={<LazyWrapper><Hosting /></LazyWrapper>} />
+                  <Route path="/hosting/:serviceId" element={<LazyWrapper><HostingDetails /></LazyWrapper>} />
                   <Route path="/services" element={<LazyWrapper><ServicesPage /></LazyWrapper>} />
                   <Route path="/pricing" element={<LazyWrapper><PricingPage /></LazyWrapper>} />
                   <Route path="/vps" element={<LazyWrapper><VpsPage /></LazyWrapper>} />

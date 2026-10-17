@@ -22,13 +22,25 @@ Options -Indexes
   RewriteRule . /index.html [L,E=Cache-Control:no-cache]
 </IfModule>
 
-<IfModule LiteSpeed>
-  CacheDisable public /
-  CacheDisable private /
+<IfModule mod_headers.c>
+  # Disable HTTP/3 QUIC on routes where UDP packets get dropped/truncated
+  Header always set Alt-Svc "clear"
 </IfModule>
 
+<FilesMatch "\.(js|css|woff2?|ttf|svg|png|jpe?g|webp|ico)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </IfModule>
+</FilesMatch>
+
 <FilesMatch "^index\.html$">
-  Header set Cache-Control "no-cache, no-store, must-revalidate"
-  Header set Pragma "no-cache"
-  Header set Expires 0
+  <IfModule LiteSpeed>
+    CacheDisable public /index.html
+    CacheDisable private /index.html
+  </IfModule>
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </IfModule>
 </FilesMatch>
