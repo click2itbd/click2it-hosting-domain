@@ -24,7 +24,7 @@ export function StaffHostsTab({ state }: { state?: any }) {
     {
       id: 'staff_1',
       name: 'Alex M.',
-      email: 'alex@click2itbd.com',
+      email: 'alex@click2it.bd',
       phone: '+880 1711-000111',
       role: 'Support Admin',
       status: 'active',
@@ -35,7 +35,7 @@ export function StaffHostsTab({ state }: { state?: any }) {
     {
       id: 'staff_2',
       name: 'Sarah K.',
-      email: 'sarah@click2itbd.com',
+      email: 'sarah@click2it.bd',
       phone: '+880 1711-000222',
       role: 'Sales & Operations Lead',
       status: 'active',
@@ -46,7 +46,7 @@ export function StaffHostsTab({ state }: { state?: any }) {
     {
       id: 'staff_3',
       name: 'Imran H.',
-      email: 'imran@click2itbd.com',
+      email: 'imran@click2it.bd',
       phone: '+880 1711-000333',
       role: 'Technical Support Specialist',
       status: 'active',
@@ -57,7 +57,7 @@ export function StaffHostsTab({ state }: { state?: any }) {
     {
       id: 'staff_4',
       name: 'Kamal R.',
-      email: 'kamal@click2itbd.com',
+      email: 'kamal@click2it.bd',
       phone: '+880 1711-000444',
       role: 'Billing & Accounting Specialist',
       status: 'active',
@@ -552,7 +552,7 @@ export function StaffHostsTab({ state }: { state?: any }) {
                     required
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="e.g. mahmudul@click2itbd.com"
+                    placeholder="e.g. mahmudul@click2it.bd"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>

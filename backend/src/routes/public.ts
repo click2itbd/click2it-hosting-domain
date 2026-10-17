@@ -28,6 +28,14 @@ publicRouter.get('/hosting-config', async (req: any, res: Response) => {
     const data = result.data || {};
 
     const safeConfig = {
+      primaryDomain: data.primaryDomain || data.hostingDomain || 'click2it.bd',
+      hostingDomain: data.hostingDomain || data.primaryDomain || 'click2it.bd',
+      nameserver1: data.nameserver1 || 'ns1.click2itbd.com',
+      nameserver2: data.nameserver2 || 'ns2.click2itbd.com',
+      cpanelUrl: data.cpanelUrl || 'https://cpanel.click2it.bd',
+      webmailUrl: data.webmailUrl || 'https://webmail.click2it.bd',
+      clientAreaUrl: data.clientAreaUrl || 'https://click2it.bd/client-area',
+      contactEmail: data.contactEmail || 'info@click2it.bd',
       bundleDiscountPercent: data.bundleDiscountPercent || 0,
       updatedAt: data.updatedAt,
     };

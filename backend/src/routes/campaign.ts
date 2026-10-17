@@ -107,7 +107,7 @@ let metaCampaigns: MetaCampaign[] = [
       callToAction: 'Send WhatsApp Message',
       whatsappMessage: 'Hi Click2IT! I saw your Meta ad for Cloud VPS with 40% OFF. I need pricing and server specifications.',
       mediaUrl: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80',
-      displayLink: 'click2itbd.com/vps'
+      displayLink: 'click2it.bd/vps'
     },
     targeting: {
       countries: ['Bangladesh', 'India', 'United States', 'United Kingdom'],
@@ -140,7 +140,7 @@ let metaCampaigns: MetaCampaign[] = [
       callToAction: 'Send WhatsApp Message',
       whatsappMessage: 'Hello! I want to check domain availability and register a new domain name.',
       mediaUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80',
-      displayLink: 'click2itbd.com/domain'
+      displayLink: 'click2it.bd/domain'
     },
     targeting: {
       countries: ['Bangladesh', 'Global'],
@@ -173,7 +173,7 @@ let metaCampaigns: MetaCampaign[] = [
       callToAction: 'Send WhatsApp Message',
       whatsappMessage: 'Hi, I need to migrate my website to your cPanel hosting. Please give me details.',
       mediaUrl: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&auto=format&fit=crop&q=80',
-      displayLink: 'click2itbd.com/hosting'
+      displayLink: 'click2it.bd/hosting'
     },
     targeting: {
       countries: ['Bangladesh'],
@@ -240,7 +240,7 @@ let whatsAppConversations: WhatsAppConversation[] = [
         sender: 'agent',
         senderName: 'Alex M.',
         agentId: 'agent_1',
-        text: 'Here is your direct activation link and WHMCS invoice: https://click2itbd.com/client-area?invoice=INV-8491. Your server is being deployed.',
+        text: 'Here is your direct activation link and WHMCS invoice: https://click2it.bd/client-area?invoice=INV-8491. Your server is being deployed.',
         timestamp: '10:30 AM',
         status: 'read'
       },
@@ -420,7 +420,7 @@ campaignRouter.post('/campaigns/meta', async (req: any, res: Response) => {
         callToAction: 'Send WhatsApp Message',
         whatsappMessage: 'Hello Click2IT! I would like to get more information about your hosting deals.',
         mediaUrl: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80',
-        displayLink: 'click2itbd.com'
+        displayLink: 'click2it.bd'
       },
       targeting: payload.targeting || {
         countries: ['Bangladesh', 'Global'],
@@ -866,7 +866,7 @@ let staffHostsList: StaffHostMember[] = [
   {
     id: 'staff_1',
     name: 'Alex M.',
-    email: 'alex@click2itbd.com',
+    email: 'alex@click2it.bd',
     phone: '+880 1711-000111',
     role: 'Support Admin',
     status: 'active',
@@ -879,7 +879,7 @@ let staffHostsList: StaffHostMember[] = [
   {
     id: 'staff_2',
     name: 'Sarah K.',
-    email: 'sarah@click2itbd.com',
+    email: 'sarah@click2it.bd',
     phone: '+880 1711-000222',
     role: 'Sales & Operations Lead',
     status: 'active',
@@ -892,7 +892,7 @@ let staffHostsList: StaffHostMember[] = [
   {
     id: 'staff_3',
     name: 'Imran H.',
-    email: 'imran@click2itbd.com',
+    email: 'imran@click2it.bd',
     phone: '+880 1711-000333',
     role: 'Technical Support Specialist',
     status: 'active',
@@ -905,7 +905,7 @@ let staffHostsList: StaffHostMember[] = [
   {
     id: 'staff_4',
     name: 'Kamal R.',
-    email: 'kamal@click2itbd.com',
+    email: 'kamal@click2it.bd',
     phone: '+880 1711-000444',
     role: 'Billing & Accounting Specialist',
     status: 'active',
@@ -1059,7 +1059,6 @@ interface HostingCrmLead {
   assignedStaffId?: string;
   assignedStaffName?: string;
   whmcsAccountId?: string;
-  targetDomain?: string;
   notes: string[];
   timeline?: any[];
   lastContactTime: string;
@@ -1210,10 +1209,10 @@ let lastAssignedStaffIndex = 0;
 
 async function getNextRoundRobinStaff() {
   const fallbackStaff = [
-    { id: 'staff_1', name: 'Alex M. (Support Admin)', email: 'alex@click2itbd.com' },
-    { id: 'staff_2', name: 'Sarah K. (Sales Lead)', email: 'sarah@click2itbd.com' },
-    { id: 'staff_3', name: 'Imran H. (Technical Support)', email: 'imran@click2itbd.com' },
-    { id: 'staff_4', name: 'Kamal R. (Billing Specialist)', email: 'kamal@click2itbd.com' }
+    { id: 'staff_1', name: 'Alex M. (Support Admin)', email: 'alex@click2it.bd' },
+    { id: 'staff_2', name: 'Sarah K. (Sales Lead)', email: 'sarah@click2it.bd' },
+    { id: 'staff_3', name: 'Imran H. (Technical Support)', email: 'imran@click2it.bd' },
+    { id: 'staff_4', name: 'Kamal R. (Billing Specialist)', email: 'kamal@click2it.bd' }
   ];
 
   try {

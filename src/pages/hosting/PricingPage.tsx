@@ -62,7 +62,7 @@ export default function PricingPage() {
         title="Web Hosting Plans & Pricing in Bangladesh | NVMe cPanel & VPS"
         description="Affordable and transparent web hosting plans in Bangladesh. NVMe cPanel hosting, WordPress cloud, and KVM VPS servers with 99.9% uptime and 24/7 expert support."
         keywords="hosting price in bangladesh, cheap web hosting bd, cpanel hosting package, best hosting company bangladesh, vps pricing bd"
-        canonical="https://click2itbd.com/pricing"
+        canonical="https://click2it.bd/pricing"
       />
 
       <PageHeader 

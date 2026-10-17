@@ -300,7 +300,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
       name: 'Official Hosting & NVMe VPS Quotation Proposal',
       category: 'quote',
       subject: 'Official Quotation Proposal for {{contactName}} — {{targetDomain}}',
-      body: `Dear {{contactName}},\n\nPlease find your requested domain and server proposal for {{targetDomain}} below:\n\nTarget Domain: {{targetDomain}}\nCompany: {{companyName}}\nTotal Deal Value: {{dealValueBdt}}\nIncluded Features: NVMe SSD Storage, BDIX Speed Boost, Free SSL Certificate, 24/7 BDIX Support.\n\nAssigned Specialist: {{assignedStaffName}}\n\nTo proceed with instant server activation, reply to this email or click the merchant bKash/Nagad payment link below: https://click2itbd.com/pay`,
+      body: `Dear {{contactName}},\n\nPlease find your requested domain and server proposal for {{targetDomain}} below:\n\nTarget Domain: {{targetDomain}}\nCompany: {{companyName}}\nTotal Deal Value: {{dealValueBdt}}\nIncluded Features: NVMe SSD Storage, BDIX Speed Boost, Free SSL Certificate, 24/7 BDIX Support.\n\nAssigned Specialist: {{assignedStaffName}}\n\nTo proceed with instant server activation, reply to this email or click the merchant bKash/Nagad payment link below: https://click2it.bd/pay`,
       updatedAt: 'Today'
     },
     {
@@ -308,7 +308,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
       name: 'bKash / Nagad Invoice Payment Link Reminder',
       category: 'followup',
       subject: 'Payment Invoice Reminder — {{targetDomain}} Hosting Order',
-      body: `Hello {{contactName}},\n\nYour invoice for {{targetDomain}} is ready for payment.\n\nTotal Payable: {{dealValueBdt}}\nInstant Payment Link: https://click2itbd.com/pay\n\nOnce completed, your server node will be provisioned automatically within 5 minutes. Contact {{assignedStaffName}} if you need invoice modifications.`,
+      body: `Hello {{contactName}},\n\nYour invoice for {{targetDomain}} is ready for payment.\n\nTotal Payable: {{dealValueBdt}}\nInstant Payment Link: https://click2it.bd/pay\n\nOnce completed, your server node will be provisioned automatically within 5 minutes. Contact {{assignedStaffName}} if you need invoice modifications.`,
       updatedAt: 'Today'
     },
     {
@@ -486,10 +486,10 @@ export function HostingCrmTab({ state }: { state?: any }) {
   // ROUND-ROBIN AUTOMATED DISTRIBUTOR HELPER FUNCTION
   const getNextRoundRobinStaffMember = () => {
     const staffPool = activeStaffMembers && activeStaffMembers.length > 0 ? activeStaffMembers : [
-      { id: 'staff_1', name: 'Alex M.', role: 'Support Admin', email: 'alex@click2itbd.com' },
-      { id: 'staff_2', name: 'Sarah K.', role: 'Sales Lead', email: 'sarah@click2itbd.com' },
-      { id: 'staff_3', name: 'Imran H.', role: 'Technical Support', email: 'imran@click2itbd.com' },
-      { id: 'staff_4', name: 'Kamal R.', role: 'Billing Specialist', email: 'kamal@click2itbd.com' }
+      { id: 'staff_1', name: 'Alex M.', role: 'Support Admin', email: 'alex@click2it.bd' },
+      { id: 'staff_2', name: 'Sarah K.', role: 'Sales Lead', email: 'sarah@click2it.bd' },
+      { id: 'staff_3', name: 'Imran H.', role: 'Technical Support', email: 'imran@click2it.bd' },
+      { id: 'staff_4', name: 'Kamal R.', role: 'Billing Specialist', email: 'kamal@click2it.bd' }
     ];
 
     const nextIdx = roundRobinIndex % staffPool.length;
@@ -2936,10 +2936,10 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
                 <div className="space-y-2">
                   {(activeStaffMembers.length > 0 ? activeStaffMembers : [
-                    { id: 'staff_1', name: 'Alex M.', role: 'Support Admin', email: 'alex@click2itbd.com' },
-                    { id: 'staff_2', name: 'Sarah K.', role: 'Sales Lead', email: 'sarah@click2itbd.com' },
-                    { id: 'staff_3', name: 'Imran H.', role: 'Technical Support', email: 'imran@click2itbd.com' },
-                    { id: 'staff_4', name: 'Kamal R.', role: 'Billing Specialist', email: 'kamal@click2itbd.com' }
+                    { id: 'staff_1', name: 'Alex M.', role: 'Support Admin', email: 'alex@click2it.bd' },
+                    { id: 'staff_2', name: 'Sarah K.', role: 'Sales Lead', email: 'sarah@click2it.bd' },
+                    { id: 'staff_3', name: 'Imran H.', role: 'Technical Support', email: 'imran@click2it.bd' },
+                    { id: 'staff_4', name: 'Kamal R.', role: 'Billing Specialist', email: 'kamal@click2it.bd' }
                   ]).map((staff, idx) => {
                     const assignedLeadsCount = leads.filter(l => l.assignedStaffId === staff.id || l.assignedStaffName?.includes(staff.name)).length;
                     const isNextUp = (roundRobinIndex % (activeStaffMembers.length || 4)) === idx;
@@ -3824,7 +3824,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
                   type="button"
                   onClick={() => {
                     const finalTotal = quoteDetails.priceBdt - (quoteDetails.priceBdt * quoteDetails.discountPercent) / 100;
-                    const msg = `Click2IT Hosting Official Quotation\nClient: ${quoteLead.contactName}\nService: ${quoteDetails.package}\nDomain: ${quoteDetails.domainName}\nTotal BDT: ৳${finalTotal}\nbKash Payment Link: https://click2itbd.com/pay`;
+                    const msg = `Click2IT Hosting Official Quotation\nClient: ${quoteLead.contactName}\nService: ${quoteDetails.package}\nDomain: ${quoteDetails.domainName}\nTotal BDT: ৳${finalTotal}\nbKash Payment Link: https://click2it.bd/pay`;
                     navigator.clipboard.writeText(msg);
                     toast.success('Copied quotation text to clipboard!');
                   }}

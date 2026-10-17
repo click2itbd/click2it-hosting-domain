@@ -97,7 +97,7 @@ export function Sidebar({ state }) {
             { icon: Tag, label: 'Promo Codes', id: 'promo-codes' },
             { icon: Server, label: 'Servers', id: 'servers' },
             { icon: Settings, label: 'Domain Registrars', id: 'domain-registrars' },
-            { icon: Settings, label: 'Hosting API Settings', id: 'api-settings' },
+            { icon: Globe, label: 'Hosting & Domain Settings', id: 'api-settings' },
           ].map((item, idx) => {
             const isActive = activeTab === item.id;
             return (

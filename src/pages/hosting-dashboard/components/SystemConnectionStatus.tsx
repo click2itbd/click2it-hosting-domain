@@ -54,7 +54,7 @@ const SERVICE_METADATA = {
     title: 'WHM / cPanel',
     subtitle: 'Web Host Manager Server API',
     icon: Server,
-    docsUrl: 'https://server2025.click2itbd.com:2087',
+    docsUrl: 'https://server2025.click2it.bd:2087',
     defaultMsg: 'Web hosting provisioning & cPanel quotas',
   },
   cloudlinux: {

@@ -156,7 +156,7 @@ export async function fulfillOrder(orderId: string, actorUid: string): Promise<F
       console.error('Failed to read site settings:', error);
     }
     if (!adminEmail) {
-      adminEmail = process.env.ADMIN_EMAIL || config.smtp.fromEmail || 'info@click2itbd.com';
+      adminEmail = process.env.ADMIN_EMAIL || config.smtp.fromEmail || 'info@click2it.bd';
     }
     if (adminEmail) {
       const failedItems = [...domainResults.filter(r => !r.success), ...hostingResults.filter(r => !r.success)];
@@ -498,7 +498,7 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
             <div style="font-size: 14px; margin-bottom: 6px;"><strong>Datacenter:</strong> ${vpsDetails.serverLocation || 'Dhaka / Global'}</div>
           </div>
           <p>Our network team is configuring your dedicated IP address and OS image. You will receive an activation email once your server is live and reachable via SSH.</p>
-          <p>Track your server status anytime in your <a href="https://click2itbd.com/dashboard" style="color: #4f46e5; font-weight: 600;">Client Dashboard</a>.</p>
+          <p>Track your server status anytime in your <a href="https://click2it.bd/dashboard" style="color: #4f46e5; font-weight: 600;">Client Dashboard</a>.</p>
         </div>
       `;
       try {
@@ -529,7 +529,7 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
 
   try {
     const result = await provider.provisionAccount({
-      domain: hostingData.domain || 'click2itbd.com',
+      domain: hostingData.domain || 'click2it.bd',
       contactEmail,
       billingCycle: hostingData.billingCycle || 'monthly',
       planCode: hostingData.planId || 'default',
@@ -576,7 +576,7 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
           ${result.cPanelUrl ? `<div style="font-size: 14px; margin-bottom: 6px;"><strong>Control Panel:</strong> <a href="${result.cPanelUrl}" style="color: #2563eb; font-weight: 600;">${result.cPanelUrl}</a></div>` : ''}
           ${result.nameservers?.length ? `<div style="font-size: 14px; margin-top: 10px;"><strong>Nameservers:</strong><br>${result.nameservers.map((ns: string) => `&bull; ${ns}`).join('<br>')}</div>` : ''}
         </div>
-        <p>You can also log in to your account from your client portal at <a href="https://click2itbd.com" style="color: #2563eb;">click2itbd.com</a> anytime.</p>
+        <p>You can also log in to your account from your client portal at <a href="https://click2it.bd" style="color: #2563eb;">click2it.bd</a> anytime.</p>
       `;
       let footerNote = 'Need help moving your site? Contact our 24/7 technical support team.';
 
@@ -647,7 +647,7 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
                   <tr>
                     <td style="background-color: #f8fafc; border-top: 1px solid #e5e7eb; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748b;">
                       <p style="margin: 0; font-weight: 700; color: #0f172a;">${fromName}</p>
-                      <p style="margin: 4px 0 0;">Email: info@click2itbd.com | Web: click2itbd.com</p>
+                      <p style="margin: 4px 0 0;">Email: info@click2it.bd | Web: click2it.bd</p>
                     </td>
                   </tr>
                 </table>

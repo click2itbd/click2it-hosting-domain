@@ -123,7 +123,7 @@ export const ActiveHostingAccounts: React.FC = () => {
     billingCycle: 'monthly',
     username: '',
     serverIp: '103.145.118.50',
-    controlPanelUrl: 'https://cpanel.click2itbd.com',
+    controlPanelUrl: 'https://cpanel.click2it.bd',
   });
 
   const [hostingPlans, setHostingPlans] = useState<any[]>([]);
@@ -394,7 +394,7 @@ export const ActiveHostingAccounts: React.FC = () => {
       const success = await sendServiceActivationEmail(account.orderId || account.id, account.customerEmail, {
         domain: account.domain,
         serverIp: account.serverIp || '103.145.118.50',
-        controlPanelUrl: account.cPanelUrl || account.controlPanelUrl || 'https://cpanel.click2itbd.com',
+        controlPanelUrl: account.cPanelUrl || account.controlPanelUrl || 'https://cpanel.click2it.bd',
       });
 
       if (success) {
@@ -420,7 +420,7 @@ export const ActiveHostingAccounts: React.FC = () => {
       // 1. Hit WHM provision endpoint
       const result = await provisionHostingAccount({
         domain: newAccountData.domain.trim(),
-        contactEmail: newAccountData.customerEmail.trim() || 'admin@click2itbd.com',
+        contactEmail: newAccountData.customerEmail.trim() || 'admin@click2it.bd',
         billingCycle: newAccountData.billingCycle,
         planCode: newAccountData.planId,
       });
@@ -452,7 +452,7 @@ export const ActiveHostingAccounts: React.FC = () => {
         billingCycle: 'monthly',
         username: '',
         serverIp: '103.145.118.50',
-        controlPanelUrl: 'https://cpanel.click2itbd.com',
+        controlPanelUrl: 'https://cpanel.click2it.bd',
       });
       fetchAccounts();
     } catch (error: any) {

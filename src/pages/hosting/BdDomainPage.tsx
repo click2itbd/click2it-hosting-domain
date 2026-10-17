@@ -126,7 +126,7 @@ export default function BdDomainPage() {
         title=".BD Domain Registration in Bangladesh | Click2IT"
         description="Register official .bd, .com.bd, .net.bd, .edu.bd, .org.bd domains easily with Click2IT. Fast registry verification, full DNS management, and dedicated 24/7 support in Bangladesh."
         keywords="bd domain registration, com bd domain, buy bd domain bangladesh, .bd domain price, official bd domain"
-        canonical="https://click2itbd.com/domain/bd"
+        canonical="https://click2it.bd/domain/bd"
       />
       
       {/* Hero Section with Bangladesh Background */}

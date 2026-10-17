@@ -146,7 +146,7 @@ export function MetaCampaignsTab({ state }: { state?: any }) {
         callToAction: formCta,
         whatsappMessage: formWhatsappMessage,
         mediaUrl: formMediaUrl,
-        displayLink: 'click2itbd.com'
+        displayLink: 'click2it.bd'
       },
       targeting: {
         countries: ['Bangladesh', 'Global'],
@@ -607,7 +607,7 @@ export function MetaCampaignsTab({ state }: { state?: any }) {
                   <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                        click2itbd.com
+                        click2it.bd
                       </span>
                       <h5 className="font-bold text-xs text-slate-900 truncate">
                         {formHeadline}

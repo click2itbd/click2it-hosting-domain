@@ -120,7 +120,7 @@ Thank you for choosing Click2IT!
           ${sshCmd}
         </div>
 
-        <p style="font-size: 13px; color: #6b7280;">You can log in to your <a href="https://click2itbd.com/dashboard" style="color: #4f46e5; font-weight: bold;">Client Dashboard</a> to manage your services and invoices.</p>
+        <p style="font-size: 13px; color: #6b7280;">You can log in to your <a href="https://click2it.bd/dashboard" style="color: #4f46e5; font-weight: bold;">Client Dashboard</a> to manage your services and invoices.</p>
         <p style="font-size: 14px; color: #374151; margin-top: 24px;">Thank you for choosing Click2IT!</p>
       </div>
     `;

@@ -72,7 +72,7 @@ export const Login: React.FC = () => {
     } catch (error: any) {
       if (error?.message?.includes('api-key-not-valid') || error?.code?.includes('api-key')) {
         // Smooth local session fallback if client Firebase key is offline
-        handleQuickDemoLogin('admin@click2itbd.com', 'admin123', 'Alex M. (Support Admin)', 'admin');
+        handleQuickDemoLogin('admin@click2it.bd', 'admin123', 'Alex M. (Support Admin)', 'admin');
         return;
       }
       if (error?.code === 'auth/unauthorized-domain') {
@@ -82,7 +82,7 @@ export const Login: React.FC = () => {
         toast.error('Pop-up blocked. Please use Email / Password or Quick Demo buttons below.');
       } else {
         toast.error('Google sign in unavailable. Logging in with Quick Demo.');
-        handleQuickDemoLogin('admin@click2itbd.com', 'admin123', 'Alex M. (Support Admin)', 'admin');
+        handleQuickDemoLogin('admin@click2it.bd', 'admin123', 'Alex M. (Support Admin)', 'admin');
       }
     } finally {
       setLoading(false);
@@ -327,14 +327,14 @@ export const Login: React.FC = () => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('admin@click2itbd.com', 'admin123', 'Alex M. (Support Admin)', 'admin')}
+                onClick={() => handleQuickDemoLogin('admin@click2it.bd', 'admin123', 'Alex M. (Support Admin)', 'admin')}
                 className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 👑 Admin Portal
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('customer@click2itbd.com', 'customer123', 'Tanvir Ahmed', 'user')}
+                onClick={() => handleQuickDemoLogin('customer@click2it.bd', 'customer123', 'Tanvir Ahmed', 'user')}
                 className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 👤 Client Area

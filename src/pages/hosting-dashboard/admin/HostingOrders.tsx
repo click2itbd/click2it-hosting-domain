@@ -690,7 +690,7 @@ export default function HostingOrders() {
         await sendServiceActivationEmail(order.id, order.customerEmail, {
           domain: firstAccount?.domain || order.items?.find(i => i.domain)?.domain || 'Hosting Service',
           serverIp: firstAccount?.serverIp || 'Assigned Server',
-          controlPanelUrl: firstAccount?.controlPanelUrl || 'https://cpanel.click2itbd.com'
+          controlPanelUrl: firstAccount?.controlPanelUrl || 'https://cpanel.click2it.bd'
         });
         toast.success("Activation email sent successfully!");
       }

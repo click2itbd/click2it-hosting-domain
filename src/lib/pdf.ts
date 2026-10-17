@@ -189,7 +189,7 @@ export const generatePDF = async (
   });
   
   doc.text(finalPhone, pageWidth - 15, addrY, { align: "right" });
-  doc.text(settings.website || "www.click2itbd.com", pageWidth - 15, addrY + 5, { align: "right" });
+  doc.text(settings.website || "www.click2it.bd", pageWidth - 15, addrY + 5, { align: "right" });
 
   currentY = Math.max(currentY + 15, addrY + 5);
 

@@ -187,7 +187,7 @@ export default function SupportPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const contactPhone = settings?.contactPhone || settings?.phone || '+8809640887777';
-  const contactEmail = settings?.contactEmail || settings?.email || 'info@click2itbd.com';
+  const contactEmail = settings?.contactEmail || settings?.email || 'info@click2it.bd';
   const cleanPhone = contactPhone.replace(/[^0-9]/g, '');
 
   // Real-time dynamic search filter

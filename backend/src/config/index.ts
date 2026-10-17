@@ -47,7 +47,7 @@ export const config = {
     user: process.env.SMTP_USER || '',
     password: process.env.SMTP_PASSWORD || '',
     fromName: process.env.SMTP_FROM_NAME || 'Click2IT',
-    fromEmail: process.env.SMTP_FROM_EMAIL || 'noreply@click2itbd.com',
+    fromEmail: process.env.SMTP_FROM_EMAIL || 'noreply@click2it.bd',
   },
   cloudlinux: {
     enabled: process.env.CLOUDLINUX_ENABLED || 'false',

@@ -111,7 +111,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
   const [currentAgent, setCurrentAgent] = useState<StaffMember>({
     id: 'staff_1',
     name: 'Alex M.',
-    email: 'alex@click2itbd.com',
+    email: 'alex@click2it.bd',
     role: 'Support Admin'
   });
 
@@ -180,8 +180,8 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
   const cannedReplies = [
     { label: '👋 Welcome', text: 'Hello! Welcome to Click2IT Hosting. How can our technical support team assist you today?' },
     { label: '🌐 Nameservers', text: 'Our official nameservers are:\nns1.click2itbd.com\nns2.click2itbd.com\nPlease update them in your domain management panel.' },
-    { label: '🎛️ cPanel URL', text: 'You can access your cPanel control panel at: https://cpanel.yourdomain.com:2083 or via our Client Area at https://click2itbd.com/client-area' },
-    { label: '💳 Invoice Link', text: 'Here is your direct invoice payment link: https://click2itbd.com/client-area?tab=invoices. Instant service activation once payment completes!' },
+    { label: '🎛️ cPanel URL', text: 'You can access your cPanel control panel at: https://cpanel.yourdomain.com:2083 or via our Client Area at https://click2it.bd/client-area' },
+    { label: '💳 Invoice Link', text: 'Here is your direct invoice payment link: https://click2it.bd/client-area?tab=invoices. Instant service activation once payment completes!' },
     { label: '🚀 VPS Provisioned', text: 'Your Cloud NVMe VPS has been deployed successfully. Root credentials and dedicated IP have been sent to your email.' }
   ];
 
@@ -533,7 +533,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
     } else if (lastMsg.toLowerCase().includes('dns') || lastMsg.toLowerCase().includes('nameserver')) {
       suggestion = 'Our primary DNS nameservers are ns1.click2itbd.com and ns2.click2itbd.com. I can also configure your custom A and MX records directly from WHM for you.';
     } else if (lastMsg.toLowerCase().includes('invoice') || lastMsg.toLowerCase().includes('payment')) {
-      suggestion = 'You can review and pay your invoice securely at https://click2itbd.com/client-area?tab=invoices via bKash, Nagad, or Credit Card with instant activation.';
+      suggestion = 'You can review and pay your invoice securely at https://click2it.bd/client-area?tab=invoices via bKash, Nagad, or Credit Card with instant activation.';
     }
 
     setNewMessageText(suggestion);
@@ -1572,7 +1572,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                           required
                           value={newStaffForm.email}
                           onChange={(e) => setNewStaffForm({ ...newStaffForm, email: e.target.value })}
-                          placeholder="e.g. mahmudul@click2itbd.com"
+                          placeholder="e.g. mahmudul@click2it.bd"
                           className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
@@ -1737,7 +1737,7 @@ export function WhatsAppCrmTab({ state }: { state?: any }) {
                     { label: '👋 Welcome', text: 'Hello! Welcome to Click2IT Hosting. How can our sales and technical support team assist you today?' },
                     { label: '🚀 VPS 40% OFF', text: 'Hi! We have an exclusive 40% discount on pure Cloud NVMe VPS with root access and 1 Gbps bandwidth. Would you like a custom quote?' },
                     { label: '🌐 Domain Inquiry', text: 'Hello! I noticed you are inquiring about domain registration (.BD / .COM). How may we help reserve your digital identity?' },
-                    { label: '💳 Invoice Payment', text: 'Hello! Here is your secure invoice link for Click2IT Hosting: https://click2itbd.com/client-area?tab=invoices. Instant service activation!' }
+                    { label: '💳 Invoice Payment', text: 'Hello! Here is your secure invoice link for Click2IT Hosting: https://click2it.bd/client-area?tab=invoices. Instant service activation!' }
                   ].map((tpl, i) => (
                     <button
                       key={i}

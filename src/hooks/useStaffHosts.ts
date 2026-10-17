@@ -16,10 +16,10 @@ export interface StaffHostMember {
 
 export function useStaffHosts() {
   const [staffMembers, setStaffMembers] = useState<StaffHostMember[]>([
-    { id: 'staff_1', name: 'Alex M.', email: 'alex@click2itbd.com', phone: '+880 1711-000111', role: 'Support Admin', status: 'active', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80' },
-    { id: 'staff_2', name: 'Sarah K.', email: 'sarah@click2itbd.com', phone: '+880 1711-000222', role: 'Sales & Operations Lead', status: 'active', avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100&auto=format&fit=crop&q=80' },
-    { id: 'staff_3', name: 'Imran H.', email: 'imran@click2itbd.com', phone: '+880 1711-000333', role: 'Technical Support Specialist', status: 'active', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80' },
-    { id: 'staff_4', name: 'Kamal R.', email: 'kamal@click2itbd.com', phone: '+880 1711-000444', role: 'Billing & Accounting Specialist', status: 'active', avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80' }
+    { id: 'staff_1', name: 'Alex M.', email: 'alex@click2it.bd', phone: '+880 1711-000111', role: 'Support Admin', status: 'active', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80' },
+    { id: 'staff_2', name: 'Sarah K.', email: 'sarah@click2it.bd', phone: '+880 1711-000222', role: 'Sales & Operations Lead', status: 'active', avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100&auto=format&fit=crop&q=80' },
+    { id: 'staff_3', name: 'Imran H.', email: 'imran@click2it.bd', phone: '+880 1711-000333', role: 'Technical Support Specialist', status: 'active', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80' },
+    { id: 'staff_4', name: 'Kamal R.', email: 'kamal@click2it.bd', phone: '+880 1711-000444', role: 'Billing & Accounting Specialist', status: 'active', avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80' }
   ]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);

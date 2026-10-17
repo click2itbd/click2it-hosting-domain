@@ -364,7 +364,7 @@ ordersRouter.post('/admin/:orderId/payment/verify', requireFirebaseAuth, async (
                           <td style="background-color: #f8fafc; border-top: 1px solid #e5e7eb; padding: 24px 30px; text-align: center;">
                             <p style="margin: 0; font-size: 13px; font-weight: 700; color: #0f172a;">Click2IT BD</p>
                             <p style="margin: 4px 0 0; font-size: 12px; color: #64748b;">
-                              Email: <a href="mailto:info@click2itbd.com" style="color: #2563eb; text-decoration: none;">info@click2itbd.com</a> | Web: <a href="https://click2itbd.com" style="color: #2563eb; text-decoration: none;">click2itbd.com</a>
+                              Email: <a href="mailto:info@click2it.bd" style="color: #2563eb; text-decoration: none;">info@click2it.bd</a> | Web: <a href="https://click2it.bd" style="color: #2563eb; text-decoration: none;">click2it.bd</a>
                             </p>
                             <p style="margin: 8px 0 0; font-size: 11px; color: #94a3b8;">
                               © 2026 Click2IT BD. All rights reserved.

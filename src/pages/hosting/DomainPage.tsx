@@ -50,7 +50,7 @@ const DomainPage = () => {
         title="Domain Registration in Bangladesh | Buy .COM, .NET at Best Price"
         description="Search and register your domain name at lowest price in Bangladesh. Instant activation, free DNS management, WHOIS privacy protection, and 24/7 support at Click2IT."
         keywords="domain registration bangladesh, buy domain bd, cheap domain name, .com domain price bd, click2it domain, website name bd"
-        canonical="https://click2itbd.com/domain"
+        canonical="https://click2it.bd/domain"
       />
       
       <PageHeader 

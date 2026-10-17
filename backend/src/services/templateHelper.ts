@@ -31,7 +31,7 @@ export async function getDynamicTemplate(
     }
     
     const fromName = process.env.SMTP_FROM_NAME || 'Click2IT BD';
-    const fromEmail = process.env.SMTP_FROM_EMAIL || 'info@click2itbd.com';
+    const fromEmail = process.env.SMTP_FROM_EMAIL || 'info@click2it.bd';
     
     const finalHtml = `
       <!DOCTYPE html>
@@ -71,7 +71,7 @@ export async function getDynamicTemplate(
                 <tr>
                   <td style="background-color: #f8fafc; border-top: 1px solid #e5e7eb; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748b;">
                     <p style="margin: 0; font-weight: 700; color: #0f172a;">${fromName}</p>
-                    <p style="margin: 4px 0 0;">Email: ${fromEmail} | Web: click2itbd.com</p>
+                    <p style="margin: 4px 0 0;">Email: ${fromEmail} | Web: click2it.bd</p>
                   </td>
                 </tr>
               </table>

@@ -32,7 +32,7 @@ export const SEO: React.FC<SEOProps> = ({
   const isHostingDomain = currentDomain === 'click2it.bd' || currentDomain === 'www.click2it.bd' || currentDomain === '127.0.0.1' || pathname.startsWith('/hosting') || pathname.startsWith('/domain') || pathname.startsWith('/vps') || pathname.startsWith('/ssl') || pathname.startsWith('/services') || pathname.startsWith('/pricing');
   
   const siteName = settings?.companyName || (isHostingDomain ? 'Click2IT Hosting' : 'Click2IT');
-  const baseDomain = isHostingDomain ? 'https://click2it.bd' : 'https://click2itbd.com';
+  const baseDomain = settings?.website || (settings?.primaryDomain ? `https://${settings.primaryDomain}` : 'https://click2it.bd');
   
   const defaultTitle = isHostingDomain 
     ? `${siteName} - High-Speed Web Hosting, VPS & Domain in Bangladesh`

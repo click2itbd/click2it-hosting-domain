@@ -33,7 +33,7 @@ export async function getSmtpProvider(forceReload = false): Promise<SmtpEmailPro
   let user = '';
   let password = '';
   let fromName = 'Click2IT';
-  let fromEmail = 'noreply@click2itbd.com';
+  let fromEmail = 'noreply@click2it.bd';
 
   // 1. Check Firestore settings/site first (allows runtime admin configuration from UI)
   try {
@@ -471,7 +471,7 @@ export const EmailTemplates = {
         <p><strong>Product:</strong> ${productName}</p>
         <p><strong>Current Stock:</strong> ${currentStock} units</p>
         <p>Please restock this product soon to avoid missing out on sales.</p>
-        <a href="https://click2itbd.com/admin" style="display: inline-block; padding: 10px 20px; background: #dc2626; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px;">Go to Admin Panel</a>
+        <a href="https://click2it.bd/admin" style="display: inline-block; padding: 10px 20px; background: #dc2626; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px;">Go to Admin Panel</a>
       </div>
     `,
   }),

@@ -123,7 +123,7 @@ export const BulkDomainSearch = () => {
         title="Bulk Domain Search & Registration in Bangladesh | Click2IT"
         description="Search up to 20 domains at once and register multiple domain names with ease. Protect your brand across .com, .net, .org, and more at Click2IT."
         keywords="bulk domain search, mass domain check bd, register multiple domains, cheap bulk domains"
-        canonical="https://click2itbd.com/domain/bulk"
+        canonical="https://click2it.bd/domain/bulk"
       />
       <div className="bg-[#081621] text-white pt-24 pb-16">
         <div className="max-w-7xl mx-auto px-4 text-center">

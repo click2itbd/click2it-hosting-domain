@@ -54,7 +54,7 @@ Dear Sir,
 
 I, the undersigned ${applicantName || '[Your Full Name]'}, am the legal and registered owner of the .BD domain "${targetDomain}".
 
-I would like to authorize Click2IT (Web: click2it.bd / info@click2itbd.com) as the authorized technical management partner for our domain. Kindly update the Technical and Billing contact details in the central registry database as follows:
+I would like to authorize Click2IT (Web: click2it.bd / info@click2it.bd) as the authorized technical management partner for our domain. Kindly update the Technical and Billing contact details in the central registry database as follows:
 
 Domain Name: ${targetDomain}
 New Technical Contact ID / Partner: Click2IT
@@ -151,7 +151,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
       // Send email alert to admin
       try {
         await sendEmail({
-          to: 'info@click2itbd.com',
+          to: 'info@click2it.bd',
           subject: `[Transfer Request] .BD Domain: ${cleanDomain}`,
           html: `<h3>New .BD Domain Manual Transfer Request</h3>
                  <p><strong>Domain:</strong> ${cleanDomain}</p>
@@ -444,7 +444,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
                 ) : (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
                     <AlertCircle size={16} className="flex-shrink-0 text-amber-600" />
-                    <span>You can submit this form now and email your documents to <strong>info@click2itbd.com</strong> or WhatsApp <strong>+8801729887777</strong> quoting your domain name.</span>
+                    <span>You can submit this form now and email your documents to <strong>info@click2it.bd</strong> or WhatsApp <strong>+8801729887777</strong> quoting your domain name.</span>
                   </div>
                 )}
               </div>

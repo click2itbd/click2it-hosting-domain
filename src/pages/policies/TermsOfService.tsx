@@ -68,7 +68,7 @@ const TermsOfService = () => {
               <section>
                 <h2 className="text-2xl font-bold text-gray-900 mb-3">8. Contact Information</h2>
                 <p>
-                  If you have any questions about these Terms of Service, please contact us at <strong>info@click2itbd.com</strong>.
+                  If you have any questions about these Terms of Service, please contact us at <strong>info@click2it.bd</strong>.
                 </p>
               </section>
             </div>

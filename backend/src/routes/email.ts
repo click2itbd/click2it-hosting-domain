@@ -135,7 +135,7 @@ emailRouter.post('/low-stock-warning', requireFirebaseAuth, async (req: any, res
     const { productName, currentStock } = req.body;
     if (!productName || currentStock === undefined) return res.status(400).json({ error: 'Missing fields' });
     
-    const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM_EMAIL || 'info@click2itbd.com';
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM_EMAIL || 'info@click2it.bd';
     const defaultTmpl = EmailTemplates.lowStockWarning(productName, currentStock);
     
     const template = await getDynamicTemplate(
@@ -162,7 +162,7 @@ emailRouter.post('/notify-admin-new-order', requireFirebaseAuth, async (req: any
       return res.status(400).json({ error: 'Missing orderId or orderData' });
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM_EMAIL || 'info@click2itbd.com';
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM_EMAIL || 'info@click2it.bd';
     const customerName = orderData.customerName || 'A customer';
     const totalAmount = orderData.total || 0;
     
@@ -183,7 +183,7 @@ emailRouter.post('/notify-admin-new-order', requireFirebaseAuth, async (req: any
         <p><strong>Payment Method:</strong> ${orderData.paymentMethod || 'N/A'}</p>
         ${itemsHtml}
         <br/>
-        <a href="https://click2itbd.com/admin" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 5px;">View Order in Admin Panel</a>
+        <a href="https://click2it.bd/admin" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 5px;">View Order in Admin Panel</a>
       </div>
     `;
 

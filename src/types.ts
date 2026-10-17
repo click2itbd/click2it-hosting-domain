@@ -352,6 +352,17 @@ export interface SiteSettings {
   apiSettings?: ApiSettings;
   documentDesign?: DocumentDesignSettings;
   
+  // Hosting & Primary Domain Settings
+  primaryDomain?: string;
+  hostingDomain?: string;
+  nameserver1?: string;
+  nameserver2?: string;
+  nameserver3?: string;
+  nameserver4?: string;
+  cpanelUrl?: string;
+  webmailUrl?: string;
+  clientAreaUrl?: string;
+
   // New Business Settings from UI
   businessName?: string;
   website?: string;
