@@ -1,3 +1,4 @@
+import { Resend } from 'resend';
 import { getAdminDb } from '../firebase/admin.js';
 import { SmtpEmailProvider, SmtpConfig } from '../providers/email/SmtpEmailProvider.js';
 
@@ -129,7 +130,112 @@ export async function isEmailDuplicate(options: EmailOptions): Promise<boolean> 
   }
 }
 
-export async function sendEmail(options: EmailOptions, retries: number = 2): Promise<{ success: boolean; error?: string }> {
+export async function getResendConfig(): Promise<{ apiKey: string; fromEmail: string; fromName: string }> {
+  let apiKey = process.env.RESEND_API_KEY || '';
+  let fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@click2it.bd';
+  let fromName = process.env.SMTP_FROM_NAME || 'Click2IT';
+
+  try {
+    const db = getAdminDb();
+    if (db) {
+      const [siteSnap, hostingSnap, keysSnap] = await Promise.all([
+        db.collection('settings').doc('site').get().catch(() => null),
+        db.collection('settings').doc('hostingApiConfig').get().catch(() => null),
+        db.collection('settings').doc('api_keys').get().catch(() => null),
+      ]);
+
+      for (const snap of [keysSnap, hostingSnap, siteSnap]) {
+        if (snap && snap.exists) {
+          const data = snap.data() || {};
+          if (data.resendApiKey && String(data.resendApiKey).trim()) {
+            apiKey = String(data.resendApiKey).trim();
+          }
+          if (data.resendFromEmail && String(data.resendFromEmail).trim()) {
+            fromEmail = String(data.resendFromEmail).trim();
+          } else if (data.mailFromAddress && String(data.mailFromAddress).trim()) {
+            fromEmail = String(data.mailFromAddress).trim();
+          }
+          if (data.mailFromName && String(data.mailFromName).trim()) {
+            fromName = String(data.mailFromName).trim();
+          } else if (data.brandName && String(data.brandName).trim()) {
+            fromName = String(data.brandName).trim();
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not read Resend config from Firestore:', err);
+  }
+
+  return { apiKey, fromEmail, fromName };
+}
+
+export async function sendViaResend(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: any[]
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  const { apiKey, fromEmail, fromName } = await getResendConfig();
+  if (!apiKey) {
+    return { success: false, error: 'RESEND_API_KEY not configured' };
+  }
+
+  const resend = new Resend(apiKey);
+  const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`;
+
+  const sendPayload = async (fromAddress: string) => {
+    const formattedAttachments =
+      attachments && attachments.length > 0
+        ? attachments.map((att: any) => ({
+            filename: att.filename || 'attachment.pdf',
+            content: att.content,
+          }))
+        : undefined;
+
+    const { data, error } = await resend.emails.send({
+      from: fromAddress,
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      html,
+      ...(formattedAttachments ? { attachments: formattedAttachments } : {}),
+    });
+
+    if (!error && data?.id) {
+      return { success: true, id: data.id };
+    }
+    return {
+      success: false,
+      error: error?.message || 'Resend delivery failed',
+    };
+  };
+
+  try {
+    const primaryAttempt = await sendPayload(formattedFrom);
+    if (primaryAttempt.success) {
+      return primaryAttempt;
+    }
+
+    // If custom domain is not yet verified in Resend, automatically retry with onboarding@resend.dev
+    if (
+      !fromEmail.endsWith('@resend.dev') &&
+      (primaryAttempt.error?.toLowerCase().includes('domain') ||
+        primaryAttempt.error?.toLowerCase().includes('verified') ||
+        primaryAttempt.error?.toLowerCase().includes('not allowed'))
+    ) {
+      const fallbackAttempt = await sendPayload(`${fromName} <onboarding@resend.dev>`);
+      if (fallbackAttempt.success) {
+        return fallbackAttempt;
+      }
+    }
+
+    return primaryAttempt;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Resend request failed' };
+  }
+}
+
+export async function sendEmail(options: EmailOptions, retries: number = 2): Promise<{ success: boolean; error?: string; provider?: string }> {
   const { to, subject, html, attachments } = options;
 
   if (await isEmailDuplicate(options)) {
@@ -137,6 +243,18 @@ export async function sendEmail(options: EmailOptions, retries: number = 2): Pro
     return { success: true };
   }
 
+  // 1. Try Resend first if RESEND_API_KEY is configured
+  const resendCfg = await getResendConfig();
+  if (resendCfg.apiKey) {
+    const resendResult = await sendViaResend(to, subject, html, attachments);
+    if (resendResult.success) {
+      await logEmailToFirestore(options, 'sent');
+      return { success: true, provider: 'resend' };
+    }
+    console.warn('[Email] Resend delivery failed, attempting SMTP fallback:', resendResult.error);
+  }
+
+  // 2. Fallback to SMTP Provider
   const provider = await getSmtpProvider();
 
   let lastError: string | undefined;
@@ -152,7 +270,7 @@ export async function sendEmail(options: EmailOptions, retries: number = 2): Pro
 
     if (result.success) {
       await logEmailToFirestore(options, 'sent');
-      return { success: true };
+      return { success: true, provider: 'smtp' };
     }
 
     lastError = result.error;
@@ -492,6 +610,59 @@ export const EmailTemplates = {
         </ul>
         <p>If you have any questions, feel free to contact our support team.</p>
         <p>Best regards,<br>Click2IT Team</p>
+      </div>
+    `,
+  }),
+
+  passwordReset: (email: string, resetUrl: string, expiresInMinutes: number = 60) => ({
+    subject: 'Reset Your Click2IT Account Password',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #081621 0%, #1e3a8a 100%); padding: 28px 24px; text-align: center;">
+          <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: -0.4px;">CLICK2IT</h1>
+          <p style="margin: 6px 0 0; color: #93c5fd; font-size: 13px;">Account Security & Password Recovery</p>
+        </div>
+        <div style="padding: 28px 28px 24px; color: #1e293b; font-size: 14px; line-height: 1.6;">
+          <h2 style="margin: 0 0 12px; color: #0f172a; font-size: 18px; font-weight: 700;">Password Reset Request</h2>
+          <p style="margin: 0 0 16px;">Hello,</p>
+          <p style="margin: 0 0 20px;">We received a request to reset the password for your Click2IT account associated with <strong>${email}</strong>. Click the secure button below to set a new password:</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${resetUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);">
+              Reset My Password
+            </a>
+          </div>
+          <p style="margin: 0 0 12px; font-size: 12px; color: #64748b;">Or copy and paste this link into your browser:</p>
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; word-break: break-all; font-family: monospace; font-size: 12px; color: #2563eb; margin-bottom: 20px;">
+            ${resetUrl}
+          </div>
+          <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 14px; border-radius: 0 8px 8px 0; font-size: 12px; color: #92400e;">
+            <strong>Security Notice:</strong> This password reset link is valid for <strong>${expiresInMinutes} minutes</strong>. If you did not request a password reset, please ignore this email — your account remains secure.
+          </div>
+        </div>
+        <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 24px; text-align: center; font-size: 12px; color: #64748b;">
+          <p style="margin: 0; font-weight: 700; color: #0f172a;">Click2IT Hosting & Cloud</p>
+          <p style="margin: 4px 0 0;">Email: info@click2it.bd | Web: <a href="https://click2it.bd" style="color: #2563eb; text-decoration: none;">click2it.bd</a></p>
+        </div>
+      </div>
+    `,
+  }),
+
+  passwordResetConfirmation: (email: string) => ({
+    subject: 'Your Click2IT Password Has Been Changed',
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #081621 0%, #065f46 100%); padding: 26px 24px; text-align: center;">
+          <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 800;">CLICK2IT</h1>
+          <p style="margin: 6px 0 0; color: #6ee7b7; font-size: 13px;">Password Updated Successfully</p>
+        </div>
+        <div style="padding: 26px 28px; color: #1e293b; font-size: 14px; line-height: 1.6;">
+          <p style="margin: 0 0 14px;">Hello,</p>
+          <p style="margin: 0 0 16px;">The password for your Click2IT account (<strong>${email}</strong>) was recently changed.</p>
+          <p style="margin: 0 0 20px;">If you made this change, no further action is needed. You can sign in anytime at <a href="https://click2it.bd/login" style="color: #2563eb; font-weight: 600;">click2it.bd/login</a>.</p>
+          <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 14px; border-radius: 0 8px 8px 0; font-size: 12px; color: #991b1b;">
+            If you did not authorize this change, please contact our security & support team immediately at <strong>info@click2it.bd</strong>.
+          </div>
+        </div>
       </div>
     `,
   }),

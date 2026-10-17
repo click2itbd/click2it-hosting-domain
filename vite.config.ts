@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3000,
-      host: '0.0.0.0',
+      host: "0.0.0.0",
       allowedHosts: true,
       hmr: process.env.DISABLE_HMR !== "true",
     },
@@ -24,6 +24,9 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
+          entryFileNames: "assets/index.js",
+          chunkFileNames: "assets/[name].js",
+          assetFileNames: "assets/[name].[ext]",
           manualChunks(id) {
             if (!id.includes("node_modules")) return undefined;
             if (id.includes("firebase/auth") || id.includes("@firebase/auth")) {

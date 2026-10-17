@@ -30,6 +30,7 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 
 const Hosting = lazyWithRetry(() => import('./pages/Hosting'));
 const Login = lazyWithRetry(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const HostingDetails = lazyWithRetry(() => import('./pages/HostingDetails').then(m => ({ default: m.HostingDetails })));
 const HostingBillingDashboard = lazyWithRetry(() => import('./pages/hosting-dashboard/HostingBillingDashboard').then(m => ({ default: m.HostingBillingDashboard })));
 const MyServices = lazyWithRetry(() => import('./pages/MyServices').then(m => ({ default: m.MyServices })));
@@ -83,6 +84,8 @@ export default function App() {
                   <Route path="/login" element={<LazyWrapper><Login /></LazyWrapper>} />
                   <Route path="/register" element={<LazyWrapper><Login /></LazyWrapper>} />
                   <Route path="/signup" element={<LazyWrapper><Login /></LazyWrapper>} />
+                  <Route path="/forgot-password" element={<LazyWrapper><Login /></LazyWrapper>} />
+                  <Route path="/reset-password" element={<LazyWrapper><ResetPassword /></LazyWrapper>} />
                   <Route path="/account/services" element={<ProtectedRoute><LazyWrapper><MyServices /></LazyWrapper></ProtectedRoute>} />
                   <Route path="/my-services" element={<Navigate to="/account/services" replace />} />
                   <Route path="/client-area" element={<Navigate to="/profile" replace />} />

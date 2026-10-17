@@ -172,6 +172,8 @@ export function createApp(): Express {
   apiRouter.post("/auth/login", authLimiter);
   apiRouter.post("/auth/register", authLimiter);
   apiRouter.post("/auth/forgot-password", authLimiter);
+  apiRouter.post("/email/forgot-password", authLimiter);
+  apiRouter.post("/forgot-password", authLimiter);
   apiRouter.post("/auth/otp", authLimiter);
   apiRouter.use("/ai/chat", sensitiveLimiter);
 
@@ -188,6 +190,7 @@ export function createApp(): Express {
   apiRouter.use("/ai", aiRouter);
   apiRouter.use("/webhook", webhookRouter);
   apiRouter.use("/customers", customersRouter);
+  apiRouter.use("/email", emailRouter);
   apiRouter.use("/", emailRouter);
   apiRouter.use("/", campaignRouter);
 

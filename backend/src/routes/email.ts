@@ -213,4 +213,226 @@ emailRouter.post('/notify-admin-new-order', requireFirebaseAuth, async (req: any
   }
 });
 
+// --- Public Password Reset Notification System (Resend + Token Verification) ---
+
+emailRouter.post('/forgot-password', async (req: any, res: Response) => {
+  try {
+    const rawEmail = req.body?.email;
+    if (!rawEmail || typeof rawEmail !== 'string' || !rawEmail.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Please provide a valid email address.' });
+    }
+
+    const cleanEmail = rawEmail.trim().toLowerCase();
+    const crypto = await import('crypto');
+    const { getAdminDb, getAdminAuth } = await import('../firebase/admin.js');
+    const db = getAdminDb();
+
+    // Determine base URL for the password reset link
+    let baseUrl = req.body?.origin || process.env.FRONTEND_URL || 'https://click2it.bd';
+    try {
+      const siteSnap = await db.collection('settings').doc('site').get();
+      if (siteSnap.exists) {
+        const sData = siteSnap.data() || {};
+        if (!req.body?.origin && (sData.primaryDomain || sData.hostingDomain)) {
+          const dom = sData.primaryDomain || sData.hostingDomain;
+          baseUrl = dom.startsWith('http') ? dom : `https://${dom}`;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    baseUrl = baseUrl.replace(/\/+$/, '');
+
+    // Generate cryptographically secure 60-minute reset token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresInMinutes = 60;
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString();
+
+    await db.collection('passwordResets').doc(token).set({
+      token,
+      email: cleanEmail,
+      expiresAt,
+      used: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Optionally generate Firebase Admin oobCode if service account is active
+    let oobCode = '';
+    try {
+      const adminAuth = getAdminAuth();
+      if (adminAuth) {
+        const fbLink = await adminAuth.generatePasswordResetLink(cleanEmail, {
+          url: `${baseUrl}/login`,
+        });
+        const parsedUrl = new URL(fbLink);
+        oobCode = parsedUrl.searchParams.get('oobCode') || '';
+      }
+    } catch {
+      // Fallback to token-based link if Firebase Admin Auth link is not generated
+    }
+
+    const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(cleanEmail)}${
+      oobCode ? `&oobCode=${encodeURIComponent(oobCode)}` : ''
+    }`;
+
+    const defaultTmpl = EmailTemplates.passwordReset(cleanEmail, resetUrl, expiresInMinutes);
+    const template = await getDynamicTemplate(
+      'password_reset',
+      { email: cleanEmail, resetUrl, expiresInMinutes: String(expiresInMinutes) },
+      defaultTmpl.subject,
+      defaultTmpl.html
+    );
+
+    const emailResult = await sendEmail({
+      to: cleanEmail,
+      customerEmail: cleanEmail,
+      subject: template.subject,
+      html: template.html,
+      category: 'system',
+      type: 'password_reset',
+    });
+
+    if (!emailResult.success) {
+      return res.status(200).json({
+        success: true,
+        emailDispatched: false,
+        fallbackClientFirebase: true,
+        message: 'Password reset token generated. Triggering client email dispatch.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      emailDispatched: true,
+      provider: emailResult.provider || 'resend',
+      message: 'A secure password reset link has been sent to your email.',
+    });
+  } catch (error: any) {
+    console.error('[Forgot Password Error]:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Failed to process password reset request.',
+    });
+  }
+});
+
+emailRouter.post('/verify-reset-token', async (req: any, res: Response) => {
+  try {
+    const { token, email } = req.body || {};
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Missing reset token.' });
+    }
+
+    const { getAdminDb } = await import('../firebase/admin.js');
+    const db = getAdminDb();
+    const snap = await db.collection('passwordResets').doc(String(token)).get();
+
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, error: 'Invalid or expired password reset link.' });
+    }
+
+    const data = snap.data() || {};
+    if (data.used) {
+      return res.status(400).json({ success: false, error: 'This password reset link has already been used.' });
+    }
+
+    if (new Date(data.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({ success: false, error: 'This password reset link has expired. Please request a new one.' });
+    }
+
+    if (email && data.email && data.email.toLowerCase() !== String(email).trim().toLowerCase()) {
+      return res.status(400).json({ success: false, error: 'Token does not match the provided email address.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      email: data.email,
+      expiresAt: data.expiresAt,
+    });
+  } catch (error: any) {
+    console.error('[Verify Reset Token Error]:', error);
+    return res.status(500).json({ success: false, error: 'Failed to verify reset token.' });
+  }
+});
+
+emailRouter.post('/reset-password', async (req: any, res: Response) => {
+  try {
+    const { token, email, newPassword, completedViaFirebaseClient } = req.body || {};
+    if (!newPassword || String(newPassword).length < 8) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 8 characters long.' });
+    }
+
+    const { getAdminDb, getAdminAuth } = await import('../firebase/admin.js');
+    const db = getAdminDb();
+
+    let targetEmail = email ? String(email).trim().toLowerCase() : '';
+
+    if (token) {
+      const snap = await db.collection('passwordResets').doc(String(token)).get();
+      if (!snap.exists) {
+        return res.status(404).json({ success: false, error: 'Invalid or expired password reset token.' });
+      }
+      const data = snap.data() || {};
+      if (data.used) {
+        return res.status(400).json({ success: false, error: 'This password reset link has already been used.' });
+      }
+      if (new Date(data.expiresAt).getTime() < Date.now()) {
+        return res.status(400).json({ success: false, error: 'This password reset link has expired.' });
+      }
+      targetEmail = data.email || targetEmail;
+    }
+
+    if (!targetEmail) {
+      return res.status(400).json({ success: false, error: 'Email address could not be determined.' });
+    }
+
+    // Update password in Firebase Auth if not already completed via Firebase client confirmPasswordReset
+    if (!completedViaFirebaseClient) {
+      const adminAuth = getAdminAuth();
+      if (adminAuth) {
+        const userRecord = await adminAuth.getUserByEmail(targetEmail);
+        await adminAuth.updateUser(userRecord.uid, { password: String(newPassword) });
+      } else {
+        return res.status(400).json({
+          success: false,
+          requiresOobCode: true,
+          error: 'Please use the verification code from your email to complete the password reset.',
+        });
+      }
+    }
+
+    if (token) {
+      await db.collection('passwordResets').doc(String(token)).set(
+        {
+          used: true,
+          usedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    }
+
+    // Send confirmation notification via Resend
+    const confirmTmpl = EmailTemplates.passwordResetConfirmation(targetEmail);
+    await sendEmail({
+      to: targetEmail,
+      customerEmail: targetEmail,
+      subject: confirmTmpl.subject,
+      html: confirmTmpl.html,
+      category: 'system',
+      type: 'password_reset_confirmation',
+    }).catch(() => null);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Your password has been reset successfully. You can now sign in with your new password.',
+    });
+  } catch (error: any) {
+    console.error('[Reset Password Error]:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Failed to reset password.',
+    });
+  }
+});
+
 export default emailRouter;
