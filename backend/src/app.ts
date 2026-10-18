@@ -55,6 +55,8 @@ export function createApp(): Express {
             "https://*",
             "wss://*",
             "ws://*",
+            "http://localhost:*",
+            "ws://localhost:*",
           ],
           fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
           objectSrc: ["'none'"],

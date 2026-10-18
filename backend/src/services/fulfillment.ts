@@ -80,7 +80,7 @@ export async function fulfillOrder(orderId: string, actorUid: string): Promise<F
   let hasPending = false;
 
   for (const docSnap of domainOrdersSnap.docs) {
-    const domainData = docSnap.data();
+    const domainData = { customerEmail: orderData.customerEmail, customerName: orderData.customerName, ...docSnap.data() };
     const result = await fulfillDomainOrder(docSnap.id, domainData, actorUid);
     domainResults.push(result);
     if (!result.success) {
@@ -133,13 +133,61 @@ export async function fulfillOrder(orderId: string, actorUid: string): Promise<F
   await writeAuditLog(db, orderId, auditAction, actorUid, 'processing', orderStatus, null, auditMessage);
 
   if (finalStatus === 'completed' && orderData.customerEmail) {
-    const subject = `Order Completed - #${orderId.slice(0, 8)}`;
+    const subject = `Order Completed - #${orderId.slice(0, 8)} [${orderData.documentNumber || 'Click2IT'}]`;
+    const itemsListHtml = (orderData.items || []).map((item: any) => `
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 10px 8px; font-weight: 600; color: #1e293b;">${item.name || item.domain || 'Service'}</td>
+        <td style="padding: 10px 8px; color: #64748b; text-align: center;">${item.termYears ? `${item.termYears} Year(s)` : (item.description || '1 Year')}</td>
+        <td style="padding: 10px 8px; font-weight: 700; color: #0f172a; text-align: right;">৳${item.price || 0}</td>
+      </tr>
+    `).join('');
+
     const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-        <h2 style="color: #16a34a;">Order Completed!</h2>
-        <p>Dear ${orderData.customerName || 'Customer'},</p>
-        <p>Your order <strong>#${orderId.slice(0, 8)}</strong> has been completed successfully.</p>
-        <p>Thank you for choosing Click2IT!</p>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+        <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+          <h1 style="color: #0f172a; font-size: 24px; margin: 0 0 6px 0; font-weight: 800;">Click2IT</h1>
+          <p style="color: #16a34a; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">Order Completed & Activated</p>
+        </div>
+
+        <div style="padding: 20px 0;">
+          <p style="font-size: 15px; margin: 0 0 12px 0;">Dear <strong>${orderData.customerName || 'Valued Customer'}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+            Great news! Your order <strong>#${orderId.slice(0, 8)}</strong> (${orderData.documentNumber || 'Invoice'}) has been fully processed and all your services are now <strong>ACTIVE</strong>.
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+            <thead>
+              <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 10px 8px; text-align: left; color: #475569; font-weight: 600;">Item / Service</th>
+                <th style="padding: 10px 8px; text-align: center; color: #475569; font-weight: 600;">Duration</th>
+                <th style="padding: 10px 8px; text-align: right; color: #475569; font-weight: 600;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsListHtml}
+              <tr>
+                <td colspan="2" style="padding: 12px 8px; font-weight: 700; text-align: right; color: #334155;">Total Paid:</td>
+                <td style="padding: 12px 8px; font-weight: 800; text-align: right; color: #16a34a; font-size: 15px;">৳${orderData.total || 0}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 13px;">
+            <p style="margin: 0 0 6px 0; font-weight: 700; color: #0f172a;">Quick Order Summary:</p>
+            <p style="margin: 0 0 4px 0; color: #475569;"><strong>Invoice No:</strong> ${orderData.documentNumber || 'INV-' + orderId.slice(0, 8)}</p>
+            <p style="margin: 0 0 4px 0; color: #475569;"><strong>Payment Method:</strong> ${(orderData.paymentMethod || 'Online').toUpperCase()}</p>
+            <p style="margin: 0; color: #475569;"><strong>Default Nameservers:</strong> ns1.click2itbd.com, ns2.click2itbd.com</p>
+          </div>
+
+          <div style="text-align: center; margin: 24px 0 16px 0;">
+            <a href="https://click2it.bd/account/services" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Manage Services in Dashboard</a>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 12px; color: #94a3b8;">
+          <p style="margin: 0 0 4px 0;">Click2IT BD &bull; Premium Hosting & Domain Solutions</p>
+          <p style="margin: 0;">Need support? Reach out anytime at info@click2itbd.com</p>
+        </div>
       </div>
     `;
     await sendEmail({ to: orderData.customerEmail, subject, html, orderId, customerEmail: orderData.customerEmail, category: 'order' });
