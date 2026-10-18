@@ -30,18 +30,14 @@ const app = initializeApp(firebaseConfig);
 
 let firestoreInstance: any;
 try {
-  firestoreInstance = getFirestore(app);
+  firestoreInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
 } catch {
   try {
-    firestoreInstance = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
+    firestoreInstance = initializeFirestore(app, {});
   } catch {
-    try {
-      firestoreInstance = initializeFirestore(app, {});
-    } catch {
-      firestoreInstance = getFirestore(app);
-    }
+    firestoreInstance = getFirestore(app);
   }
 }
 
