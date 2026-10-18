@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../../firebase';
+import { db, auth } from '../../../firebase';
 import { collection, query, orderBy, getDocs, doc, updateDoc, where, limit, deleteDoc, addDoc } from 'firebase/firestore';
 import { formatCurrency, cn } from '../../../lib/utils';
 import { toast } from 'react-hot-toast';
@@ -115,12 +115,35 @@ export default function HostingOrders() {
     setStatusUpdating(true);
     try {
       await updateDoc(doc(db, 'orders', selectedOrder.id), {
-        status: newStatus
+        status: newStatus,
+        updatedAt: new Date().toISOString()
       });
       toast.success('Order status updated');
       setOrders(orders.map(o => o.id === selectedOrder.id ? { ...o, status: newStatus as any } : o));
       setSelectedOrder({ ...selectedOrder, status: newStatus as any });
-    } catch (error) {
+
+      // Automatically dispatch status update email to customer
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const apiUrl = getApiUrl();
+        await fetch(`${apiUrl}/api/send-email/notify-order-status-update`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            orderId: selectedOrder.id,
+            newStatus
+          })
+        });
+        toast.success(`Customer notified via email (${newStatus.toUpperCase()})`);
+        const refreshedLogs = await getEmailLogsForOrder(selectedOrder.id);
+        setEmailLogs(refreshedLogs);
+      } catch (mailErr) {
+        console.warn('Failed to dispatch status email notification:', mailErr);
+      }
+    } catch (error: any) {
       console.error('Error updating order status:', error);
       toast.error('Order Error: ' + error.message);
     } finally {

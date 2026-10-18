@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { sendEmail, EmailTemplates, verifySmtpConnection } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { getDynamicTemplate } from '../services/templateHelper.js';
+import { getAdminDb } from '../firebase/admin.js';
 const emailRouter = Router();
 emailRouter.post('/send-email', requireFirebaseAuth, async (req, res) => {
     try {
@@ -158,11 +159,190 @@ emailRouter.post('/notify-admin-new-order', requireFirebaseAuth, async (req, res
         if (!result.success) {
             return res.status(400).json({ error: result.error || 'Failed to send admin notification' });
         }
-        res.status(200).json({ success: true, message: 'Admin notification sent' });
+        // Also notify Customer about Order Placement
+        if (orderData.customerEmail) {
+            try {
+                const docNum = orderData.documentNumber || `INV-${orderId.slice(0, 8)}`;
+                const customerSubject = `Order Placed & Confirmation - #${orderId.slice(0, 8)} [${docNum}]`;
+                const customerItemsHtml = (orderData.items || []).map((item) => `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px 8px; font-weight: 600; color: #1e293b;">${item.name || item.domain || 'Service'}</td>
+            <td style="padding: 10px 8px; color: #64748b; text-align: center;">${item.termYears ? `${item.termYears} Year(s)` : (item.description || '1 Year')}</td>
+            <td style="padding: 10px 8px; font-weight: 700; color: #0f172a; text-align: right;">৳${item.price || 0}</td>
+          </tr>
+        `).join('');
+                const customerHtml = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+            <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+              <h1 style="color: #0f172a; font-size: 24px; margin: 0 0 6px 0; font-weight: 800;">Click2IT</h1>
+              <p style="color: #2563eb; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">Order Received & Invoice Created</p>
+            </div>
+
+            <div style="padding: 20px 0;">
+              <p style="font-size: 15px; margin: 0 0 12px 0;">Dear <strong>${orderData.customerName || 'Valued Customer'}</strong>,</p>
+              <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+                Thank you for your order! We have received your order <strong>#${orderId.slice(0, 8)}</strong> (${docNum}). Our system is preparing to activate your services.
+              </p>
+
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+                <thead>
+                  <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                    <th style="padding: 10px 8px; text-align: left; color: #475569; font-weight: 600;">Item / Service</th>
+                    <th style="padding: 10px 8px; text-align: center; color: #475569; font-weight: 600;">Duration</th>
+                    <th style="padding: 10px 8px; text-align: right; color: #475569; font-weight: 600;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${customerItemsHtml}
+                  <tr>
+                    <td colspan="2" style="padding: 12px 8px; font-weight: 700; text-align: right; color: #334155;">Total Amount:</td>
+                    <td style="padding: 12px 8px; font-weight: 800; text-align: right; color: #2563eb; font-size: 15px;">৳${orderData.total || 0}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 13px;">
+                <p style="margin: 0 0 6px 0; font-weight: 700; color: #0f172a;">Order Summary:</p>
+                <p style="margin: 0 0 4px 0; color: #475569;"><strong>Invoice No:</strong> ${docNum}</p>
+                <p style="margin: 0 0 4px 0; color: #475569;"><strong>Payment Method:</strong> ${(orderData.paymentMethod || 'Online').toUpperCase()}</p>
+                <p style="margin: 0; color: #475569;"><strong>Next Step:</strong> You will receive an activation email as soon as your domain & hosting services are fully provisioned.</p>
+              </div>
+
+              <div style="text-align: center; margin: 24px 0 16px 0;">
+                <a href="https://click2it.bd/account/services" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View My Account & Orders</a>
+              </div>
+            </div>
+
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 12px; color: #94a3b8;">
+              <p style="margin: 0 0 4px 0;">Click2IT BD &bull; Premium Hosting & Domain Solutions</p>
+              <p style="margin: 0;">Need support? Contact us at info@click2itbd.com</p>
+            </div>
+          </div>
+        `;
+                await sendEmail({
+                    to: orderData.customerEmail,
+                    subject: customerSubject,
+                    html: customerHtml,
+                    orderId,
+                    customerEmail: orderData.customerEmail,
+                    category: 'order'
+                });
+            }
+            catch (custMailErr) {
+                console.warn('Failed to send customer order confirmation (non-blocking):', custMailErr);
+            }
+        }
+        res.status(200).json({ success: true, message: 'Admin and customer order notifications sent' });
     }
     catch (error) {
-        console.error('Admin notification error:', error);
+        console.error('Order notification error:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+emailRouter.post('/notify-order-status-update', requireFirebaseAuth, async (req, res) => {
+    try {
+        const { orderId, newStatus, note } = req.body;
+        if (!orderId || !newStatus) {
+            return res.status(400).json({ error: 'Missing orderId or newStatus' });
+        }
+        const db = getAdminDb();
+        const orderDoc = await db.collection('orders').doc(orderId).get();
+        if (!orderDoc.exists) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        const orderData = orderDoc.data() || {};
+        const recipientEmail = orderData.customerEmail;
+        if (!recipientEmail) {
+            return res.status(200).json({ success: true, message: 'No customer email found for this order.' });
+        }
+        const docNum = orderData.documentNumber || `INV-${orderId.slice(0, 8)}`;
+        const statusUpper = String(newStatus).toUpperCase();
+        const statusColors = {
+            COMPLETED: {
+                bg: '#16a34a',
+                text: '#ffffff',
+                label: 'COMPLETED & ACTIVE',
+                desc: 'All services in your order have been successfully activated and are ready for use.'
+            },
+            PROCESSING: {
+                bg: '#2563eb',
+                text: '#ffffff',
+                label: 'PROCESSING',
+                desc: 'Our engineering team is actively provisioning and deploying your services.'
+            },
+            PENDING: {
+                bg: '#f59e0b',
+                text: '#ffffff',
+                label: 'PENDING',
+                desc: 'Your order is currently awaiting review or payment verification.'
+            },
+            CANCELLED: {
+                bg: '#dc2626',
+                text: '#ffffff',
+                label: 'CANCELLED',
+                desc: 'Your order has been cancelled. Please contact our support team if you believe this is in error.'
+            },
+            REFUNDED: {
+                bg: '#7c3aed',
+                text: '#ffffff',
+                label: 'REFUNDED',
+                desc: 'A refund has been processed for your order payment.'
+            }
+        };
+        const statusInfo = statusColors[statusUpper] || {
+            bg: '#475569',
+            text: '#ffffff',
+            label: statusUpper,
+            desc: `Your order status has been updated to ${statusUpper}.`
+        };
+        const subject = `Order Status Update: ${statusInfo.label} - #${orderId.slice(0, 8)} [${docNum}]`;
+        const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+        <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+          <h1 style="color: #0f172a; font-size: 24px; margin: 0 0 6px 0; font-weight: 800;">Click2IT</h1>
+          <div style="display: inline-block; background-color: ${statusInfo.bg}; color: ${statusInfo.text}; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 5px 14px; border-radius: 20px; margin-top: 4px;">
+            Status: ${statusInfo.label}
+          </div>
+        </div>
+
+        <div style="padding: 20px 0;">
+          <p style="font-size: 15px; margin: 0 0 12px 0;">Dear <strong>${orderData.customerName || 'Valued Customer'}</strong>,</p>
+          <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+            ${statusInfo.desc}
+          </p>
+          ${note ? `<div style="background-color: #f1f5f9; padding: 12px 16px; border-left: 4px solid ${statusInfo.bg}; border-radius: 4px; margin-bottom: 16px; font-size: 13px; color: #334155;"><strong>Note from Team:</strong> ${note}</div>` : ''}
+
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 13px;">
+            <p style="margin: 0 0 6px 0; font-weight: 700; color: #0f172a;">Order Details:</p>
+            <p style="margin: 0 0 4px 0; color: #475569;"><strong>Order ID:</strong> #${orderId.slice(0, 8)}</p>
+            <p style="margin: 0 0 4px 0; color: #475569;"><strong>Invoice No:</strong> ${docNum}</p>
+            <p style="margin: 0; color: #475569;"><strong>Total Amount:</strong> ৳${orderData.total || 0}</p>
+          </div>
+
+          <div style="text-align: center; margin: 24px 0 16px 0;">
+            <a href="https://click2it.bd/account/services" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Check Status in Dashboard</a>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 12px; color: #94a3b8;">
+          <p style="margin: 0 0 4px 0;">Click2IT BD &bull; Premium Hosting & Domain Solutions</p>
+          <p style="margin: 0;">Need support? Reach out anytime at info@click2itbd.com</p>
+        </div>
+      </div>
+    `;
+        const sendRes = await sendEmail({
+            to: recipientEmail,
+            subject,
+            html,
+            orderId,
+            customerEmail: recipientEmail,
+            category: 'order'
+        });
+        return res.json({ success: sendRes.success, message: 'Status update email dispatched.' });
+    }
+    catch (error) {
+        console.error('Status update email error:', error);
+        return res.status(500).json({ error: error.message || 'Failed to send status update email.' });
     }
 });
 // --- Public Password Reset Notification System (Resend + Token Verification) ---
