@@ -1,22 +1,7 @@
 import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuthSdk } from 'firebase-admin/auth';
-import { initializeApp as initClientApp, getApps as getClientApps } from 'firebase/app';
-import { 
-  initializeFirestore, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  limit, 
-  writeBatch 
-} from 'firebase/firestore';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -62,11 +47,11 @@ export function validateServiceAccountStructure(serviceAccount: any): void {
   }
 }
 
-function getFirebaseClientConfig(): any {
+function getFirebaseClientConfig(): { projectId: string; firestoreDatabaseId: string; apiKey?: string } {
   const candidatePaths = [
     path.resolve(process.cwd(), 'firebase-applet-config.json'),
     path.resolve(__dirname, '..', '..', 'firebase-applet-config.json'),
-    path.resolve(__dirname, '..', '..', '..', 'firebase-applet-config.json')
+    path.resolve(__dirname, '..', '..', '..', 'firebase-applet-config.json'),
   ];
 
   for (const p of candidatePaths) {
@@ -81,105 +66,287 @@ function getFirebaseClientConfig(): any {
 
   return {
     projectId: process.env.GOOGLE_CLOUD_PROJECT || 'gen-lang-client-0990631330',
-    firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || 'ai-studio-422fbad2-d827-4e69-8599-aed85390d277'
+    firestoreDatabaseId:
+      process.env.FIREBASE_DATABASE_ID ||
+      process.env.FIRESTORE_DATABASE_ID ||
+      'ai-studio-422fbad2-d827-4e69-8599-aed85390d277',
   };
 }
 
-function wrapDocSnapshot(snap: any) {
-  const exists = typeof snap.exists === 'function' ? snap.exists() : Boolean(snap.exists);
-  const data = exists ? snap.data() : undefined;
-  return {
-    id: snap.id,
-    exists,
-    data: () => data,
-    get: (field: string) => data?.[field],
-    ref: wrapDocRef(snap.ref)
-  };
+function toFirestoreValue(val: any): any {
+  if (val === null || val === undefined) return { nullValue: null };
+  if (typeof val === 'boolean') return { booleanValue: val };
+  if (typeof val === 'number') {
+    return Number.isInteger(val) ? { integerValue: String(val) } : { doubleValue: val };
+  }
+  if (typeof val === 'string') return { stringValue: val };
+  if (val instanceof Date) return { timestampValue: val.toISOString() };
+  if (Array.isArray(val)) {
+    return { arrayValue: { values: val.map(toFirestoreValue) } };
+  }
+  if (typeof val === 'object') {
+    const fields: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val)) {
+      if (v !== undefined) fields[k] = toFirestoreValue(v);
+    }
+    return { mapValue: { fields } };
+  }
+  return { stringValue: String(val) };
 }
 
-function wrapDocRef(rawRef: any) {
-  return {
-    id: rawRef.id,
-    path: rawRef.path,
-    _webDocRef: rawRef,
-    get: async () => wrapDocSnapshot(await getDoc(rawRef)),
-    set: async (data: any, opts?: any) => setDoc(rawRef, data, opts || {}),
-    update: async (data: any) => updateDoc(rawRef, data),
-    delete: async () => deleteDoc(rawRef)
-  };
+function fromFirestoreValue(val: any): any {
+  if (!val || typeof val !== 'object') return undefined;
+  if ('nullValue' in val) return null;
+  if ('booleanValue' in val) return Boolean(val.booleanValue);
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('stringValue' in val) return String(val.stringValue);
+  if ('timestampValue' in val) return String(val.timestampValue);
+  if ('arrayValue' in val) {
+    return (val.arrayValue?.values || []).map(fromFirestoreValue);
+  }
+  if ('mapValue' in val) {
+    return fromFirestoreFields(val.mapValue?.fields || {});
+  }
+  return undefined;
 }
 
-class QueryAdapter {
-  protected ref: any;
-  protected constraints: any[];
-
-  constructor(ref: any, constraints: any[] = []) {
-    this.ref = ref;
-    this.constraints = constraints;
+function fromFirestoreFields(fields: Record<string, any> = {}): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    out[k] = fromFirestoreValue(v);
   }
+  return out;
+}
 
-  where(field: string, op: any, val: any) {
-    return new QueryAdapter(this.ref, [...this.constraints, where(field, op, val)]);
-  }
+function createRestFirestoreAdapter() {
+  const cfg = getFirebaseClientConfig();
+  const projectId = cfg.projectId || 'gen-lang-client-0990631330';
+  const dbId = cfg.firestoreDatabaseId || 'ai-studio-422fbad2-d827-4e69-8599-aed85390d277';
+  const baseUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/${encodeURIComponent(dbId)}/documents`;
 
-  orderBy(field: string, dir: 'asc' | 'desc' = 'asc') {
-    return new QueryAdapter(this.ref, [...this.constraints, orderBy(field, dir)]);
-  }
+  const makeDocRef = (colName: string, docId?: string) => {
+    const id = docId || crypto.randomBytes(10).toString('hex');
+    const docPath = `${colName}/${id}`;
+    const docUrl = `${baseUrl}/${encodeURIComponent(colName)}/${encodeURIComponent(id)}`;
 
-  limit(n: number) {
-    return new QueryAdapter(this.ref, [...this.constraints, limit(n)]);
-  }
-
-  async get() {
-    const q = query(this.ref, ...this.constraints);
-    const snap = await getDocs(q);
-    const docs = snap.docs.map(wrapDocSnapshot);
-    return {
-      empty: snap.empty,
-      size: snap.size,
-      docs,
-      forEach: (cb: (doc: any) => void) => docs.forEach(cb)
+    const refObj: any = {
+      id,
+      path: docPath,
+      async get() {
+        const res = await fetch(docUrl);
+        if (res.status === 404) {
+          return {
+            id,
+            exists: false,
+            data: () => undefined,
+            get: () => undefined,
+            ref: refObj,
+          };
+        }
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(`Firestore GET failed (${res.status}): ${errText}`);
+        }
+        const json: any = await res.json();
+        const parsed = fromFirestoreFields(json.fields || {});
+        return {
+          id,
+          exists: true,
+          data: () => parsed,
+          get: (field: string) => parsed?.[field],
+          ref: refObj,
+        };
+      },
+      async set(data: Record<string, any>, opts?: { merge?: boolean }) {
+        const fields: Record<string, any> = {};
+        const keys = Object.keys(data || {}).filter((k) => data[k] !== undefined);
+        for (const k of keys) {
+          fields[k] = toFirestoreValue(data[k]);
+        }
+        let url = docUrl;
+        if (opts?.merge && keys.length > 0) {
+          const maskParams = keys.map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+          url = `${docUrl}?${maskParams}`;
+        }
+        const res = await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields }),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(`Firestore SET failed (${res.status}): ${errText}`);
+        }
+      },
+      async update(data: Record<string, any>) {
+        return refObj.set(data, { merge: true });
+      },
+      async delete() {
+        const res = await fetch(docUrl, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(`Firestore DELETE failed (${res.status}): ${errText}`);
+        }
+      },
     };
-  }
-}
+    return refObj;
+  };
 
-class CollectionAdapter extends QueryAdapter {
-  private name: string;
-  private webDb: any;
+  class RestQueryAdapter {
+    protected colName: string;
+    protected filters: Array<{ field: string; op: string; val: any }>;
+    protected orders: Array<{ field: string; dir: 'asc' | 'desc' }>;
+    protected limitCount?: number;
 
-  constructor(name: string, webDb: any) {
-    const colRef = collection(webDb, name);
-    super(colRef, []);
-    this.name = name;
-    this.webDb = webDb;
-  }
+    constructor(
+      colName: string,
+      filters: Array<{ field: string; op: string; val: any }> = [],
+      orders: Array<{ field: string; dir: 'asc' | 'desc' }> = [],
+      limitCount?: number
+    ) {
+      this.colName = colName;
+      this.filters = filters;
+      this.orders = orders;
+      this.limitCount = limitCount;
+    }
 
-  doc(id?: string) {
-    const dRef = id ? doc(this.webDb, this.name, id) : doc(collection(this.webDb, this.name));
-    return wrapDocRef(dRef);
-  }
-}
+    where(field: string, op: string, val: any) {
+      return new RestQueryAdapter(this.colName, [...this.filters, { field, op, val }], this.orders, this.limitCount);
+    }
 
-function createClientFirestoreAdapter() {
-  const config = getFirebaseClientConfig();
-  const clientApp = getClientApps().length > 0 
-    ? getClientApps()[0] 
-    : initClientApp(config, 'backend-client-adapter');
-  
-  const webDb = initializeFirestore(clientApp, {}, config.firestoreDatabaseId || 'ai-studio-422fbad2-d827-4e69-8599-aed85390d277');
+    orderBy(field: string, dir: 'asc' | 'desc' = 'asc') {
+      return new RestQueryAdapter(this.colName, this.filters, [...this.orders, { field, dir }], this.limitCount);
+    }
 
-  return {
-    collection: (name: string) => new CollectionAdapter(name, webDb),
-    batch: () => {
-      const batch = writeBatch(webDb);
-      const unwrap = (target: any) => target?._webDocRef || target?.ref?._webDocRef || target?.ref || target;
+    limit(n: number) {
+      return new RestQueryAdapter(this.colName, this.filters, this.orders, n);
+    }
+
+    async get() {
+      const opMap: Record<string, string> = {
+        '==': 'EQUAL',
+        '!=': 'NOT_EQUAL',
+        '<': 'LESS_THAN',
+        '<=': 'LESS_THAN_OR_EQUAL',
+        '>': 'GREATER_THAN',
+        '>=': 'GREATER_THAN_OR_EQUAL',
+        'array-contains': 'ARRAY_CONTAINS',
+        in: 'IN',
+      };
+
+      const structuredQuery: any = {
+        from: [{ collectionId: this.colName }],
+      };
+
+      if (this.filters.length === 1) {
+        const f = this.filters[0];
+        structuredQuery.where = {
+          fieldFilter: {
+            field: { fieldPath: f.field },
+            op: opMap[f.op] || 'EQUAL',
+            value: toFirestoreValue(f.val),
+          },
+        };
+      } else if (this.filters.length > 1) {
+        structuredQuery.where = {
+          compositeFilter: {
+            op: 'AND',
+            filters: this.filters.map((f) => ({
+              fieldFilter: {
+                field: { fieldPath: f.field },
+                op: opMap[f.op] || 'EQUAL',
+                value: toFirestoreValue(f.val),
+              },
+            })),
+          },
+        };
+      }
+
+      if (this.orders.length > 0) {
+        structuredQuery.orderBy = this.orders.map((o) => ({
+          field: { fieldPath: o.field },
+          direction: o.dir === 'desc' ? 'DESCENDING' : 'ASCENDING',
+        }));
+      }
+
+      if (this.limitCount) {
+        structuredQuery.limit = this.limitCount;
+      }
+
+      const res = await fetch(`${baseUrl}:runQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ structuredQuery }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Firestore Query failed (${res.status}): ${errText}`);
+      }
+
+      const rows = (await res.json()) as any[];
+      const docs = (rows || [])
+        .filter((r) => r && r.document)
+        .map((r) => {
+          const docName: string = r.document.name || '';
+          const id = docName.split('/').pop() || '';
+          const parsed = fromFirestoreFields(r.document.fields || {});
+          const ref = makeDocRef(this.colName, id);
+          return {
+            id,
+            exists: true,
+            data: () => parsed,
+            get: (field: string) => parsed?.[field],
+            ref,
+          };
+        });
+
       return {
-        set: (target: any, data: any, opts?: any) => batch.set(unwrap(target), data, opts || {}),
-        update: (target: any, data: any) => batch.update(unwrap(target), data),
-        delete: (target: any) => batch.delete(unwrap(target)),
-        commit: () => batch.commit()
+        empty: docs.length === 0,
+        size: docs.length,
+        docs,
+        forEach: (cb: (doc: any) => void) => docs.forEach(cb),
       };
     }
+  }
+
+  class RestCollectionAdapter extends RestQueryAdapter {
+    constructor(colName: string) {
+      super(colName);
+    }
+
+    doc(id?: string) {
+      return makeDocRef(this.colName, id);
+    }
+
+    async add(data: Record<string, any>) {
+      const dRef = makeDocRef(this.colName);
+      await dRef.set(data);
+      return dRef;
+    }
+  }
+
+  return {
+    collection: (name: string) => new RestCollectionAdapter(name),
+    batch: () => {
+      const ops: Array<() => Promise<any>> = [];
+      const resolveRef = (target: any) => (target?.ref ? target.ref : target);
+      return {
+        set: (target: any, data: any, opts?: any) => {
+          ops.push(() => resolveRef(target).set(data, opts));
+        },
+        update: (target: any, data: any) => {
+          ops.push(() => resolveRef(target).update(data));
+        },
+        delete: (target: any) => {
+          ops.push(() => resolveRef(target).delete());
+        },
+        commit: async () => {
+          await Promise.all(ops.map((fn) => fn()));
+        },
+      };
+    },
   };
 }
 
@@ -227,13 +394,13 @@ export function getAdminDb(): any {
         adminDb = getAdminFirestore(app, dbId);
         return adminDb;
       } catch (err) {
-        console.warn('[Firebase Admin] Falling back to Web SDK adapter:', err);
+        console.warn('[Firebase Admin] Falling back to REST adapter:', err);
       }
     }
 
-    // Fallback: Initialize Firestore Client SDK adapter (100% full read/write via client config)
+    // Fallback: Initialize zero-dependency Firestore REST API adapter
     try {
-      clientAdapterDb = createClientFirestoreAdapter();
+      clientAdapterDb = createRestFirestoreAdapter();
       return clientAdapterDb;
     } catch (adapterErr) {
       console.error('[Firebase Admin] Failed to initialize Firestore adapter:', adapterErr);
@@ -261,7 +428,7 @@ export function getAdminAuth() {
 
 export function isAdminDbAvailable(): boolean {
   if (initializationFailed) return false;
-  return Boolean(adminDb || clientAdapterDb || getAdminApps().length > 0 || getClientApps().length > 0);
+  return Boolean(adminDb || clientAdapterDb || getAdminApps().length > 0);
 }
 
 export async function getAdminDocument(collectionName: string, docId: string) {

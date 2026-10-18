@@ -7,13 +7,13 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { validateFirebaseEnvironment, testFirestoreConnection, FirebaseValidationResult } from './utils/firebaseValidation';
 
 let firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyKeyForBuildAndProductionFallback",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "593966307838",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:593966307838:web:click2itbd",
-  firestoreDatabaseId: "(default)"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyB_STUjdz0fPcYAk0JWz59SiMyJ-WKwCuw",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "gen-lang-client-0990631330.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "gen-lang-client-0990631330",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "gen-lang-client-0990631330.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "746698279074",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:746698279074:web:bdbcfb3f791029b9006ffb",
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277"
 };
 
 try {

@@ -258,8 +258,8 @@ emailRouter.post('/forgot-password', async (req: any, res: Response) => {
 
     // Optionally generate Firebase Admin oobCode if service account is active
     let oobCode = '';
+    const adminAuth = getAdminAuth();
     try {
-      const adminAuth = getAdminAuth();
       if (adminAuth) {
         const fbLink = await adminAuth.generatePasswordResetLink(cleanEmail, {
           url: `${baseUrl}/login`,
@@ -269,6 +269,15 @@ emailRouter.post('/forgot-password', async (req: any, res: Response) => {
       }
     } catch {
       // Fallback to token-based link if Firebase Admin Auth link is not generated
+    }
+
+    if (!oobCode && !adminAuth) {
+      return res.status(200).json({
+        success: true,
+        emailDispatched: false,
+        fallbackClientFirebase: true,
+        message: 'Triggering Firebase client password reset email.',
+      });
     }
 
     const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(cleanEmail)}${

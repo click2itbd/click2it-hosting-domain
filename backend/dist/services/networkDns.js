@@ -1,23 +1,29 @@
 import dns from 'node:dns';
-import { Agent, setGlobalDispatcher } from 'undici';
+export let resilientAgent = undefined;
 // Optional custom DNS lookup with immediate fallback to OS default dns.lookup
-export const resilientAgent = new Agent({
-    connect: {
-        lookup: (hostname, options, callback) => {
-            if (typeof options === 'function') {
-                callback = options;
-                options = {};
-            }
-            dns.lookup(hostname, options, callback);
-        },
-        timeout: 20000,
-    },
-    headersTimeout: 20000,
-    bodyTimeout: 20000,
-});
 if (process.env.ENABLE_CUSTOM_DNS === 'true') {
-    setGlobalDispatcher(resilientAgent);
-    console.log('[NetworkDNS] Custom DNS dispatcher enabled');
+    import('undici')
+        .then(({ Agent, setGlobalDispatcher }) => {
+        resilientAgent = new Agent({
+            connect: {
+                lookup: (hostname, options, callback) => {
+                    if (typeof options === 'function') {
+                        callback = options;
+                        options = {};
+                    }
+                    dns.lookup(hostname, options, callback);
+                },
+                timeout: 20000,
+            },
+            headersTimeout: 20000,
+            bodyTimeout: 20000,
+        });
+        setGlobalDispatcher(resilientAgent);
+        console.log('[NetworkDNS] Custom DNS dispatcher enabled');
+    })
+        .catch(() => {
+        console.log('[NetworkDNS] Standard OS DNS lookup active (undici not installed)');
+    });
 }
 else {
     console.log('[NetworkDNS] Standard OS DNS lookup active');

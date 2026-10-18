@@ -1,4 +1,3 @@
-import { Resend } from 'resend';
 import { getAdminDb } from '../firebase/admin.js';
 import { SmtpEmailProvider, SmtpConfig } from '../providers/email/SmtpEmailProvider.js';
 
@@ -181,7 +180,6 @@ export async function sendViaResend(
     return { success: false, error: 'RESEND_API_KEY not configured' };
   }
 
-  const resend = new Resend(apiKey);
   const formattedFrom = fromEmail.includes('<') ? fromEmail : `${fromName} <${fromEmail}>`;
 
   const sendPayload = async (fromAddress: string) => {
@@ -189,24 +187,35 @@ export async function sendViaResend(
       attachments && attachments.length > 0
         ? attachments.map((att: any) => ({
             filename: att.filename || 'attachment.pdf',
-            content: att.content,
+            content: Buffer.isBuffer(att.content)
+              ? att.content.toString('base64')
+              : att.content,
           }))
         : undefined;
 
-    const { data, error } = await resend.emails.send({
-      from: fromAddress,
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      html,
-      ...(formattedAttachments ? { attachments: formattedAttachments } : {}),
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html,
+        ...(formattedAttachments ? { attachments: formattedAttachments } : {}),
+      }),
     });
 
-    if (!error && data?.id) {
+    const data: any = await response.json().catch(() => ({}));
+
+    if (response.ok && data?.id) {
       return { success: true, id: data.id };
     }
     return {
       success: false,
-      error: error?.message || 'Resend delivery failed',
+      error: data?.message || data?.error || `Resend delivery failed (${response.status})`,
     };
   };
 
