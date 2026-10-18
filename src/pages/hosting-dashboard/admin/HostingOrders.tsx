@@ -716,6 +716,30 @@ export default function HostingOrders() {
           controlPanelUrl: firstAccount?.controlPanelUrl || 'https://cpanel.click2it.bd'
         });
         toast.success("Activation email sent successfully!");
+      } else {
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const apiUrl = getApiUrl();
+          await fetch(`${apiUrl}/api/send-email/notify-order-status-update`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              orderId: order.id,
+              newStatus: 'completed'
+            })
+          });
+          toast.success("Customer notified of order completion!");
+        } catch (e) {
+          console.warn("Failed to notify completion status:", e);
+        }
+      }
+
+      if (selectedOrder?.id === order.id) {
+        const refreshed = await getEmailLogsForOrder(order.id);
+        setEmailLogs(refreshed);
       }
     } catch (error: any) {
       console.error('Mark completed error:', error);

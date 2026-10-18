@@ -131,13 +131,49 @@ Hello,
 Great news! Your service for ${serviceDetails.domain || 'your recent order'} has been activated.
 
 Here are your service details:
-- Server IP: ${serviceDetails.serverIp || 'N/A'}
-- Control Panel: ${serviceDetails.controlPanelUrl || 'N/A'}
+- Domain / Service: ${serviceDetails.domain || 'Active Service'}
+- Server IP: ${serviceDetails.serverIp || 'Auto-Assigned'}
+- Control Panel: ${serviceDetails.controlPanelUrl || 'https://cpanel.click2it.bd'}
 
-Thank you for choosing us!
+Thank you for choosing Click2IT!
     `.trim();
 
-    html = content.replace(/\n/g, '<br>');
+    html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #2563eb 100%); padding: 24px; border-radius: 8px; color: #ffffff; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800;">🎉 Service Activated & Ready</h2>
+          <p style="margin: 6px 0 0; color: #bfdbfe; font-size: 13px;">Your hosting & domain service is now fully active</p>
+        </div>
+        <p style="color: #334155; font-size: 15px; margin: 0 0 12px 0;">Hello,</p>
+        <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+          Great news! Your service for <strong>${serviceDetails.domain || 'your recent order'}</strong> is now fully configured and ready for use.
+        </p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px;">
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #475569; width: 40%; border-bottom: 1px solid #e2e8f0;">Service / Domain</td>
+            <td style="padding: 10px 14px; color: #0f172a; font-weight: 700; border-bottom: 1px solid #e2e8f0;">${serviceDetails.domain || 'Hosting Package'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0;">Server IP</td>
+            <td style="padding: 10px 14px; color: #2563eb; font-weight: 700; border-bottom: 1px solid #e2e8f0;">${serviceDetails.serverIp || 'Auto-Assigned'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; font-weight: 600; color: #475569;">Control Panel</td>
+            <td style="padding: 10px 14px; color: #0f172a;"><a href="${serviceDetails.controlPanelUrl || 'https://cpanel.click2it.bd'}" style="color: #2563eb; font-weight: 600; text-decoration: none;" target="_blank">${serviceDetails.controlPanelUrl || 'Access Control Panel'}</a></td>
+          </tr>
+        </table>
+
+        <div style="text-align: center; margin: 24px 0 16px 0;">
+          <a href="https://click2it.bd/account/services" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Manage in Client Dashboard</a>
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 12px; color: #94a3b8; margin-top: 24px;">
+          <p style="margin: 0 0 4px 0;">Click2IT BD &bull; Premium Hosting & Domain Solutions</p>
+          <p style="margin: 0;">Need support? Contact us at info@click2itbd.com</p>
+        </div>
+      </div>
+    `;
   }
 
   try {
@@ -146,16 +182,19 @@ Thank you for choosing us!
       body: JSON.stringify({
         to: customerEmail,
         subject,
-        html: content.replace(/\n/g, '<br>'),
+        html: html || content.replace(/\n/g, '<br>'),
+        orderId,
       }),
     });
 
     await addDoc(collection(db, 'emailLogs'), {
       orderId,
       customerEmail,
+      recipient: customerEmail,
       subject,
       content,
       sentAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
       status: response.success ? 'sent' : 'failed'
     });
 
@@ -165,9 +204,11 @@ Thank you for choosing us!
     await addDoc(collection(db, 'emailLogs'), {
       orderId,
       customerEmail,
+      recipient: customerEmail,
       subject,
       content,
       sentAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
       status: 'failed'
     });
     return false;
