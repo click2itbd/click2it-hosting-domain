@@ -181,7 +181,31 @@ export const getEmailLogsForOrder = async (orderId: string): Promise<EmailLog[]>
       where('orderId', '==', orderId)
     );
     const snapshot = await getDocs(q);
-    const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EmailLog));
+    const logs = snapshot.docs.map(doc => {
+      const data = doc.data();
+      let sentDate = new Date();
+      const rawDate = data.sentAt || data.timestamp || data.createdAt;
+      if (rawDate) {
+        if (typeof rawDate?.toDate === 'function') {
+          sentDate = rawDate.toDate();
+        } else if (rawDate?.seconds) {
+          sentDate = new Date(rawDate.seconds * 1000);
+        } else {
+          const parsed = new Date(rawDate);
+          if (!isNaN(parsed.getTime())) sentDate = parsed;
+        }
+      }
+
+      return {
+        id: doc.id,
+        orderId: data.orderId || orderId,
+        customerEmail: data.customerEmail || data.recipient || data.to || '',
+        subject: data.subject || 'Order Notification',
+        content: data.content || data.body || (data.error ? `Error: ${data.error}` : (data.status === 'sent' ? 'Email notification sent successfully to customer.' : 'Delivery failed.')),
+        sentAt: sentDate.toISOString(),
+        status: data.status || 'sent',
+      } as EmailLog;
+    });
     return logs.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
   } catch (err) {
     console.error('Failed to fetch email logs:', err);

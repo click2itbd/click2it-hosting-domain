@@ -1798,19 +1798,32 @@ export default function HostingOrders() {
               ) : (
                 <div className="space-y-4">
                   {emailLogs.map((log) => (
-                    <div key={log.id} className="border border-gray-200 rounded-lg p-4 bg-white">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-bold text-gray-900">{log.subject}</h4>
-                        <span className={cn("px-2 py-1 text-xs font-semibold rounded-full", log.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
+                    <div key={log.id} className="border border-gray-200/90 rounded-xl p-4 bg-white shadow-xs">
+                      <div className="flex justify-between items-start gap-2 mb-2">
+                        <h4 className="font-bold text-sm text-gray-900">{log.subject}</h4>
+                        <span className={cn("px-2.5 py-0.5 text-[11px] font-bold rounded-full shrink-0 tracking-wide", log.status === 'sent' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800')}>
                           {log.status.toUpperCase()}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mb-3">
-                        Sent on {new Date(log.sentAt).toLocaleString()} to <span className="font-medium text-gray-700">{log.customerEmail}</span>
-                      </p>
-                      <div className="bg-gray-50 p-3 rounded border border-gray-100 text-sm whitespace-pre-wrap font-mono text-gray-800">
-                        {log.content}
+                      <div className="text-xs text-gray-500 mb-2.5 flex items-center justify-between flex-wrap gap-1">
+                        <span>
+                          Sent on {(() => {
+                            if (!log.sentAt) return 'Recently';
+                            const d = new Date(log.sentAt);
+                            return isNaN(d.getTime()) ? 'Recently' : d.toLocaleString();
+                          })()}
+                        </span>
+                        {log.customerEmail && (
+                          <span>
+                            To: <span className="font-semibold text-gray-800">{log.customerEmail}</span>
+                          </span>
+                        )}
                       </div>
+                      {log.content && (
+                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs text-slate-700 leading-relaxed font-sans">
+                          {log.content}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

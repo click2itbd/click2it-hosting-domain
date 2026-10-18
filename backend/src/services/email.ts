@@ -5,6 +5,7 @@ export interface EmailOptions {
   to: string;
   subject: string;
   html: string;
+  text?: string;
   attachments?: any[];
   orderId?: string;
   customerEmail?: string;
@@ -93,15 +94,31 @@ export async function getSmtpProvider(forceReload = false): Promise<SmtpEmailPro
 export async function logEmailToFirestore(options: EmailOptions, status: 'sent' | 'failed', error?: string): Promise<void> {
   try {
     const db = getAdminDb();
+    const cleanSnippet = options.html
+      ? options.html
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 300)
+      : (options.text || '');
+
+    const nowIso = new Date().toISOString();
+    const recipientEmail = options.customerEmail || options.to;
+
     await db.collection('emailLogs').add({
       orderId: options.orderId || null,
-      recipient: options.customerEmail || options.to,
+      customerEmail: recipientEmail,
+      recipient: recipientEmail,
+      to: options.to,
       type: options.type || options.category || 'system',
       status,
       subject: options.subject,
+      content: cleanSnippet || (status === 'sent' ? 'Email delivered successfully.' : 'Delivery failed'),
       error: error || null,
-      timestamp: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
+      sentAt: nowIso,
+      timestamp: nowIso,
+      createdAt: nowIso,
     });
   } catch (logError) {
     console.error('Failed to log email to Firestore:', logError);

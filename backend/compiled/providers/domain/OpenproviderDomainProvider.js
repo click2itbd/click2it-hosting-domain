@@ -551,6 +551,15 @@ export class OpenproviderDomainProvider {
             return [];
         }
     }
+    async getDomainId(domain) {
+        const domainObj = this.splitDomain(domain);
+        const search = await this.fetchApi(`/domains?name=${domainObj.name}&extension=${domainObj.extension}&limit=1`);
+        const item = search.data?.results?.[0];
+        if (!item?.id) {
+            throw new Error(`Domain ${domain} not found in your Openprovider account.`);
+        }
+        return item.id;
+    }
     async getDnsZone(domain) {
         await this.authenticate();
         try {
@@ -558,18 +567,39 @@ export class OpenproviderDomainProvider {
             return { success: true, data: response.data };
         }
         catch (error) {
+            // If zone doesn't exist yet in Openprovider DNS manager, return clean empty record set
+            if (String(error.message || '').includes('Zone specified is not found') || error.providerCode === '872') {
+                return { success: true, data: { name: domain, records: [] }, isNewZone: true };
+            }
             console.error('[Openprovider] getDnsZone error:', error);
             return { success: false, error: error.message };
         }
     }
     async updateDnsRecords(domain, records) {
         await this.authenticate();
+        const domainObj = this.splitDomain(domain);
         try {
-            await this.fetchApi(`/dns/zones/${domain}`, {
-                method: 'PUT',
-                body: JSON.stringify({ records })
-            });
-            return { success: true };
+            try {
+                await this.fetchApi(`/dns/zones/${domain}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ records })
+                });
+                return { success: true };
+            }
+            catch (putErr) {
+                if (String(putErr.message || '').includes('Zone specified is not found') || putErr.providerCode === '872') {
+                    await this.fetchApi('/dns/zones', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            domain: domainObj,
+                            type: 'master',
+                            records
+                        })
+                    });
+                    return { success: true };
+                }
+                throw putErr;
+            }
         }
         catch (error) {
             console.error('[Openprovider] updateDnsRecords error:', error);
@@ -577,11 +607,20 @@ export class OpenproviderDomainProvider {
         }
     }
     async getDomainDetails(domain) {
-        const domainObj = this.splitDomain(domain);
         await this.authenticate();
         try {
-            const response = await this.fetchApi(`/domains/${domainObj.name}/${domainObj.extension}?with_auth_code=true`);
-            return { success: true, data: response.data };
+            const id = await this.getDomainId(domain);
+            const response = await this.fetchApi(`/domains/${id}?with_auth_code=true`);
+            const data = response.data || {};
+            return {
+                success: true,
+                data: {
+                    ...data,
+                    is_locked: data.is_locked !== undefined ? data.is_locked : true,
+                    auth_code: data.auth_code || '',
+                    is_whois_privacy_enabled: !!(data.is_private_whois_enabled ?? data.is_whois_privacy_enabled),
+                }
+            };
         }
         catch (error) {
             console.error('[Openprovider] getDomainDetails error:', error);
@@ -628,12 +667,12 @@ export class OpenproviderDomainProvider {
         };
     }
     async updateWhoisPrivacy(domain, isEnabled) {
-        const domainObj = this.splitDomain(domain);
         await this.authenticate();
         try {
-            await this.fetchApi(`/domains/${domainObj.name}/${domainObj.extension}`, {
+            const id = await this.getDomainId(domain);
+            await this.fetchApi(`/domains/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ is_whois_privacy_enabled: isEnabled })
+                body: JSON.stringify({ is_private_whois_enabled: isEnabled })
             });
             return { success: true };
         }
@@ -683,10 +722,10 @@ export class OpenproviderDomainProvider {
         }
     }
     async updateDomainContacts(domain, handle) {
-        const domainObj = this.splitDomain(domain);
         await this.authenticate();
         try {
-            await this.fetchApi(`/domains/${domainObj.name}/${domainObj.extension}`, {
+            const id = await this.getDomainId(domain);
+            await this.fetchApi(`/domains/${id}`, {
                 method: 'PUT',
                 body: JSON.stringify({
                     owner_handle: handle,
@@ -703,10 +742,10 @@ export class OpenproviderDomainProvider {
         }
     }
     async updateDomainLock(domain, isLocked) {
-        const domainObj = this.splitDomain(domain);
         await this.authenticate();
         try {
-            await this.fetchApi(`/domains/${domainObj.name}/${domainObj.extension}`, {
+            const id = await this.getDomainId(domain);
+            await this.fetchApi(`/domains/${id}`, {
                 method: 'PUT',
                 body: JSON.stringify({ is_locked: isLocked })
             });
