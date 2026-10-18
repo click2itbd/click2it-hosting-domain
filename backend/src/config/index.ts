@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config();
 dotenv.config({ path: path.join(process.cwd(), '.env') });
+dotenv.config({ path: path.join(process.cwd(), 'backend', '.env') });
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 export const config = {

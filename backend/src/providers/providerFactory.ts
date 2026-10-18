@@ -82,7 +82,7 @@ export function getHostingProvider(config?: { hostingApiType?: string; hostingAp
           changePlan: async () => { throw new Error('cPanel API key not configured.'); }
         };
       }
-      return new CpanelHostingProvider(hostingApiUrl, hostingApiKey, hostingApiUsername);
+      return new CpanelHostingProvider(hostingApiKey, hostingApiUrl, hostingApiUsername);
     case 'resellerclub':
       return new ResellerClubHostingProvider(hostingApiUrl, hostingApiKey);
     default:

@@ -1,3 +1,7 @@
+import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.join(process.cwd(), 'backend', '.env') });
 import "./backend/src/services/networkDns.js";
 import { createServer as createViteServer } from "vite";
 import { createApp } from "./backend/src/app.js";
