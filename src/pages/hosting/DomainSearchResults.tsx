@@ -29,8 +29,12 @@ export default function DomainSearchResults() {
   const [infoDomain, setInfoDomain] = useState<any | null>(null);
   const [crossSellDomain, setCrossSellDomain] = useState<{ domain: string; price: number } | null>(null);
   const [favorites, setFavorites] = useState<string[]>(() => {
-    const saved = localStorage.getItem('domainFavorites');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('domainFavorites');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
   
   const { loading, results, search, error } = useDomainSearch();

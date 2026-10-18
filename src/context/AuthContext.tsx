@@ -101,37 +101,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     : user;
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          setUser(firebaseUser);
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid)).catch(() => null);
-          if (userDoc && userDoc.exists()) {
-            setProfile(userDoc.data() as UserProfile);
-          } else {
-            const newProfile: UserProfile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || 'User',
-              role: 'user',
-              permissions: [],
-              createdAt: new Date().toISOString(),
-            };
-            await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => null);
-            setProfile(newProfile);
-          }
-        } else {
-          setUser(null);
-          setProfile(null);
-        }
-      } catch (error) {
-        console.warn('Auth context background listener warning:', error);
-      } finally {
-        setLoading(false);
-      }
-    });
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
 
-    return unsubscribe;
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        try {
+          if (firebaseUser) {
+            setUser(firebaseUser);
+            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid)).catch(() => null);
+            if (userDoc && userDoc.exists()) {
+              setProfile(userDoc.data() as UserProfile);
+            } else {
+              const newProfile: UserProfile = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                displayName: firebaseUser.displayName || 'User',
+                role: 'user',
+                permissions: [],
+                createdAt: new Date().toISOString(),
+              };
+              await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => null);
+              setProfile(newProfile);
+            }
+          } else {
+            setUser(null);
+            setProfile(null);
+          }
+        } catch (error) {
+          console.warn('Auth context background listener warning:', error);
+        } finally {
+          clearTimeout(safetyTimer);
+          setLoading(false);
+        }
+      });
+    } catch {
+      clearTimeout(safetyTimer);
+      setLoading(false);
+    }
+
+    return () => {
+      clearTimeout(safetyTimer);
+      try {
+        unsubscribe();
+      } catch {
+        // ignore
+      }
+    };
   }, []);
 
   const isAdmin = profile?.role === 'admin';
