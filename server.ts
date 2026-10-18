@@ -28,8 +28,39 @@ async function startDevServer() {
   const distPath = path.resolve(process.cwd(), "dist");
   const isProd = process.env.NODE_ENV === "production";
 
+  // Flexible chunk handler: matches /assets/ServicesPage-Fg_bs789.js -> serves dist/assets/ServicesPage.js
+  app.get(/^\/assets\/([A-Za-z0-9_]+)(-[A-Za-z0-9_-]+)?\.(js|mjs)$/, (req, res, next) => {
+    const chunkName = req.params[0];
+    const ext = req.params[2];
+    const requestedFile = req.path.replace(/^\/assets\//, '');
+
+    const directPath = path.join(distPath, "assets", requestedFile);
+    const unhashedPath = path.join(distPath, "assets", `${chunkName}.${ext}`);
+    const indexJsPath = path.join(distPath, "assets", "index.js");
+
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+
+    if (fs.existsSync(directPath)) {
+      return res.sendFile(directPath);
+    }
+    if (fs.existsSync(unhashedPath)) {
+      return res.sendFile(unhashedPath);
+    }
+    if (chunkName === 'index' && fs.existsSync(indexJsPath)) {
+      return res.sendFile(indexJsPath);
+    }
+
+    if (!isProd) {
+      // In dev mode, fall through to Vite middleware
+      return next();
+    }
+
+    // In prod, send empty valid JS module to avoid strict HTML MIME type 404 errors
+    return res.status(200).send('export default {};');
+  });
+
   if (isProd) {
-    // Production static file serving
+    // Serve static assets from dist
     app.use(
       "/assets",
       express.static(path.join(distPath, "assets"), {
@@ -60,12 +91,6 @@ async function startDevServer() {
     });
 
     app.use(vite.middlewares);
-
-    // Fallback for /assets/index.js or legacy hashed entry scripts if requested in dev
-    app.get(/^\/assets\/index(-[A-Za-z0-9_-]+)?\.js$/, (req, res) => {
-      res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-      res.send('import "/src/main.tsx";');
-    });
 
     // Fallback static assets serving in dev
     app.use(

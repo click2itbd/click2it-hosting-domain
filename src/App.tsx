@@ -15,14 +15,22 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
 ) {
   return lazy(async () => {
+    const pageHasBeenReloaded = sessionStorage.getItem('chunk_retry_reload');
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        return await factory();
+        const module = await factory();
+        sessionStorage.removeItem('chunk_retry_reload');
+        return module;
       } catch (err) {
         lastError = err;
         await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }
+    }
+    if (!pageHasBeenReloaded) {
+      sessionStorage.setItem('chunk_retry_reload', 'true');
+      window.location.reload();
+      return new Promise<{ default: T }>(() => {});
     }
     throw lastError;
   });
