@@ -81,8 +81,9 @@ async function apiRequest<T>(path: string, options: RequestInit = {}, token?: st
   return response.json();
 }
 
-export function getApiUrl(path: string): string {
+export function getApiUrl(path: string = ''): string {
   const base = resolveApiBaseUrl();
+  if (!path) return base;
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   if (base.endsWith('/api') && cleanPath.startsWith('/api/')) {
     return `${base}${cleanPath.slice(4)}`;

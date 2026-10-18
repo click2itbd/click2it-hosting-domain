@@ -51,7 +51,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               An unexpected error occurred while loading this page. Please try refreshing or returning to the homepage.
             </p>
 
-            {this.state.error && (
+            {this.state.error && import.meta.env.DEV && (
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-left mb-6 overflow-x-auto max-h-32">
                 <code className="text-xs text-red-400 font-mono break-all">
                   {this.state.error.toString()}

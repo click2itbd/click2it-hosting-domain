@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
       allowedHosts: true,
       hmr: process.env.DISABLE_HMR !== "true",
     },
+    esbuild: mode === "production" ? {
+      drop: ["console", "debugger"],
+    } : undefined,
     build: {
       modulePreload: false,
       chunkSizeWarningLimit: 1000,

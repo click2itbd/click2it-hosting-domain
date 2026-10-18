@@ -5,6 +5,17 @@ import './index.css';
 
 import * as Sentry from '@sentry/react';
 
+// Live production console cleaner: Only show console logs/errors/warns in local dev environment
+if (import.meta.env.PROD) {
+  const noop = () => {};
+  console.log = noop;
+  console.info = noop;
+  console.warn = noop;
+  console.error = noop;
+  console.debug = noop;
+  console.trace = noop;
+}
+
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN,
