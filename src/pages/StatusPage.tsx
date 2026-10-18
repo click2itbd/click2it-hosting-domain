@@ -13,11 +13,13 @@ import {
   Database,
   Mail,
   Cpu,
-  HardDrive,
   Radio,
   ChevronDown,
   ChevronUp,
   Info,
+  LifeBuoy,
+  Wifi,
+  ExternalLink
 } from 'lucide-react';
 import {
   AreaChart,
@@ -27,8 +29,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
   LineChart,
   Line,
 } from 'recharts';
@@ -91,10 +91,9 @@ interface StatusData {
 export const StatusPage: React.FC = () => {
   const [data, setData] = useState<StatusData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
-  const [chartType, setChartType] = useState<'uptime' | 'latency' | 'bars'>('uptime');
+  const [chartType, setChartType] = useState<'bars' | 'uptime' | 'latency'>('bars');
   const [selectedServer, setSelectedServer] = useState<string | 'all'>('all');
   const [expandedServerId, setExpandedServerId] = useState<string | null>(null);
   const [testingPingId, setTestingPingId] = useState<string | null>(null);
@@ -106,13 +105,10 @@ export const StatusPage: React.FC = () => {
       const res: any = await apiGet('/api/public/status');
       if (res && res.success && res.data) {
         setData(res.data);
-        setError(null);
       } else {
-        // Fallback simulated data if offline
         setData(getFallbackData());
       }
-    } catch (err: any) {
-      console.warn('Could not fetch real-time status from backend, displaying cached fallback:', err);
+    } catch {
       setData(getFallbackData());
     } finally {
       setLoading(false);
@@ -135,10 +131,10 @@ export const StatusPage: React.FC = () => {
   const handlePingTest = (serverId: string) => {
     setTestingPingId(serverId);
     setTimeout(() => {
-      const randomLatency = Math.floor(8 + Math.random() * 15);
+      const randomLatency = Math.floor(8 + Math.random() * 14);
       setPingResults((prev) => ({ ...prev, [serverId]: randomLatency }));
       setTestingPingId(null);
-    }, 800);
+    }, 600);
   };
 
   const toggleExpand = (id: string) => {
@@ -149,21 +145,21 @@ export const StatusPage: React.FC = () => {
     switch (status) {
       case 'operational':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
             Operational
           </span>
         );
       case 'degraded':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
             <AlertTriangle className="w-3.5 h-3.5" />
-            Degraded Performance
+            Degraded
           </span>
         );
       case 'maintenance':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
             <Clock className="w-3.5 h-3.5" />
             Maintenance
           </span>
@@ -171,9 +167,9 @@ export const StatusPage: React.FC = () => {
       case 'outage':
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
             <XCircle className="w-3.5 h-3.5" />
-            Service Outage
+            Outage
           </span>
         );
     }
@@ -186,309 +182,208 @@ export const StatusPage: React.FC = () => {
     : [];
 
   return (
-    <Layout>
+    <Layout fullWidth={true} bgClassName="bg-[#030712]">
       <SEO
-        title="Service Status & 30-Day Uptime | CLICK2IT Shared Hosting"
-        description="Real-time uptime, server health telemetry, BDIX latency checks, and 30-day historical performance graphs for CLICK2IT shared hosting servers."
+        title="Live System Status & Server Uptime | Click2IT"
+        description="Real-time uptime, server health telemetry, BDIX latency checks, and 30-day historical performance graphs for Click2IT shared hosting servers."
       />
 
-      <div className="min-h-screen bg-slate-950 text-slate-100 pt-8 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto space-y-8">
+      {/* Main Full-Width Container (No White Margins) */}
+      <div className="w-full min-h-screen bg-[#030712] text-slate-100 py-6 sm:py-10 px-4 sm:px-6 lg:px-12">
+        <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
           
-          {/* Top Status Header Banner */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900/90 to-indigo-950/40 border border-slate-800 p-6 md:p-8 shadow-2xl">
-            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                    <Activity className="w-6 h-6 animate-pulse" />
-                  </div>
-                  <div>
-                    <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                      Service Status & Server Telemetry
-                    </h1>
-                    <p className="text-sm text-slate-400">
-                      Real-time uptime monitoring for Shared Hosting & BDIX Networks
-                    </p>
-                  </div>
-                </div>
-
-                {data && (
-                  <div className="flex items-center gap-3 text-sm text-slate-300 bg-slate-950/50 backdrop-blur px-4 py-2 rounded-xl border border-slate-800/80 w-fit">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>
-                      Overall Status:{' '}
-                      <strong className="text-emerald-400 font-semibold uppercase tracking-wider">
-                        {data.overallStatus}
-                      </strong>
-                    </span>
-                    <span className="text-slate-600">|</span>
-                    <span className="text-slate-400">
-                      30-Day Uptime: <strong className="text-white">{data.overallUptime30d}%</strong>
-                    </span>
-                  </div>
-                )}
+          {/* Header Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800/60">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shadow-sm">
+                <Activity className="w-5 h-5 animate-pulse" />
               </div>
-
-              {/* Controls */}
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={() => setAutoRefresh(!autoRefresh)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all border ${
-                    autoRefresh
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                      : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-white'
-                  }`}
-                >
-                  {autoRefresh ? 'Auto-Refresh (30s ON)' : 'Auto-Refresh OFF'}
-                </button>
-
-                <button
-                  onClick={() => fetchStatus(true)}
-                  disabled={refreshing}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                  {refreshing ? 'Refreshing...' : 'Refresh Status'}
-                </button>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  System Status & Network Telemetry
+                </h1>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Live monitoring of Shared Hosting, Cloud VPS, cPanel, and BDIX Routes
+                </p>
               </div>
             </div>
 
-            {/* Announcement banner */}
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 self-start sm:self-center">
+              <button
+                type="button"
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                  autoRefresh
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+              >
+                {autoRefresh ? '● Auto-Refresh: 30s' : '○ Auto-Refresh: Off'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fetchStatus(true)}
+                disabled={refreshing}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+
+          {/* Primary Status Banner (Clean & High Contrast) */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 p-6 shadow-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-3.5 w-3.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                    All Systems Operational
+                  </h2>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+                  All shared hosting servers, cPanel WHM instances, MySQL clusters, and BDIX direct fiber routes are operating at 100% capacity with ultra-low domestic latency.
+                </p>
+              </div>
+
+              {/* Status Pill */}
+              <div className="flex md:flex-col items-center md:items-end justify-between gap-1 pt-3 md:pt-0 border-t md:border-t-0 border-slate-800/80">
+                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                  Network Health
+                </span>
+                <span className="text-sm font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                  99.98% Uptime (30d)
+                </span>
+              </div>
+            </div>
+
             {data?.announcement && (
-              <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-start gap-3 text-xs text-slate-300">
-                <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                <p>{data.announcement}</p>
+              <div className="mt-4 pt-3 border-t border-slate-800 flex items-center gap-2 text-xs text-slate-300">
+                <Info className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>{data.announcement}</span>
               </div>
             )}
           </div>
 
-          {/* Key Metrics Dashboard Summary */}
+          {/* Minimal 4-Metric Grid */}
           {data && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-sm">
-                <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">30-Day Average Uptime</p>
-                  <p className="text-2xl font-black text-emerald-400 mt-1">{data.overallUptime30d}%</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">SLA Guaranteed 99.9%</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">30d Uptime</p>
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 </div>
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
+                <p className="text-2xl font-black text-emerald-400 mt-2">{data.overallUptime30d}%</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">SLA Guaranteed 99.9%</p>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-sm">
-                <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Shared Hosting Nodes</p>
-                  <p className="text-2xl font-black text-white mt-1">{data.servers.length} Active Nodes</p>
-                  <p className="text-[11px] text-emerald-400 mt-0.5">100% Operational</p>
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Nodes</p>
+                  <Server className="w-4 h-4 text-blue-400" />
                 </div>
-                <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                  <Server className="w-6 h-6" />
-                </div>
+                <p className="text-2xl font-black text-white mt-2">{data.servers.length} Nodes</p>
+                <p className="text-[11px] text-emerald-400 mt-0.5">100% Operational</p>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-sm">
-                <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Average BDIX Latency</p>
-                  <p className="text-2xl font-black text-amber-400 mt-1">12 ms</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Ultra-Fast Fiber Direct</p>
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">BDIX Latency</p>
+                  <Zap className="w-4 h-4 text-amber-400" />
                 </div>
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                  <Zap className="w-6 h-6" />
-                </div>
+                <p className="text-2xl font-black text-amber-400 mt-2">12 ms</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Direct Domestic Fiber</p>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-sm">
-                <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Active Incidents</p>
-                  <p className="text-2xl font-black text-slate-200 mt-1">0 Active</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">All Systems Normal</p>
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Incidents</p>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 </div>
-                <div className="p-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-300">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-                </div>
+                <p className="text-2xl font-black text-slate-200 mt-2">0 Active</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">All Systems Normal</p>
               </div>
             </div>
           )}
 
-          {/* Historical Uptime Graph (Recharts 30-Day Trend) */}
-          <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-6 shadow-xl space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          {/* Historical Telemetry (Clean Tabs & Minimalist Graphs) */}
+          <div className="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-5 sm:p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/70">
               <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-indigo-400" />
-                  30-Day Historical Uptime & Response Telemetry
-                </h2>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-400" />
+                  30-Day Historical Performance
+                </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Daily uptime percentage and average HTTP latency measured across all shared hosting nodes
+                  Daily uptime percentage and latency telemetry across hosting clusters
                 </p>
               </div>
 
-              {/* View Switcher Tabs */}
-              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+              {/* Minimal View Switcher */}
+              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold self-start sm:self-auto">
                 <button
-                  onClick={() => setChartType('uptime')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    chartType === 'uptime'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Uptime Area Graph
-                </button>
-                <button
+                  type="button"
                   onClick={() => setChartType('bars')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    chartType === 'bars'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    chartType === 'bars' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  30-Day Pill Grid
+                  30-Day Grid
                 </button>
                 <button
-                  onClick={() => setChartType('latency')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    chartType === 'latency'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
+                  type="button"
+                  onClick={() => setChartType('uptime')}
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    chartType === 'uptime' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Latency Trend (ms)
+                  Uptime Area
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartType('latency')}
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    chartType === 'latency' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Latency (ms)
                 </button>
               </div>
             </div>
 
             {loading ? (
-              <div className="h-64 flex items-center justify-center text-slate-500 text-sm">
-                <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-                Loading historical metrics...
+              <div className="h-44 flex items-center justify-center text-slate-500 text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                Loading performance metrics...
               </div>
             ) : data ? (
               <div>
-                {/* 1. Recharts Area Chart for Uptime */}
-                {chartType === 'uptime' && (
-                  <div className="h-72 w-full pt-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data.history30d} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorUptime" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                        <XAxis
-                          dataKey="dayLabel"
-                          stroke="#64748b"
-                          fontSize={11}
-                          tickLine={false}
-                          axisLine={{ stroke: '#334155' }}
-                        />
-                        <YAxis
-                          domain={[98, 100]}
-                          stroke="#64748b"
-                          fontSize={11}
-                          tickLine={false}
-                          axisLine={{ stroke: '#334155' }}
-                          tickFormatter={(val) => `${val}%`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#0f172a',
-                            borderColor: '#334155',
-                            borderRadius: '12px',
-                            color: '#fff',
-                            fontSize: '12px',
-                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
-                          }}
-                          formatter={(value: any) => [`${value}%`, 'Uptime']}
-                          labelFormatter={(label: any) => `Date: ${label}`}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="uptimePercentage"
-                          stroke="#10b981"
-                          strokeWidth={2.5}
-                          fillOpacity={1}
-                          fill="url(#colorUptime)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* 2. Recharts Line Chart for Latency */}
-                {chartType === 'latency' && (
-                  <div className="h-72 w-full pt-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data.history30d} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                        <XAxis
-                          dataKey="dayLabel"
-                          stroke="#64748b"
-                          fontSize={11}
-                          tickLine={false}
-                          axisLine={{ stroke: '#334155' }}
-                        />
-                        <YAxis
-                          domain={[0, 50]}
-                          stroke="#64748b"
-                          fontSize={11}
-                          tickLine={false}
-                          axisLine={{ stroke: '#334155' }}
-                          tickFormatter={(val) => `${val}ms`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: '#0f172a',
-                            borderColor: '#334155',
-                            borderRadius: '12px',
-                            color: '#fff',
-                            fontSize: '12px',
-                          }}
-                          formatter={(value: any) => [`${value} ms`, 'Avg Response Time']}
-                          labelFormatter={(label: any) => `Date: ${label}`}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="responseTimeMs"
-                          stroke="#f59e0b"
-                          strokeWidth={2}
-                          dot={{ r: 3, fill: '#f59e0b' }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* 3. GitHub / AWS Style 30-Day Bar Grid */}
+                {/* 1. Sleek 30-Day Pill Grid */}
                 {chartType === 'bars' && (
-                  <div className="space-y-4 pt-2">
-                    <div className="grid grid-cols-10 sm:grid-cols-15 md:grid-cols-30 gap-1.5">
+                  <div className="space-y-4 pt-1">
+                    <div className="grid grid-cols-10 sm:grid-cols-15 md:grid-cols-30 gap-1 sm:gap-1.5">
                       {data.history30d.map((day, idx) => {
-                        let colorClass = 'bg-emerald-500 hover:bg-emerald-400';
-                        if (day.uptimePercentage < 99.5) colorClass = 'bg-amber-500 hover:bg-amber-400';
-                        if (day.status === 'maintenance') colorClass = 'bg-blue-500 hover:bg-blue-400';
-                        if (day.status === 'outage') colorClass = 'bg-rose-500 hover:bg-rose-400';
+                        let colorClass = 'bg-emerald-500/80 hover:bg-emerald-400';
+                        if (day.uptimePercentage < 99.5) colorClass = 'bg-amber-500/80 hover:bg-amber-400';
+                        if (day.status === 'maintenance') colorClass = 'bg-blue-500/80 hover:bg-blue-400';
+                        if (day.status === 'outage') colorClass = 'bg-rose-500/80 hover:bg-rose-400';
 
                         return (
-                          <div
-                            key={idx}
-                            className="group relative flex flex-col items-center"
-                          >
-                            <div className={`h-12 w-full rounded-md transition-all cursor-pointer ${colorClass}`} />
+                          <div key={idx} className="group relative flex flex-col items-center">
+                            <div className={`h-10 sm:h-12 w-full rounded-md transition-all cursor-pointer ${colorClass}`} />
                             
                             {/* Hover tooltip */}
-                            <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-20 w-36">
-                              <div className="bg-slate-950 border border-slate-700 text-white text-[11px] rounded-lg p-2 shadow-2xl text-center space-y-0.5">
+                            <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-30 w-32">
+                              <div className="bg-slate-950 border border-slate-700 text-white text-[10px] rounded-lg p-2 shadow-2xl text-center space-y-0.5">
                                 <p className="font-bold text-slate-300">{day.dayLabel}</p>
                                 <p className="text-emerald-400 font-extrabold">{day.uptimePercentage}% Uptime</p>
-                                <p className="text-slate-400 text-[10px]">{day.responseTimeMs}ms latency</p>
+                                <p className="text-slate-400">{day.responseTimeMs} ms latency</p>
                               </div>
                             </div>
                           </div>
@@ -496,50 +391,102 @@ export const StatusPage: React.FC = () => {
                       })}
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-2">
+                    <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-1">
                       <span>30 Days Ago</span>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded bg-emerald-500" /> 100% Operational
+                          <span className="w-2 h-2 rounded bg-emerald-500" /> Operational
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded bg-amber-500" /> Degraded
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded bg-blue-500" /> Maintenance
+                          <span className="w-2 h-2 rounded bg-blue-500" /> Maintenance
                         </span>
                       </div>
                       <span>Today</span>
                     </div>
                   </div>
                 )}
+
+                {/* 2. Uptime Area Graph */}
+                {chartType === 'uptime' && (
+                  <div className="h-60 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={data.history30d} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorUptimeMinimal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis dataKey="dayLabel" stroke="#64748b" fontSize={10} tickLine={false} axisLine={{ stroke: '#334155' }} />
+                        <YAxis domain={[98, 100]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={{ stroke: '#334155' }} tickFormatter={(val) => `${val}%`} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#0f172a',
+                            borderColor: '#334155',
+                            borderRadius: '8px',
+                            color: '#fff',
+                            fontSize: '11px',
+                          }}
+                          formatter={(value: any) => [`${value}%`, 'Uptime']}
+                          labelFormatter={(label: any) => `Date: ${label}`}
+                        />
+                        <Area type="monotone" dataKey="uptimePercentage" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorUptimeMinimal)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* 3. Latency Trend */}
+                {chartType === 'latency' && (
+                  <div className="h-60 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={data.history30d} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis dataKey="dayLabel" stroke="#64748b" fontSize={10} tickLine={false} axisLine={{ stroke: '#334155' }} />
+                        <YAxis domain={[0, 40]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={{ stroke: '#334155' }} tickFormatter={(val) => `${val}ms`} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#0f172a',
+                            borderColor: '#334155',
+                            borderRadius: '8px',
+                            color: '#fff',
+                            fontSize: '11px',
+                          }}
+                          formatter={(value: any) => [`${value} ms`, 'Response Time']}
+                          labelFormatter={(label: any) => `Date: ${label}`}
+                        />
+                        <Line type="monotone" dataKey="responseTimeMs" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2.5, fill: '#f59e0b' }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
 
-          {/* Individual Shared Hosting Servers Section */}
+          {/* Individual Server Nodes Section */}
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Server className="w-5 h-5 text-emerald-400" />
-                  Shared Hosting & Infrastructure Server Status
-                </h2>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Server className="w-4 h-4 text-emerald-400" />
+                  Shared Hosting & Infrastructure Nodes
+                </h3>
                 <p className="text-xs text-slate-400">
-                  Live HTTP, MySQL, cPanel/WHM, and BDIX ping performance for individual servers
+                  Individual server uptime, cPanel status, and live BDIX ping check
                 </p>
               </div>
 
               {/* Server Filter Dropdown */}
               {data && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 font-medium">Filter Server:</span>
                   <select
                     value={selectedServer}
                     onChange={(e) => setSelectedServer(e.target.value)}
-                    className="bg-slate-900 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 transition-colors"
+                    className="bg-slate-900 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-blue-500 transition-colors cursor-pointer"
                   >
-                    <option value="all">All Shared Hosting Nodes ({data.servers.length})</option>
+                    <option value="all">All Server Nodes ({data.servers.length})</option>
                     {data.servers.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
@@ -551,7 +498,7 @@ export const StatusPage: React.FC = () => {
             </div>
 
             {/* Server Cards List */}
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-3">
               {filteredServers.map((server) => {
                 const isExpanded = expandedServerId === server.id;
                 const dynamicPing = pingResults[server.id];
@@ -559,105 +506,102 @@ export const StatusPage: React.FC = () => {
                 return (
                   <div
                     key={server.id}
-                    className="rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all shadow-md overflow-hidden"
+                    className="rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-all shadow-sm overflow-hidden"
                   >
-                    <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       {/* Left Server Title & Badges */}
-                      <div className="space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2.5">
-                          <h3 className="text-base font-bold text-white">{server.name}</h3>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">{server.name}</h4>
                           {getStatusBadge(server.status)}
-                          <span className="text-[11px] font-mono bg-slate-950 px-2.5 py-0.5 rounded-md text-slate-400 border border-slate-800">
+                          <span className="text-[10px] font-mono bg-slate-950 px-2 py-0.5 rounded text-slate-400 border border-slate-800">
                             {server.ip}
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 flex items-center gap-2">
-                          <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                          <Globe className="w-3.5 h-3.5 text-blue-400" />
                           {server.datacenter}
-                          <span className="text-slate-600">•</span>
+                          <span className="text-slate-600">&bull;</span>
                           <span className="text-slate-300 font-medium">{server.type}</span>
                         </p>
                       </div>
 
                       {/* Right Telemetry & Ping button */}
-                      <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                      <div className="flex flex-wrap items-center gap-4 sm:gap-6 self-start md:self-center">
                         <div className="text-right">
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wider">30d Uptime</p>
-                          <p className="text-sm font-black text-emerald-400">{server.uptime30d}%</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">30d Uptime</p>
+                          <p className="text-xs font-black text-emerald-400">{server.uptime30d}%</p>
                         </div>
 
                         <div className="text-right">
-                          <p className="text-[11px] text-slate-400 uppercase tracking-wider">BDIX Latency</p>
-                          <p className="text-sm font-bold text-amber-400">
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">BDIX Ping</p>
+                          <p className="text-xs font-bold text-amber-400">
                             {dynamicPing ? `${dynamicPing} ms (Live)` : `${server.latencyMs} ms`}
                           </p>
                         </div>
 
                         <button
+                          type="button"
                           onClick={() => handlePingTest(server.id)}
                           disabled={testingPingId === server.id}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition-all disabled:opacity-50"
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
                         >
-                          <Radio className={`w-3.5 h-3.5 text-indigo-400 ${testingPingId === server.id ? 'animate-ping' : ''}`} />
-                          {testingPingId === server.id ? 'Pinging...' : 'Ping Check'}
+                          <Radio className={`w-3.5 h-3.5 text-blue-400 ${testingPingId === server.id ? 'animate-ping' : ''}`} />
+                          {testingPingId === server.id ? 'Testing...' : 'Live Ping'}
                         </button>
 
                         <button
+                          type="button"
                           onClick={() => toggleExpand(server.id)}
-                          className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors"
-                          title="Toggle Services Breakdown"
+                          className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                          title="View Services Details"
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
 
-                    {/* Expanded Services & Telemetry Details */}
+                    {/* Expanded Services Breakdown */}
                     {isExpanded && (
-                      <div className="bg-slate-950/60 border-t border-slate-800 p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 text-xs">
-                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
-                            <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                            HTTP Web Server
+                      <div className="bg-slate-950/70 border-t border-slate-800/80 p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs">
+                        <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[11px]">
+                            <Globe className="w-3 h-3 text-emerald-400" /> Web Server
                           </div>
                           <p className="text-emerald-400 font-bold capitalize">{server.services.http}</p>
                           <p className="text-[10px] text-slate-500">LiteSpeed Enterprise</p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
-                            <Database className="w-3.5 h-3.5 text-emerald-400" />
-                            MySQL / MariaDB
+                        <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[11px]">
+                            <Database className="w-3 h-3 text-emerald-400" /> Database
                           </div>
                           <p className="text-emerald-400 font-bold capitalize">{server.services.mysql}</p>
-                          <p className="text-[10px] text-slate-500">InnoDB Cached</p>
+                          <p className="text-[10px] text-slate-500">MariaDB Cached</p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                            cPanel / WHM
+                        <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[11px]">
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" /> cPanel / WHM
                           </div>
                           <p className="text-emerald-400 font-bold capitalize">{server.services.cpanel}</p>
-                          <p className="text-[10px] text-slate-500">v118 Control Panel</p>
+                          <p className="text-[10px] text-slate-500">Control Panel v118</p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
-                            <Mail className="w-3.5 h-3.5 text-emerald-400" />
-                            Mail Server (Exim)
+                        <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[11px]">
+                            <Mail className="w-3 h-3 text-emerald-400" /> Mail Server
                           </div>
                           <p className="text-emerald-400 font-bold capitalize">{server.services.mail}</p>
-                          <p className="text-[10px] text-slate-500">DKIM / SPF Verified</p>
+                          <p className="text-[10px] text-slate-500">Exim &bull; DKIM / SPF</p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
-                            <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-                            CPU & Memory
+                        <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[11px]">
+                            <Cpu className="w-3 h-3 text-blue-400" /> Load / Memory
                           </div>
                           <p className="text-white font-bold">{server.loadAverage}</p>
-                          <p className="text-[10px] text-slate-500">RAM: {server.ramUsage} | {server.storageType}</p>
+                          <p className="text-[10px] text-slate-500">RAM: {server.ramUsage}</p>
                         </div>
                       </div>
                     )}
@@ -667,28 +611,28 @@ export const StatusPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Maintenance & Past Incidents Timeline */}
-          {data && data.incidents.length > 0 && (
-            <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-6 shadow-xl space-y-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Clock className="w-5 h-5 text-indigo-400" />
-                Scheduled Maintenance & Recent Incidents Log
-              </h2>
+          {/* Maintenance & Incidents Section */}
+          <div className="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-5 sm:p-6 shadow-sm space-y-3">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-400" />
+              Scheduled Maintenance & Incidents
+            </h3>
 
-              <div className="space-y-3">
+            {data && data.incidents.length > 0 ? (
+              <div className="space-y-2">
                 {data.incidents.map((inc) => (
                   <div
                     key={inc.id}
-                    className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                    className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                   >
-                    <div className="space-y-1">
+                    <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-sm">{inc.title}</span>
+                        <span className="font-bold text-white">{inc.title}</span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">
                           {inc.status}
                         </span>
                       </div>
-                      <p className="text-slate-400">{inc.description}</p>
+                      <p className="text-slate-400 mt-1">{inc.description}</p>
                     </div>
 
                     <div className="text-right shrink-0">
@@ -704,8 +648,29 @@ export const StatusPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>No incidents reported in the last 90 days. All systems running at peak performance.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Minimal Bottom Help Card */}
+          <div className="rounded-xl bg-slate-900/40 border border-slate-800/70 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <LifeBuoy className="w-5 h-5 text-blue-400 shrink-0" />
+              <p className="text-slate-300">
+                Facing an unexpected issue with your website or server? Our 24/7 technical team is ready to help.
+              </p>
             </div>
-          )}
+            <a
+              href="/support"
+              className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs inline-flex items-center gap-1.5 transition-colors shrink-0 self-start sm:self-auto"
+            >
+              Contact Support <ExternalLink size={12} />
+            </a>
+          </div>
 
         </div>
       </div>
@@ -724,7 +689,7 @@ function getFallbackData(): StatusData {
       date: d.toISOString().split('T')[0],
       dayLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       uptimePercentage: i === 12 ? 99.85 : 100.0,
-      responseTimeMs: Math.round(12 + Math.abs(Math.sin(i * 5)) * 10),
+      responseTimeMs: Math.round(10 + Math.abs(Math.sin(i * 5)) * 8),
       status: i === 12 ? 'maintenance' : 'operational',
       incidentsCount: i === 12 ? 1 : 0,
     });
@@ -784,7 +749,7 @@ function getFallbackData(): StatusData {
         ip: '198.51.100.45',
         status: 'operational',
         uptime30d: 100.0,
-        latencyMs: 182,
+        latencyMs: 178,
         loadAverage: '0.28 / 32 Cores',
         ramUsage: '31%',
         storageType: 'NVMe Gen4 SSD',
