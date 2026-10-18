@@ -112,6 +112,8 @@ export const ActiveHostingAccounts: React.FC = () => {
   const [changePackageModal, setChangePackageModal] = useState<HostingAccountItem | null>(null);
   const [newPlanCode, setNewPlanCode] = useState('standard');
   const [updatingPackage, setUpdatingPackage] = useState(false);
+  const [deleteModalAccount, setDeleteModalAccount] = useState<HostingAccountItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [isAddingModal, setIsAddingModal] = useState(false);
   const [savingNewAccount, setSavingNewAccount] = useState(false);
@@ -319,20 +321,21 @@ export const ActiveHostingAccounts: React.FC = () => {
   };
 
 
-  const handleTerminate = async (account: HostingAccountItem) => {
-    if (!isAdmin) { toast.error('You do not have permission to delete this.'); return; }
-    
+  const handleTerminate = (account: HostingAccountItem) => {
+    if (!isAdmin) { 
+      toast.error('You do not have permission to delete this.'); 
+      return; 
+    }
+    setDeleteModalAccount(account);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModalAccount) return;
+    const account = deleteModalAccount;
     const targetName = account.domain || account.username || account.id || 'unknown';
     const isTestOrPending = account.status === 'pending' || !account.domain || account.domain.includes('Unknown') || !account.domain.includes('.');
-    
-    const confirmed = isTestOrPending
-      ? window.confirm(`Delete this test/pending record "${targetName}" from database?`)
-      : (window.prompt(`⚠️ DANGER: This will delete the account "${targetName}". Type "${targetName}" to confirm:`) === targetName);
 
-    if (!confirmed) {
-      return;
-    }
-
+    setIsDeleting(true);
     const toastId = toast.loading(`Removing ${targetName}...`);
     try {
       const accId = account.providerAccountId || account.username || account.id;
@@ -350,9 +353,12 @@ export const ActiveHostingAccounts: React.FC = () => {
 
       setAccounts(prev => prev.filter(a => a.id !== account.id));
       toast.success(`Account "${targetName}" removed successfully.`, { id: toastId });
+      setDeleteModalAccount(null);
     } catch (error: any) {
       console.error('Termination error:', error);
       toast.error('Failed to remove account: ' + (error?.message || 'Server error'), { id: toastId });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1399,6 +1405,73 @@ export const ActiveHostingAccounts: React.FC = () => {
                   {savingVps ? 'Saving...' : 'Save VPS Settings'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete / Terminate Account Modal */}
+      {deleteModalAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-100 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900">Delete Account</h3>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  Are you sure you want to permanently delete this hosting record from the system?
+                </p>
+              </div>
+              <button
+                onClick={() => setDeleteModalAccount(null)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-100 space-y-1.5 font-mono text-xs">
+              <div className="flex justify-between items-center text-gray-600">
+                <span className="font-sans font-medium text-gray-500">Domain / Identifier:</span>
+                <span className="font-bold text-gray-900 truncate max-w-[200px]" title={deleteModalAccount.domain || deleteModalAccount.id}>
+                  {deleteModalAccount.domain || deleteModalAccount.username || deleteModalAccount.id}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-gray-600">
+                <span className="font-sans font-medium text-gray-500">Plan / Type:</span>
+                <span className="font-semibold text-blue-600 uppercase">{deleteModalAccount.planId || 'Standard'}</span>
+              </div>
+              <div className="flex justify-between items-center text-gray-600">
+                <span className="font-sans font-medium text-gray-500">Status:</span>
+                <span className="capitalize font-semibold text-amber-600">{deleteModalAccount.status}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-amber-700 bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>This action cannot be undone and will permanently remove this record.</span>
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteModalAccount(null)}
+                disabled={isDeleting}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-md shadow-red-200 transition disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isDeleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 size={14} />}
+                {isDeleting ? 'Deleting...' : 'Yes, Delete Account'}
+              </button>
             </div>
           </div>
         </div>
