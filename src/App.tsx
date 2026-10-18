@@ -60,6 +60,7 @@ const PaymentReturn = lazyWithRetry(() => import('./pages/PaymentReturn').then(m
 const HostingCart = lazyWithRetry(() => import('./pages/hosting/HostingCart').then(m => ({ default: m.HostingCart })));
 const HostingCheckout = lazyWithRetry(() => import('./pages/hosting/HostingCheckout').then(m => ({ default: m.HostingCheckout })));
 const DomainRenewal = lazyWithRetry(() => import('./pages/hosting/DomainRenewal'));
+const StatusPage = lazyWithRetry(() => import('./pages/StatusPage').then(m => ({ default: m.StatusPage })));
 
 import { PageLoader } from './components/Loading';
 
@@ -133,6 +134,9 @@ export default function App() {
 
                   {/* --- SUPPORT & INFO --- */}
                   <Route path="/support" element={<LazyWrapper><SupportPage /></LazyWrapper>} />
+                  <Route path="/status" element={<LazyWrapper><StatusPage /></LazyWrapper>} />
+                  <Route path="/service-status" element={<Navigate to="/status" replace />} />
+                  <Route path="/server-status" element={<Navigate to="/status" replace />} />
                   <Route path="/about" element={<LazyWrapper><AboutUs /></LazyWrapper>} />
                   <Route path="/about-us" element={<Navigate to="/about" replace />} />
                   <Route path="/contact" element={<LazyWrapper><ContactUs /></LazyWrapper>} />

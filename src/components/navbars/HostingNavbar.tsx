@@ -98,6 +98,7 @@ export const HostingNavbar: React.FC = () => {
       ],
     },
     { name: "Support", path: "/support" },
+    { name: "Status", path: "/status" },
   ];
 
   const isActive = (path: string) => {
