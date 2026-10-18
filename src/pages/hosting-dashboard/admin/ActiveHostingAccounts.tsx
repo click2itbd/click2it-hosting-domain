@@ -319,40 +319,40 @@ export const ActiveHostingAccounts: React.FC = () => {
   };
 
 
-    const handleTerminate = async (account: HostingAccountItem) => {
+  const handleTerminate = async (account: HostingAccountItem) => {
     if (!isAdmin) { toast.error('You do not have permission to delete this.'); return; }
     
     const targetName = account.domain || account.username || account.id || 'unknown';
-    const domainConfirm = window.prompt(
-      `⚠️ DANGER: This will PERMANENTLY delete the cPanel account, databases, and emails for ${targetName} on the server.\n\nType "${targetName}" to confirm:`
-    );
+    const isTestOrPending = account.status === 'pending' || !account.domain || account.domain.includes('Unknown') || !account.domain.includes('.');
+    
+    const confirmed = isTestOrPending
+      ? window.confirm(`Delete this test/pending record "${targetName}" from database?`)
+      : (window.prompt(`⚠️ DANGER: This will delete the account "${targetName}". Type "${targetName}" to confirm:`) === targetName);
 
-    if (domainConfirm !== targetName) {
-      toast.error('Termination cancelled: Confirmation text did not match.');
+    if (!confirmed) {
       return;
     }
 
-    const toastId = toast.loading(`Terminating ${targetName} on WHM server...`);
+    const toastId = toast.loading(`Removing ${targetName}...`);
     try {
       const accId = account.providerAccountId || account.username || account.id;
       
-      try {
-        if (accId) await terminateHostingAccount(accId);
-      } catch (whmError: any) {
-        const forceDelete = window.confirm(`WHM Error: ${whmError.message}\n\nDo you want to force delete this record from the database anyway?`);
-        if (!forceDelete) {
-          toast.error('Termination aborted.', { id: toastId });
-          return;
+      // Only call WHM if it is an active shared account with a valid provider account ID
+      if (account.status === 'active' && !isVps(account) && accId && !isTestOrPending) {
+        try {
+          await terminateHostingAccount(accId);
+        } catch (whmError: any) {
+          console.warn('WHM termination notice:', whmError?.message);
         }
       }
 
       await deleteDoc(doc(db, 'hostingAccounts', account.id));
 
       setAccounts(prev => prev.filter(a => a.id !== account.id));
-      toast.success(`Account for ${targetName} has been completely removed.`, { id: toastId });
+      toast.success(`Account "${targetName}" removed successfully.`, { id: toastId });
     } catch (error: any) {
       console.error('Termination error:', error);
-      toast.error('Failed to remove account: ' + error.message, { id: toastId });
+      toast.error('Failed to remove account: ' + (error?.message || 'Server error'), { id: toastId });
     }
   };
 
