@@ -35,13 +35,21 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('cart');
-    return saved ? JSON.parse(saved).map(withoutTransferSecrets) : [];
+    try {
+      const saved = localStorage.getItem('cart');
+      return saved ? JSON.parse(saved).map(withoutTransferSecrets) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [appliedDiscount, setAppliedDiscount] = useState<DiscountCode | null>(() => {
-    const saved = localStorage.getItem('appliedDiscount');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('appliedDiscount');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const { settings } = useSettings();

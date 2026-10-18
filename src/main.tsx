@@ -20,8 +20,12 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   });
 }
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );
