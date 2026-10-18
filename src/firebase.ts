@@ -4,6 +4,7 @@ import { getFirestore, initializeFirestore, persistentLocalCache, persistentMult
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { validateFirebaseEnvironment, testFirestoreConnection, FirebaseValidationResult } from './utils/firebaseValidation';
 
 let firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyKeyForBuildAndProductionFallback",
@@ -22,22 +23,31 @@ try {
   if (configModule?.default) {
     firebaseConfig = { ...firebaseConfig, ...configModule.default };
   }
-} catch (e) {
+} catch {
   // Fall back to environment config
 }
 
+// Run environment validation script immediately at initialization
+export const firebaseValidationResult: FirebaseValidationResult = validateFirebaseEnvironment(firebaseConfig);
+
 const app = initializeApp(firebaseConfig);
+
+const dbId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+  ? firebaseConfig.firestoreDatabaseId
+  : undefined;
 
 let firestoreInstance: any;
 try {
-  firestoreInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-  });
+  firestoreInstance = dbId
+    ? initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }, dbId)
+    : initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 } catch {
   try {
-    firestoreInstance = initializeFirestore(app, {});
+    firestoreInstance = dbId
+      ? initializeFirestore(app, {}, dbId)
+      : initializeFirestore(app, {});
   } catch {
-    firestoreInstance = getFirestore(app);
+    firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
   }
 }
 
@@ -50,15 +60,25 @@ const siteKey = (firebaseConfig as any).appCheck?.siteKey;
 const isBrowser = typeof window !== 'undefined';
 const isRealSiteKey = siteKey && typeof siteKey === 'string' && !siteKey.includes('YOUR_') && !siteKey.includes('RECAPTCHA');
 
-if (isBrowser && isRealSiteKey) {
-  try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(siteKey),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch (e) {
-    console.warn('App Check init skipped:', e);
+if (isBrowser) {
+  if (isRealSiteKey) {
+    try {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(siteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+    } catch (e) {
+      console.warn('App Check init skipped:', e);
+    }
   }
+
+  // Asynchronously test Firestore connection upon boot
+  setTimeout(() => {
+    testFirestoreConnection(db).then((connected) => {
+      firebaseValidationResult.testedFirestore = true;
+      firebaseValidationResult.firestoreConnected = connected;
+    });
+  }, 1000);
 }
 
 export { app };
