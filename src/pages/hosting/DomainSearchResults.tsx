@@ -40,7 +40,11 @@ export default function DomainSearchResults() {
   const { loading, results, search, error } = useDomainSearch();
   
   // A base list of popular TLDs to check
-  const popularTlds = ['.com', '.net', '.org', '.co', '.io', '.online', '.dev', '.tech', '.store', '.me'];
+  const popularTlds = [
+    '.com', '.net', '.org', '.xyz', '.co', '.io', '.online', '.dev', '.tech', '.store',
+    '.site', '.app', '.ai', '.info', '.biz', '.shop', '.pro', '.me', '.live', '.cloud',
+    '.digital', '.space', '.agency', '.link', '.club', '.website'
+  ];
 
   const toggleFavorite = (domain: string) => {
     setFavorites(prev => {
@@ -107,9 +111,13 @@ export default function DomainSearchResults() {
       const availableTlds = pricing.length > 0 
         ? pricing.map(p => p.tld.startsWith('.') ? p.tld.toLowerCase() : `.${p.tld.toLowerCase()}`) 
         : popularTlds;
-      const alternates = availableTlds
+
+      // Combine both lists to ensure comprehensive TLD suggestions
+      const combinedTlds = Array.from(new Set([...availableTlds, ...popularTlds]));
+
+      const alternates = combinedTlds
         .filter(tld => tld !== (searchedTld || '.com'))
-        .slice(0, 10)
+        .slice(0, 24)
         .map(tld => `${baseName}${tld}`);
         
       const domainsToSearch = [exactDomain, ...alternates];
