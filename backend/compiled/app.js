@@ -155,6 +155,8 @@ export function createApp() {
     apiRouter.post("/auth/login", authLimiter);
     apiRouter.post("/auth/register", authLimiter);
     apiRouter.post("/auth/forgot-password", authLimiter);
+    apiRouter.post("/email/forgot-password", authLimiter);
+    apiRouter.post("/forgot-password", authLimiter);
     apiRouter.post("/auth/otp", authLimiter);
     apiRouter.use("/ai/chat", sensitiveLimiter);
     apiRouter.use(generalLimiter);
@@ -169,6 +171,7 @@ export function createApp() {
     apiRouter.use("/ai", aiRouter);
     apiRouter.use("/webhook", webhookRouter);
     apiRouter.use("/customers", customersRouter);
+    apiRouter.use("/email", emailRouter);
     apiRouter.use("/", emailRouter);
     apiRouter.use("/", campaignRouter);
     app.use("/api", apiRouter);

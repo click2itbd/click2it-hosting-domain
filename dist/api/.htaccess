@@ -1,0 +1,7 @@
+DirectoryIndex disabled
+Options -Indexes
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /api/
+  RewriteRule ^(.*)$ http://127.0.0.1:4000/api/$1 [P,L,QSA]
+</IfModule>

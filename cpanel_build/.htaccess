@@ -15,6 +15,19 @@ Options -Indexes
   RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|WhatsApp|Twitterbot|Pinterest|LinkedInBot|TelegramBot|Slackbot|Discordbot|SkypeUriPreview|Viber|kakaotalk-scrap|vkShare) [NC]
   RewriteRule ^product/([a-zA-Z0-9_.-]+)/?$ /share.php?id=$1 [L,QSA]
 
+  # Map any legacy hashed entry or chunk bundle (e.g. /assets/index-OkU3895N.js) to /assets/<name>.js
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{DOCUMENT_ROOT}/assets/$1.js -f
+  RewriteRule ^assets/([A-Za-z0-9_]+)-[A-Za-z0-9_-]+\.js$ /assets/$1.js [L,E=Cache-Control:no-cache]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{DOCUMENT_ROOT}/assets/index.css -f
+  RewriteRule ^assets/index-[A-Za-z0-9_-]+\.css$ /assets/index.css [L,E=Cache-Control:no-cache]
+
+  # Do not rewrite missing /assets/*.js or /assets/*.css to index.html (prevents text/html MIME error)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^assets/.*\.(js|mjs|css|wasm)$ - [R=404,L]
+
   # Direct all other routes to React Single Page App (index.html)
   RewriteRule ^index\.html$ - [L,E=Cache-Control:no-cache]
   RewriteCond %{REQUEST_FILENAME} !-f
@@ -27,9 +40,15 @@ Options -Indexes
   Header always set Alt-Svc "clear"
 </IfModule>
 
-<FilesMatch "\.(js|css|woff2?|ttf|svg|png|jpe?g|webp|ico)$">
+<FilesMatch "\.(woff2?|ttf|svg|png|jpe?g|webp|ico)$">
   <IfModule mod_headers.c>
     Header set Cache-Control "public, max-age=31536000, immutable"
+  </IfModule>
+</FilesMatch>
+
+<FilesMatch "\.(js|css)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=0, must-revalidate"
   </IfModule>
 </FilesMatch>
 
