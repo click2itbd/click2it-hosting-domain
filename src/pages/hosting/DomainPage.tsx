@@ -78,14 +78,6 @@ const DomainPage = () => {
                 disabled={isSearching}
               />
               <div className="flex items-center gap-2 pr-2">
-                <select 
-                  value={selectedTld}
-                  onChange={(e) => setSelectedTld(e.target.value)}
-                  className="hidden md:block text-sm text-gray-600 bg-gray-100 border-0 rounded-lg px-3 py-2 outline-none h-[44px] cursor-pointer">
-                  {POPULAR_TLDS.map(tld => (
-                    <option key={tld} value={tld}>{tld}</option>
-                  ))}
-                </select>
                 <button 
                   type="submit"
                   disabled={isSearching}

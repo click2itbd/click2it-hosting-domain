@@ -100,14 +100,6 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
               className="flex-1 px-4 py-5 text-lg text-gray-800 outline-none bg-transparent placeholder-gray-400"
             />
             <div className="flex items-center gap-2 pr-2">
-              <select 
-                value={selectedTld}
-                onChange={e => setSelectedTld(e.target.value)}
-                className="hidden md:block text-sm text-gray-600 bg-gray-100 border-0 rounded-lg px-3 py-2 outline-none cursor-pointer">
-                {POPULAR_TLDS.map(tld => (
-                  <option key={tld} value={tld}>{tld}</option>
-                ))}
-              </select>
               <button
                 onClick={handleSearch}
                 className="flex items-center gap-2 text-white font-bold px-7 py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-90"

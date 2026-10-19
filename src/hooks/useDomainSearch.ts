@@ -41,7 +41,7 @@ export function useDomainSearch() {
         ...prev, 
         loading: false, 
         results: [], 
-        error: 'Domain search service is currently unavailable. Please check your backend connection.' 
+        error: 'Unable to check domain availability right now. Please try again.' 
       }));
     }
   }, []);

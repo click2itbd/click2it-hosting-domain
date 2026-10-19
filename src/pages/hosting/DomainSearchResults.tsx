@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { HostingPromoBanner } from '../../components/hosting/HostingPromoBanner';
-import { Search, X, Info, Star, ShoppingCart, Loader2, DollarSign } from 'lucide-react';
+import { Search, X, Info, Star, ShoppingCart, Loader2, DollarSign, RefreshCw } from 'lucide-react';
 import { useDomainSearch } from '../../hooks/useDomainSearch';
 import { getDomainPricing, DomainPricing, submitDomainOffer } from '../../services/hostingApi';
 import { useCart } from '../../context/CartContext';
@@ -329,14 +329,35 @@ export default function DomainSearchResults() {
                 ))}
               </div>
             </div>
+          ) : error && !exactMatch && !loading ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 md:p-12 mb-6 text-center max-w-xl mx-auto">
+              <div className="w-14 h-14 bg-orange-50 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-orange-100">
+                <Search size={26} />
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2">Unable to Verify Domain Availability</h3>
+              <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                We could not verify availability for this domain at the moment. Please verify your spelling or click below to try searching again.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  lastSearchRef.current = '';
+                  const clean = cleanDomainInput(query);
+                  if (clean) {
+                    const targetDomain = clean.includes('.') ? clean : `${clean}.com`;
+                    const parts = clean.split('.');
+                    const base = parts[0];
+                    const alternates = popularTlds.map(tld => `${base}${tld}`);
+                    search([targetDomain, ...alternates]);
+                  }
+                }}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold px-6 py-3 rounded-xl text-sm shadow-md hover:from-orange-600 hover:to-orange-700 active:scale-95 transition-all cursor-pointer"
+              >
+                <RefreshCw size={16} /> Try Searching Again
+              </button>
+            </div>
           ) : (
             <>
-              {/* Error message */}
-              {error && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 mb-4 md:mb-6 text-sm flex items-center justify-between">
-                  <span>⚠️ {error}</span>
-                </div>
-              )}
 
               {/* Exact Match Result Card */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
