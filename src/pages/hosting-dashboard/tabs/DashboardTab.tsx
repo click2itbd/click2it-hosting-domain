@@ -13,19 +13,26 @@ import {
 } from '../modules';
 
 import { apiGet } from '../../../services/apiClient';
+import { useAuth } from '../../../context/AuthContext';
 import { Wallet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SystemConnectionStatus } from '../components/SystemConnectionStatus';
 
 const ApiBalanceWidget = () => {
+  const { user, canAccessAdmin, loading: authLoading } = useAuth();
   const [balance, setBalance] = React.useState<number | null>(null);
   const [currency, setCurrency] = React.useState<string>('USD');
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    if (authLoading || !user || !canAccessAdmin) {
+      if (!authLoading) setLoading(false);
+      return;
+    }
     const fetchBalance = async () => {
       try {
-        const res: any = await apiGet('/api/domains/balance');
+        const token = await user.getIdToken();
+        const res: any = await apiGet('/api/domains/balance', token);
         if (res.success && res.balance !== undefined) {
           setBalance(res.balance);
           setCurrency(res.currency || 'USD');
@@ -37,7 +44,7 @@ const ApiBalanceWidget = () => {
       }
     };
     fetchBalance();
-  }, []);
+  }, [user, canAccessAdmin, authLoading]);
 
   if (loading || balance === null) return null;
 

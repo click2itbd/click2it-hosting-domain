@@ -45,6 +45,13 @@ async function apiRequest<T>(path: string, options: RequestInit = {}, token?: st
 
   if (authToken) {
     headers['Authorization'] = `Bearer ${authToken}`;
+    headers['X-Authorization'] = `Bearer ${authToken}`;
+  } else {
+    // If an admin or balance endpoint is called without an auth session, abort gracefully to prevent browser 401 console errors
+    const isAuthRequiredEndpoint = cleanPath.startsWith('/api/admin') || cleanPath === '/api/domains/balance';
+    if (isAuthRequiredEndpoint) {
+      throw new Error('Authentication required');
+    }
   }
 
   let response = await fetch(url, {
@@ -57,6 +64,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}, token?: st
       const freshToken = await auth.currentUser.getIdToken(true);
       if (freshToken) {
         headers['Authorization'] = `Bearer ${freshToken}`;
+        headers['X-Authorization'] = `Bearer ${freshToken}`;
         response = await fetch(url, {
           ...options,
           headers,

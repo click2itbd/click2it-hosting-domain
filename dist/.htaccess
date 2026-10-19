@@ -4,6 +4,9 @@ Options -Indexes
   RewriteEngine On
   RewriteBase /
 
+  # Ensure Authorization header is passed to backend through Apache/LiteSpeed proxy
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
   <IfModule mod_proxy.c>
     # Forward /api requests to local Node.js backend on port 4001
     RewriteRule ^/?api/(.*)$ http://127.0.0.1:4001/api/$1 [P,L,QSA,E=Cache-Control:no-cache]

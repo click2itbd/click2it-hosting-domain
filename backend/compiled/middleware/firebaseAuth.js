@@ -10,11 +10,11 @@ function decodeDevToken(idToken) {
     }
 }
 export async function requireFirebaseAuth(req, res, next) {
-    const authHeader = req.headers.authorization;
+    const authHeader = (req.headers.authorization || req.headers['http_authorization'] || req.headers['x-authorization'] || '');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Missing or invalid authorization token' });
     }
-    const idToken = authHeader.split('Bearer ')[1];
+    const idToken = authHeader.split('Bearer ')[1]?.trim();
     try {
         const adminAuth = getAdminAuth();
         if (adminAuth) {
@@ -35,7 +35,7 @@ export async function requireFirebaseAuth(req, res, next) {
     return res.status(401).json({ error: 'Invalid or expired token' });
 }
 export async function requireAdmin(req, res, next) {
-    const authHeader = req.headers.authorization;
+    const authHeader = (req.headers.authorization || req.headers['http_authorization'] || req.headers['x-authorization'] || '');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Missing or invalid authorization token' });
     }

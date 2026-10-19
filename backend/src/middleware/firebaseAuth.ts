@@ -12,12 +12,12 @@ function decodeDevToken(idToken: string): any {
 }
 
 export async function requireFirebaseAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
+  const authHeader = (req.headers.authorization || (req.headers['http_authorization'] as string) || (req.headers['x-authorization'] as string) || '') as string;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing or invalid authorization token' });
   }
 
-  const idToken = authHeader.split('Bearer ')[1];
+  const idToken = authHeader.split('Bearer ')[1]?.trim();
 
   try {
     const adminAuth = getAdminAuth();
@@ -41,7 +41,7 @@ export async function requireFirebaseAuth(req: Request, res: Response, next: Nex
 }
 
 export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
+  const authHeader = (req.headers.authorization || (req.headers['http_authorization'] as string) || (req.headers['x-authorization'] as string) || '') as string;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing or invalid authorization token' });
   }

@@ -70,7 +70,7 @@ export const SystemConnectionStatus: React.FC<{
   className?: string;
   onNavigateTab?: (tabName: string) => void;
 }> = ({ className, onNavigateTab }) => {
-  const { user } = useAuth();
+  const { user, canAccessAdmin, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [testingService, setTestingService] = useState<string | null>(null);
@@ -110,9 +110,14 @@ export const SystemConnectionStatus: React.FC<{
   });
 
   const fetchAllStatuses = useCallback(async (isManual = false) => {
+    if (authLoading || !user || !canAccessAdmin) {
+      setLoading(false);
+      return;
+    }
     if (isManual) setRefreshing(true);
     try {
-      const res: any = await apiGet('/api/admin/connections-status');
+      const token = await user.getIdToken();
+      const res: any = await apiGet('/api/admin/connections-status', token);
       if (res && res.success && res.services) {
         setStatuses(res.services);
         setLastUpdated(new Date(res.timestamp || Date.now()));
@@ -166,12 +171,14 @@ export const SystemConnectionStatus: React.FC<{
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user, canAccessAdmin, authLoading]);
 
   const testSingleService = async (serviceId: 'backend' | 'openprovider' | 'whm' | 'cloudlinux') => {
+    if (!user || !canAccessAdmin) return;
     setTestingService(serviceId);
     try {
-      const res: any = await apiGet(`/api/admin/connections-status?service=${serviceId}`);
+      const token = await user.getIdToken();
+      const res: any = await apiGet(`/api/admin/connections-status?service=${serviceId}`, token);
       if (res && res.success && res.service) {
         setStatuses((prev) => ({
           ...prev,
@@ -191,13 +198,14 @@ export const SystemConnectionStatus: React.FC<{
   };
 
   useEffect(() => {
+    if (authLoading || !user || !canAccessAdmin) return;
     fetchAllStatuses(false);
     // Periodic poll every 45 seconds for fresh status
     const interval = setInterval(() => {
       fetchAllStatuses(false);
     }, 45000);
     return () => clearInterval(interval);
-  }, [fetchAllStatuses]);
+  }, [fetchAllStatuses, authLoading, user, canAccessAdmin]);
 
   const serviceKeys: Array<'backend' | 'openprovider' | 'whm' | 'cloudlinux'> = [
     'backend',
