@@ -533,19 +533,33 @@ export const HostingCheckout: React.FC = () => {
       const hostingItems = items.filter(item => item.itemType === 'hosting' || item.itemType === 'vps' || isVpsItem(item));
 
       for (const domainItem of domainItems) {
-        const domain = domainItem.id.replace('domain_', '');
-        const tld = domainItem.domainTld || domain.split('.').pop() || '';
+        const domainClean = ((domainItem as any).domain || domainItem.id.replace(/^domain_/, '').replace(/_\d+yr$/, '')).trim().toLowerCase();
+        const tld = domainItem.domainTld || domainClean.split('.').slice(1).join('.') || domainClean.split('.').pop() || '';
         const dOrderRef = doc(collection(db, 'domainOrders'));
+        const contactObj = {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim(),
+          phone: fullPhone.trim(),
+          companyName: formData.company?.trim() || '',
+          address: `${formData.address1.trim()}${formData.address2 ? ', ' + formData.address2.trim() : ''}`,
+          city: formData.city.trim(),
+          state: formData.state.trim() || formData.city.trim(),
+          zipcode: formData.postcode.trim(),
+          country: formData.country || 'BD',
+        };
+
         batch.set(dOrderRef, {
           userId: user?.uid || 'guest',
           orderId: newOrderRef.id,
-          domain: domain,
+          domain: domainClean,
           tld: tld,
           termYears: domainItem.termYears || 1,
           price: domainItem.price,
           nameservers: domainConfig.useCustomNs
             ? [domainConfig.ns1.trim(), domainConfig.ns2.trim()].filter(Boolean)
             : ['ns1.click2itbd.com', 'ns2.click2itbd.com'],
+          contact: contactObj,
           status: 'pending',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

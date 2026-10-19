@@ -193,44 +193,59 @@ export class OpenproviderDomainProvider implements IDomainProvider {
   }
 
   async checkAvailability(domains: string[]): Promise<DomainAvailabilityResult[]> {
-    const results: DomainAvailabilityResult[] = [];
-    const domainObjects = domains.map(d => this.splitDomain(d));
+    if (!domains || !domains.length) return [];
 
-    try {
-      const response = await this.fetchApi('/domains/check', {
-        method: 'POST',
-        body: JSON.stringify({ domains: domainObjects })
-      });
-
-      const availabilityItems = Array.isArray(response.data)
-        ? response.data
-        : response.data?.results;
-      if (!Array.isArray(availabilityItems)) {
-        throw new Error('Openprovider returned an invalid domain availability response.');
-      }
-
-      for (const item of availabilityItems) {
-        const fullDomain = typeof item.domain === 'string'
-          ? item.domain
-          : `${item.domain?.name || ''}.${item.domain?.extension || ''}`;
-        if (fullDomain === '.') {
-          throw new Error('Openprovider returned a domain availability result without a domain name.');
-        }
-        const status = String(item.status || '').toLowerCase();
-        const isAvailable = status === 'free' || status === 'available';
-        
-        results.push({
-          domain: fullDomain,
-          available: isAvailable,
-          status: item.status
-        });
-      }
-    } catch (error: any) {
-      for (const d of domains) {
-        results.push({ domain: d, available: false, error: error.message });
-      }
+    // Openprovider has a strict hard limit of max 15 domains per /domains/check request.
+    // Chunking into batches of 10 ensures 100% reliability without tripping "The domains limit exceeded".
+    const CHUNK_SIZE = 10;
+    const chunks: string[][] = [];
+    for (let i = 0; i < domains.length; i += CHUNK_SIZE) {
+      chunks.push(domains.slice(i, i + CHUNK_SIZE));
     }
-    return results;
+
+    const chunkPromises = chunks.map(async (chunk) => {
+      const chunkResults: DomainAvailabilityResult[] = [];
+      const domainObjects = chunk.map(d => this.splitDomain(d));
+
+      try {
+        const response = await this.fetchApi('/domains/check', {
+          method: 'POST',
+          body: JSON.stringify({ domains: domainObjects })
+        });
+
+        const availabilityItems = Array.isArray(response.data)
+          ? response.data
+          : response.data?.results;
+        if (!Array.isArray(availabilityItems)) {
+          throw new Error('Openprovider returned an invalid domain availability response.');
+        }
+
+        for (const item of availabilityItems) {
+          const fullDomain = typeof item.domain === 'string'
+            ? item.domain
+            : `${item.domain?.name || ''}.${item.domain?.extension || ''}`;
+          if (fullDomain === '.') {
+            throw new Error('Openprovider returned a domain availability result without a domain name.');
+          }
+          const status = String(item.status || '').toLowerCase();
+          const isAvailable = status === 'free' || status === 'available';
+          
+          chunkResults.push({
+            domain: fullDomain,
+            available: isAvailable,
+            status: item.status
+          });
+        }
+      } catch (error: any) {
+        for (const d of chunk) {
+          chunkResults.push({ domain: d, available: false, error: error.message });
+        }
+      }
+      return chunkResults;
+    });
+
+    const settled = await Promise.all(chunkPromises);
+    return settled.flat();
   }
 
   async getTldPricing(tld: string): Promise<TldPricingResult> {
@@ -323,63 +338,69 @@ export class OpenproviderDomainProvider implements IDomainProvider {
 
   async registerDomain(request: DomainRegistrationRequest): Promise<DomainRegistrationResult> {
     const domainObj = this.splitDomain(request.domain);
-    const contactHandle = request.contactId && /^[A-Z0-9]+-[A-Z0-9]+$/i.test(request.contactId)
+    let ownerHandle = request.contactId && /^[A-Z0-9]+-[A-Z0-9]+$/i.test(request.contactId)
       ? request.contactId
       : '';
-    let handle = contactHandle || this.defaultHandle;
 
     let requestStartedAt: string | undefined;
     let responseReceivedAt: string | undefined;
     let providerHttpStatus: number | undefined;
     try {
-      const hasContact = Boolean(request.contact && (request.contact.email || request.contact.firstName || request.contact.lastName));
-      if (!handle && !hasContact) {
-        throw new Error('Set OPENPROVIDER_DEFAULT_HANDLE or provide a valid Openprovider contact handle before registering domains.');
-      }
-
       await this.authenticate();
 
-      if (!handle) {
-        if (hasContact && request.contact) {
-          try {
-            handle = await this.createCustomerHandle(request.contact);
-          } catch (e: any) {
-            console.warn('[Openprovider] Auto customer handle creation failed:', e.message);
-          }
+      // 1. Prioritize creating or retrieving the CUSTOMER'S handle so the domain owner in Openprovider is the customer
+      if (!ownerHandle && request.contact && (request.contact.email || request.contact.firstName)) {
+        try {
+          ownerHandle = await this.getOrCreateCustomerHandle(request.contact);
+          console.info(`[Openprovider] Using customer handle ${ownerHandle} as domain owner for ${request.domain}`);
+        } catch (e: any) {
+          console.warn('[Openprovider] Auto customer handle creation failed, falling back to default handle:', e.message);
         }
       }
 
-      if (!handle) {
+      // 2. Fall back to defaultHandle (reseller handle) only if customer handle could not be determined
+      if (!ownerHandle) {
+        ownerHandle = this.defaultHandle;
+      }
+
+      // 3. Fall back to first available customer handle in the account if defaultHandle is empty
+      if (!ownerHandle) {
         try {
           const custRes = await this.fetchApi('/customers?limit=1');
           const firstHandle = custRes?.data?.results?.[0]?.handle || custRes?.data?.[0]?.handle;
           if (firstHandle) {
-            handle = firstHandle;
+            ownerHandle = firstHandle;
           }
         } catch (e: any) {
           console.warn('[Openprovider] Customer handle lookup failed:', e.message);
         }
       }
 
-      if (!handle) {
+      if (!ownerHandle) {
         throw new Error('Set OPENPROVIDER_DEFAULT_HANDLE or provide a valid Openprovider contact handle before registering domains.');
       }
+
       requestStartedAt = new Date().toISOString();
       console.info('[Openprovider] Domain registration request started', {
         domain: request.domain,
+        ownerHandle,
         operation: 'create',
         requestStartedAt,
       });
+
       const nameServers = request.nameServers?.filter(Boolean) || [];
+      // Tech and Billing handle can be Click2IT's defaultHandle or the ownerHandle
+      const techBillingHandle = this.defaultHandle || ownerHandle;
+
       const response = await this.fetchApi('/domains', {
         method: 'POST',
         body: JSON.stringify({
           domain: domainObj,
           period: request.years || 1,
-          owner_handle: handle,
-          admin_handle: handle,
-          tech_handle: handle,
-          billing_handle: handle,
+          owner_handle: ownerHandle, // <--- Customer Name & Contact!
+          admin_handle: ownerHandle, // <--- Customer Name & Contact!
+          tech_handle: techBillingHandle, // <--- Click2IT BD (technical reseller)
+          billing_handle: techBillingHandle, // <--- Click2IT BD (billing reseller)
           ...(nameServers.length > 0
             ? { name_servers: nameServers.map(name => ({ name })) }
             : { ns_group: 'dns-openprovider' }),
@@ -738,41 +759,107 @@ export class OpenproviderDomainProvider implements IDomainProvider {
   }
 
   
+  async getOrCreateCustomerHandle(contact: any): Promise<string> {
+    if (!contact || (!contact.email && !contact.firstName)) {
+      return this.defaultHandle;
+    }
+    await this.authenticate();
+
+    // 1. Check if a customer handle already exists in Openprovider for this email
+    const email = String(contact.email || '').trim().toLowerCase();
+    if (email) {
+      try {
+        const query = new URLSearchParams({ email, limit: '1' });
+        const searchRes = await this.fetchApi(`/customers?${query.toString()}`);
+        const existingHandle = searchRes?.data?.results?.[0]?.handle || searchRes?.data?.[0]?.handle;
+        if (existingHandle) {
+          console.info(`[Openprovider] Reusing existing customer handle for ${email}: ${existingHandle}`);
+          return existingHandle;
+        }
+      } catch (err: any) {
+        console.warn(`[Openprovider] Customer lookup by email (${email}) failed, creating new handle:`, err.message);
+      }
+    }
+
+    // 2. Create customer handle in Openprovider
+    return this.createCustomerHandle(contact);
+  }
+
   async createCustomerHandle(contact: any): Promise<string> {
     await this.authenticate();
+
+    const firstName = String(contact.firstName || '').trim() || 'Customer';
+    const lastName = String(contact.lastName || '').trim() || (firstName !== 'Customer' ? firstName : 'User');
+    const email = String(contact.email || '').trim().toLowerCase();
+    if (!email) {
+      throw new Error('Customer email is required to create an Openprovider contact.');
+    }
+
+    const rawStreet = String(contact.address || contact.street || 'Main Road').trim();
+    const numberMatch = rawStreet.match(/(?:house|flat|road|block|holding|#)?\s*(\d+[A-Za-z0-9\/-]*)/i);
+    const houseNumber = String(contact.number || contact.houseNumber || (numberMatch ? numberMatch[1] : '1')).slice(0, 10);
+    const streetName = rawStreet.slice(0, 100) || 'Main Street';
+
+    const city = String(contact.city || 'Dhaka').trim() || 'Dhaka';
+    const state = String(contact.state || city).trim() || city;
+    const zipcode = String(contact.zipcode || contact.zip || contact.postcode || '1200').trim() || '1200';
+    const country = String(contact.country || 'BD').trim().toUpperCase().slice(0, 2) || 'BD';
+
+    // Parse phone digits (clean out +880 and non-digits)
+    const rawPhone = String(contact.phoneNumber || contact.phone || '').replace(/\D/g, '');
+    let countryCode = '880';
+    let subscriberNumber = rawPhone;
+    if (subscriberNumber.startsWith('880')) {
+      countryCode = '880';
+      subscriberNumber = subscriberNumber.slice(3).replace(/^0+/, '');
+    } else if (subscriberNumber.startsWith('88')) {
+      countryCode = '880';
+      subscriberNumber = subscriberNumber.slice(2).replace(/^0+/, '');
+    } else {
+      subscriberNumber = subscriberNumber.replace(/^0+/, '');
+    }
+    if (!subscriberNumber || subscriberNumber.length < 5) {
+      subscriberNumber = '1700000000';
+    }
+
+    const payload: any = {
+      name: {
+        first_name: firstName,
+        last_name: lastName
+      },
+      address: {
+        street: streetName,
+        number: houseNumber,
+        city: city,
+        state: state,
+        zipcode: zipcode,
+        country: country
+      },
+      phone: {
+        country_code: countryCode,
+        area_code: '',
+        subscriber_number: subscriberNumber
+      },
+      email: email
+    };
+
+    if (contact.companyName && String(contact.companyName).trim()) {
+      payload.company_name = String(contact.companyName).trim();
+    }
+
     try {
       const response = await this.fetchApi('/customers', {
         method: 'POST',
-        body: JSON.stringify({
-          name: {
-            first_name: contact.firstName,
-            last_name: contact.lastName
-          },
-          company_name: contact.companyName || '',
-          address: {
-            street: contact.address,
-            city: contact.city,
-            state: contact.state || contact.city,
-            zipcode: contact.zipcode,
-            country: contact.country || 'BD'
-          },
-          phone: {
-            country_code: contact.phoneCountryCode || '+880',
-            area_code: '',
-            subscriber_number: (() => {
-              const raw = String(contact.phoneNumber || '').replace(/\D/g, '');
-              if (raw.startsWith('880')) return raw.slice(3).replace(/^0+/, '');
-              if (raw.startsWith('88')) return raw.slice(2).replace(/^0+/, '');
-              return raw.replace(/^0+/, '');
-            })()
-          },
-          email: contact.email
-        })
+        body: JSON.stringify(payload)
       });
+      if (!response.data?.handle) {
+        throw new Error('Openprovider did not return a customer handle.');
+      }
+      console.info(`[Openprovider] Customer handle created successfully: ${response.data.handle} for ${firstName} ${lastName} (${email})`);
       return response.data.handle;
     } catch (error: any) {
       console.error('[Openprovider] createCustomerHandle error:', error);
-      throw new Error(error.message || 'Failed to create customer handle');
+      throw new Error(error.message || 'Failed to create customer handle in Openprovider');
     }
   }
 
@@ -780,13 +867,14 @@ export class OpenproviderDomainProvider implements IDomainProvider {
     await this.authenticate();
     try {
       const id = await this.getDomainId(domain);
+      const techBillingHandle = this.defaultHandle || handle;
       await this.fetchApi(`/domains/${id}`, {
         method: 'PUT',
         body: JSON.stringify({
           owner_handle: handle,
           admin_handle: handle,
-          tech_handle: handle,
-          billing_handle: handle
+          tech_handle: techBillingHandle,
+          billing_handle: techBillingHandle
         })
       });
       return { success: true };

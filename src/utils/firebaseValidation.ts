@@ -109,19 +109,25 @@ export function validateFirebaseEnvironment(config: Record<string, any>): Fireba
 export async function testFirestoreConnection(dbInstance: any): Promise<boolean> {
   if (typeof window === 'undefined' || !dbInstance) return false;
   try {
-    const testDocRef = doc(dbInstance, '_connection_test', 'status');
+    // Check connection using an allowed public read collection
+    const testDocRef = doc(dbInstance, 'dynamic_pages', '_connection_check');
     await getDocFromServer(testDocRef);
     console.log('✅ [Firebase Validation] Firestore connection test succeeded.');
     return true;
   } catch (error: any) {
     const msg = error?.message || String(error);
-    if (msg.includes('offline') || msg.includes('unavailable')) {
+    // If the doc doesn't exist, getDocFromServer still succeeds and establishes network connection.
+    // If it's an offline or network error, log appropriately.
+    if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Failed to get document')) {
       console.warn('⚠️ [Firebase Validation] Firestore is unreachable or offline:', msg);
-    } else if (msg.includes('permission-denied') || msg.includes('Permission Denied')) {
-      console.warn('⚠️ [Firebase Validation] Firestore permission denied. Check security rules or domain authorization.');
+      return false;
+    } else if (msg.includes('permission-denied') || msg.includes('Permission Denied') || msg.includes('insufficient permissions')) {
+      // If permission is denied for health-check, consider client connected to Firebase servers
+      console.info('ℹ️ [Firebase Validation] Firestore is connected (authenticated / rules enforced).');
+      return true;
     } else {
       console.warn('⚠️ [Firebase Validation] Firestore connection check message:', msg);
+      return false;
     }
-    return false;
   }
 }

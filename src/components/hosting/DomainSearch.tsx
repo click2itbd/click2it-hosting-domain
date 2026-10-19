@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Server, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Server, Loader2, ArrowRight } from 'lucide-react';
 import { collection, query, orderBy, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useDomainSearch } from '../../hooks/useDomainSearch';
@@ -13,6 +14,7 @@ interface DomainSearchProps {
 }
 
 export const DomainSearch: React.FC<DomainSearchProps> = ({ onAddToCart }) => {
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [selectedTlds, setSelectedTlds] = useState<string[]>(['.com', '.net', '.org', '.com.bd', '.xyz', '.online', '.dev']);
   const [pricing, setPricing] = useState<DomainPricing[]>([]);
@@ -23,17 +25,35 @@ export const DomainSearch: React.FC<DomainSearchProps> = ({ onAddToCart }) => {
   }, []);
 
   const handleSearch = async () => {
-    if (!searchText.trim()) return;
-    const domains = selectedTlds.map(tld => `${searchText.trim()}${tld}`);
+    const raw = searchText.trim().toLowerCase();
+    if (!raw) return;
+
+    // Check if user already typed a domain with a known extension (e.g. hisaaboo.xyz or example.com)
+    const hasExtension = raw.includes('.') && !raw.endsWith('.');
+
+    let domains: string[] = [];
+    let queryBase = raw;
+
+    if (hasExtension) {
+      // Direct domain search
+      domains = [raw];
+      queryBase = raw.substring(0, raw.lastIndexOf('.'));
+    } else {
+      // Append selected TLDs
+      domains = selectedTlds.map(tld => `${raw}${tld.startsWith('.') ? tld : `.${tld}`}`);
+    }
+
     await search(domains);
-    await fetchSuggestions(searchText.trim());
+    await fetchSuggestions(queryBase);
   };
 
   const handleSearchWithDomain = async (domain: string) => {
-    const baseName = domain.replace(/\.[^.]+$/, '');
-    setSearchText(baseName);
-    const domains = selectedTlds.map(tld => `${baseName}${tld}`);
-    await search(domains);
+    const cleanDomain = domain.trim().toLowerCase();
+    const lastDotIndex = cleanDomain.lastIndexOf('.');
+    const baseName = lastDotIndex > 0 ? cleanDomain.substring(0, lastDotIndex) : cleanDomain;
+    
+    setSearchText(cleanDomain);
+    await search([cleanDomain]);
     await fetchSuggestions(baseName);
   };
 
@@ -106,7 +126,17 @@ export const DomainSearch: React.FC<DomainSearchProps> = ({ onAddToCart }) => {
 
       {results.length > 0 && (
         <div className="mt-8 space-y-3">
-          <h3 className="text-sm font-bold text-[var(--c2i-ink-soft)] uppercase tracking-wider">Search Results</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-[var(--c2i-ink-soft)] uppercase tracking-wider">Search Results</h3>
+            {searchText.trim() && (
+              <button
+                onClick={() => navigate(`/domain/search?q=${encodeURIComponent(searchText.trim())}`)}
+                className="text-xs font-bold text-[var(--c2i-red)] hover:underline flex items-center gap-1"
+              >
+                View full results & more extensions <ArrowRight size={13} />
+              </button>
+            )}
+          </div>
           {results.map((result, idx) => (
             <DomainResultCard
               key={idx}

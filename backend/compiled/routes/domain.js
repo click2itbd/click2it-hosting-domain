@@ -108,16 +108,34 @@ export async function fetchLiveOpenproviderPricingList() {
         return [];
     }
 }
+let isSyncingLivePricing = false;
+export async function syncLiveOpenproviderPricingInBackground() {
+    if (isSyncingLivePricing || Date.now() < livePricingCooldownUntil) {
+        return;
+    }
+    isSyncingLivePricing = true;
+    try {
+        await fetchLiveOpenproviderPricingList();
+    }
+    catch (err) {
+        console.warn('[Domain] Background pricing sync failed:', err?.message || err);
+    }
+    finally {
+        isSyncingLivePricing = false;
+    }
+}
 export async function getEffectiveDomainPricingList(forceLive = false) {
     if (!forceLive && domainPricingCache && domainPricingCache.expiresAt > Date.now()) {
         return domainPricingCache.data;
     }
-    // 1. Fetch live Openprovider pricing first and sync to Firestore
-    const livePricing = await fetchLiveOpenproviderPricingList();
-    if (livePricing && livePricing.length > 0) {
-        return livePricing;
+    // If forceLive requested, try live synchronously
+    if (forceLive) {
+        const livePricing = await fetchLiveOpenproviderPricingList();
+        if (livePricing && livePricing.length > 0) {
+            return livePricing;
+        }
     }
-    // 2. Fall back to Firestore if live Openprovider fetch fails
+    // 1. First serve from Firestore catalog immediately (instant response)
     try {
         const db = getAdminDb();
         const snap = await db.collection('domainPricing').get();
@@ -145,6 +163,8 @@ export async function getEffectiveDomainPricingList(forceLive = false) {
             }
             if (list.length > 0) {
                 domainPricingCache = { expiresAt: Date.now() + 5 * 60_000, data: list };
+                // Trigger live refresh in background so next time it is fresh without blocking the user
+                syncLiveOpenproviderPricingInBackground().catch(() => { });
                 return list;
             }
         }
@@ -180,6 +200,8 @@ export async function getEffectiveDomainPricingList(forceLive = false) {
         { tld: '.link', registerPrice: 750, renewPrice: 1850, transferPrice: 1850, currency: 'BDT', isActive: true },
     ];
     domainPricingCache = { expiresAt: Date.now() + 5 * 60_000, data: DEFAULT_FALLBACK_PRICING };
+    // Trigger background sync with Openprovider
+    syncLiveOpenproviderPricingInBackground().catch(() => { });
     return DEFAULT_FALLBACK_PRICING;
 }
 domainRouter.get('/check', async (req, res) => {
@@ -214,9 +236,9 @@ domainRouter.post('/check', async (req, res) => {
             results = await provider.checkAvailability(domains);
         }
         catch (error) {
-            console.warn('[Domain] Provider checkAvailability failed, using DNS fallback:', error?.message);
+            console.warn('[Domain] Provider checkAvailability failed:', error?.message);
         }
-        // If provider returned empty or all with errors, fall back to DNS checks with public resolvers
+        // Only fallback if provider returned nothing or completely threw
         if (!results.length || results.every(r => r.error)) {
             try {
                 const dns = await import('dns');
@@ -224,29 +246,45 @@ domainRouter.post('/check', async (req, res) => {
                 results = await Promise.all(domains.map(async (domainStr) => {
                     const clean = String(domainStr).trim().toLowerCase();
                     let isRegistered = false;
+                    let dnsResolved = false;
                     try {
                         const ns = await dns.promises.resolveNs(clean);
-                        if (ns && ns.length > 0)
+                        if (ns && ns.length > 0) {
                             isRegistered = true;
+                            dnsResolved = true;
+                        }
                     }
-                    catch { }
-                    if (!isRegistered) {
+                    catch (nsErr) {
+                        // NXDOMAIN (code 'ENOTFOUND' / 'NODATA') means domain does not exist in DNS
+                        if (nsErr?.code === 'ENOTFOUND' || nsErr?.code === 'NODATA') {
+                            dnsResolved = true;
+                        }
+                    }
+                    if (!isRegistered && !dnsResolved) {
                         try {
                             const a = await dns.promises.resolve4(clean);
-                            if (a && a.length > 0)
+                            if (a && a.length > 0) {
                                 isRegistered = true;
+                                dnsResolved = true;
+                            }
                         }
-                        catch { }
+                        catch (aErr) {
+                            if (aErr?.code === 'ENOTFOUND' || aErr?.code === 'NODATA') {
+                                dnsResolved = true;
+                            }
+                        }
                     }
+                    // If DNS couldn't even reach servers or failed network-wise, DO NOT assume available!
                     return {
                         domain: clean,
-                        available: !isRegistered,
+                        available: dnsResolved ? !isRegistered : false,
+                        status: isRegistered ? 'taken' : (dnsResolved ? 'free' : 'unknown'),
                     };
                 }));
             }
             catch (dnsErr) {
                 console.warn('[Domain] DNS fallback check error:', dnsErr);
-                results = domains.map((d) => ({ domain: d, available: false }));
+                results = domains.map((d) => ({ domain: d, available: false, status: 'error' }));
             }
         }
         const fullPricing = await getEffectiveDomainPricingList();
@@ -263,18 +301,8 @@ domainRouter.post('/check', async (req, res) => {
                 }
                 try {
                     const quote = await pricingPromise;
-                    if (quote) {
-                        if (quote.currency !== 'USD' || !Number.isFinite(quote.registrationPrice) || quote.registrationPrice <= 0
-                            || !Number.isFinite(quote.renewalPrice) || quote.renewalPrice <= 0) {
-                            return {
-                                ...r,
-                                price: undefined,
-                                priceBdt: undefined,
-                                renewalPrice: undefined,
-                                currency: 'BDT',
-                                error: 'A valid registration and renewal price is unavailable for this domain.',
-                            };
-                        }
+                    if (quote && quote.currency === 'USD' && Number.isFinite(quote.registrationPrice) && quote.registrationPrice > 0
+                        && Number.isFinite(quote.renewalPrice) && quote.renewalPrice > 0) {
                         const regBdt = calculateCustomerPriceBdt(quote.registrationPrice, pricingSettings);
                         const renBdt = calculateCustomerPriceBdt(quote.renewalPrice, pricingSettings);
                         return {
@@ -288,7 +316,7 @@ domainRouter.post('/check', async (req, res) => {
                     }
                 }
                 catch (quoteErr) {
-                    // If quote fetch threw, fallback to fullPricing below
+                    // If quote fetch threw or failed, fallback to fullPricing below
                 }
             }
             const match = fullPricing.find(p => p.tld.toLowerCase() === formattedTld)
@@ -334,6 +362,37 @@ domainRouter.post('/suggestions', async (req, res) => {
     catch (error) {
         console.error('Domain suggestions error:', error);
         return res.json({ success: false, error: error?.message || 'Internal server error' });
+    }
+});
+domainRouter.post('/offers', async (req, res) => {
+    try {
+        const { domain, amount, email, phone } = req.body;
+        if (!domain || !amount || !email || !phone) {
+            return res.status(400).json({ success: false, error: 'domain, amount, email, and phone are required.' });
+        }
+        const cleanAmount = Number(amount);
+        if (!Number.isFinite(cleanAmount) || cleanAmount <= 0) {
+            return res.status(400).json({ success: false, error: 'A valid offer amount is required.' });
+        }
+        const db = getAdminDb();
+        const offerDoc = {
+            domain: String(domain).trim().toLowerCase(),
+            amount: cleanAmount,
+            email: String(email).trim().toLowerCase(),
+            phone: String(phone).trim(),
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+        };
+        const docRef = await db.collection('domain_offers').add(offerDoc);
+        return res.json({
+            success: true,
+            message: 'Offer submitted successfully.',
+            data: { id: docRef.id, ...offerDoc }
+        });
+    }
+    catch (error) {
+        console.error('Submit domain offer error:', error);
+        return res.status(500).json({ success: false, error: error?.message || 'Failed to submit offer.' });
     }
 });
 domainRouter.post('/register', async (req, res) => {
@@ -1207,10 +1266,24 @@ domainRouter.post('/fulfill', requireFirebaseAuth, async (req, res) => {
                 fulfillmentType = 'renewal';
             }
             else {
+                const nameParts = (orderData.customerName || '').trim().split(/\s+/);
+                const contact = orderData.contact || {
+                    firstName: nameParts[0] || 'Customer',
+                    lastName: nameParts.slice(1).join(' ') || (nameParts[0] ? nameParts[0] : 'User'),
+                    email: orderData.customerEmail,
+                    phone: orderData.customerPhone,
+                    companyName: orderData.company || '',
+                    address: orderData.shippingAddress || 'Dhaka',
+                    city: 'Dhaka',
+                    state: 'Dhaka',
+                    zipcode: '1200',
+                    country: 'BD',
+                };
                 result = await provider.registerDomain({
                     domain: orderData.domain,
                     years: orderData.years || 1,
                     contactId: orderData.contactId,
+                    contact,
                     nameServers: orderData.nameServers,
                     autoRenew: orderData.autoRenew,
                 });
@@ -1659,11 +1732,15 @@ domainRouter.post('/manage', requireFirebaseAuth, async (req, res) => {
             return res.json({ success: result.success, error: result.error });
         }
         if (command === 'update_contacts') {
-            if (!provider.createCustomerHandle || !provider.updateDomainContacts) {
+            if (!provider.updateDomainContacts) {
                 return res.status(400).json({ success: false, error: 'Not supported' });
             }
             try {
-                const handle = await provider.createCustomerHandle(extraParams?.contact || {});
+                const handleCreator = provider.getOrCreateCustomerHandle || provider.createCustomerHandle;
+                if (!handleCreator) {
+                    return res.status(400).json({ success: false, error: 'Customer handle creation not supported' });
+                }
+                const handle = await handleCreator.call(provider, extraParams?.contact || {});
                 result = await provider.updateDomainContacts(domain, handle);
                 return res.json({ success: result.success, handle, error: result.error });
             }

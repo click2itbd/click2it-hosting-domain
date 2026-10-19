@@ -111,6 +111,19 @@ export async function getDomainSuggestions(domain: string): Promise<string[]> {
   return response.data || [];
 }
 
+export async function submitDomainOffer(data: {
+  domain: string;
+  amount: number;
+  email: string;
+  phone: string;
+}): Promise<{ success: boolean; message?: string }> {
+  const response = await apiRequest<{ success: boolean; message?: string; error?: string }>('/api/domains/offers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return response;
+}
+
 export async function getDomainPricing(): Promise<DomainPricing[]> {
   if (domainPricingCache && domainPricingCache.expiresAt > Date.now()) {
     return [...domainPricingCache.data];

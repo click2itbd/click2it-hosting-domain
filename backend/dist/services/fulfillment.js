@@ -45,7 +45,27 @@ export async function fulfillOrder(orderId, actorUid) {
     let hasManualReview = false;
     let hasPending = false;
     for (const docSnap of domainOrdersSnap.docs) {
-        const domainData = { customerEmail: orderData.customerEmail, customerName: orderData.customerName, ...docSnap.data() };
+        const dDoc = docSnap.data();
+        const domainData = {
+            customerEmail: orderData.customerEmail,
+            customerName: orderData.customerName,
+            customerPhone: orderData.customerPhone,
+            shippingAddress: orderData.shippingAddress,
+            company: orderData.company,
+            contact: dDoc.contact || {
+                firstName: orderData.firstName || (orderData.customerName ? orderData.customerName.trim().split(/\s+/)[0] : 'Customer'),
+                lastName: orderData.lastName || (orderData.customerName ? orderData.customerName.trim().split(/\s+/).slice(1).join(' ') : 'User'),
+                email: orderData.customerEmail,
+                phone: orderData.customerPhone,
+                companyName: orderData.company || '',
+                address: orderData.shippingAddress || 'Dhaka',
+                city: 'Dhaka',
+                state: 'Dhaka',
+                zipcode: '1200',
+                country: 'BD'
+            },
+            ...dDoc
+        };
         const result = await fulfillDomainOrder(docSnap.id, domainData, actorUid);
         domainResults.push(result);
         if (!result.success) {
@@ -311,10 +331,24 @@ async function fulfillDomainOrder(domainOrderId, domainData, actorUid) {
         }
         else {
             action = 'register';
+            const nameParts = (domainData.customerName || '').trim().split(/\s+/);
+            const customerContact = domainData.contact || {
+                firstName: nameParts[0] || 'Customer',
+                lastName: nameParts.slice(1).join(' ') || (nameParts[0] ? nameParts[0] : 'User'),
+                email: domainData.customerEmail,
+                phone: domainData.customerPhone,
+                companyName: domainData.company || '',
+                address: domainData.shippingAddress || 'Dhaka',
+                city: 'Dhaka',
+                state: 'Dhaka',
+                zipcode: '1200',
+                country: 'BD'
+            };
             result = await provider.registerDomain({
                 domain: domainData.domain,
-                years: domainData.years || 1,
+                years: domainData.years || domainData.termYears || 1,
                 contactId: domainData.contactId,
+                contact: customerContact,
                 nameServers: domainData.nameServers || domainData.nameservers,
                 autoRenew: domainData.autoRenew,
             });
