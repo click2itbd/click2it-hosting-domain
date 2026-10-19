@@ -5,9 +5,9 @@ Options -Indexes
   RewriteBase /
 
   <IfModule mod_proxy.c>
-    # Forward /api requests to cPanel Node.js backend on api.click2it.bd
-    RewriteRule ^/?api/(.*)$ https://api.click2it.bd/api/$1 [P,L,QSA,E=Cache-Control:no-cache]
-    RewriteRule ^/?api/?$ https://api.click2it.bd/api/ [P,L,QSA,E=Cache-Control:no-cache]
+    # Forward /api requests to local Node.js backend on port 4001
+    RewriteRule ^/?api/(.*)$ http://127.0.0.1:4001/api/$1 [P,L,QSA,E=Cache-Control:no-cache]
+    RewriteRule ^/?api/?$ http://127.0.0.1:4001/api/ [P,L,QSA,E=Cache-Control:no-cache]
   </IfModule>
 
   # Route social media crawlers requesting /product/xxx to share.php (ONLY if share.php exists on server)
