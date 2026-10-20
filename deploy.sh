@@ -83,30 +83,11 @@ if [ -d "backend" ]; then
   /bin/mkdir -p "$BACKEND_DEST/tmp"
   touch "$BACKEND_DEST/tmp/restart.txt"
 
-  # Also terminate any stale standalone Node process holding port 4001 so the new build takes over
+  # Clean up any leftover unmanaged standalone node processes
   fuser -k 4001/tcp 2>/dev/null || true
-  lsof -ti:4001 2>/dev/null | xargs -r kill -9 2>/dev/null || true
-  pkill -f "backend_app/dist/server.js" 2>/dev/null || true
-  pkill -f "dist/server.js" 2>/dev/null || true
+  pkill -u "$(whoami)" -f "dist/server.js" 2>/dev/null || true
 
-  sleep 1
-
-  # Auto-detect CloudLinux nodevenv or system node and spawn standalone server on 4001 if not already listening
-  if ! curl -s --max-time 2 http://127.0.0.1:4001/api/health >/dev/null 2>&1; then
-    NVENV="$(find "$HOME_DIR/nodevenv" -name activate -path "*/backend_app/*" -print -quit 2>/dev/null || true)"
-    if [ -n "$NVENV" ] && [ -f "$NVENV" ]; then
-      # shellcheck source=/dev/null
-      source "$NVENV"
-    fi
-    NODE_BIN="$(command -v node 2>/dev/null || find "$HOME_DIR/nodevenv" -name node -type f -print -quit 2>/dev/null || echo "")"
-    if [ -n "$NODE_BIN" ] && [ -f "$BACKEND_DEST/dist/server.js" ]; then
-      echo "🚀 Starting updated backend server on port 4001 using $NODE_BIN..."
-      (cd "$BACKEND_DEST" && NODE_ENV=production PORT=4001 nohup "$NODE_BIN" dist/server.js > "$BACKEND_DEST/backend.log" 2>&1 &)
-      sleep 1
-    fi
-  fi
-
-  echo "✅ Backend deployed and restarted on port 4001"
+  echo "✅ Backend deployed and Passenger restarted for api.click2it.bd"
 fi
 
 echo "=================================================="
