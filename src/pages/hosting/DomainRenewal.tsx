@@ -81,7 +81,11 @@ const DomainRenewal = () => {
       toast.success('Renewal price loaded');
     } catch (error: any) {
       console.error('Renewal price error:', error);
-      toast.error(error.message || 'Failed to fetch renewal price. This TLD may not be supported.');
+      const isDevOrNetwork = !error?.message || error?.message?.includes('fetch') || error?.message?.includes('Network') || error?.message?.includes('500') || error?.message?.includes('503');
+      const userMessage = isDevOrNetwork
+        ? 'Unable to retrieve renewal pricing at this moment. Please try again shortly or contact our 24/7 support.'
+        : (error.message || 'We could not determine the renewal price for this domain. Please verify your domain extension.');
+      toast.error(userMessage);
     } finally {
       setIsChecking(false);
     }
@@ -178,7 +182,11 @@ const DomainRenewal = () => {
       }
     } catch (error: any) {
       console.error('Renewal submission error:', error);
-      toast.error(error.message || 'Failed to submit renewal request');
+      const isDevOrNetwork = !error?.message || error?.message?.includes('fetch') || error?.message?.includes('Network') || error?.message?.includes('500');
+      const userMessage = isDevOrNetwork
+        ? 'Unable to process your renewal order at this moment. Please check your connection or contact our billing team.'
+        : (error.message || 'Could not complete renewal order. Please try again or contact support.');
+      toast.error(userMessage);
     } finally {
       setIsSubmitting(false);
     }
