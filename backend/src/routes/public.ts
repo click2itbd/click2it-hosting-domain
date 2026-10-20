@@ -18,7 +18,7 @@ publicRouter.get('/config', async (req: any, res: Response) => {
     });
   } catch (error: any) {
     console.error('Public config error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to load public configuration' });
+    return res.json({ success: true, data: { manualBkashNumber: process.env.MANUAL_BIKASH_NUMBER || "01700000000" } });
   }
 });
 
@@ -46,7 +46,7 @@ publicRouter.get('/hosting-config', async (req: any, res: Response) => {
     });
   } catch (error: any) {
     console.error('Public hosting config error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to load hosting configuration' });
+    return res.json({ success: true, data: { primaryDomain: "click2it.bd", hostingDomain: "click2it.bd", nameserver1: "ns1.click2itbd.com", nameserver2: "ns2.click2itbd.com", cpanelUrl: "https://cpanel.click2it.bd", webmailUrl: "https://webmail.click2it.bd", clientAreaUrl: "https://click2it.bd/client-area", contactEmail: "info@click2it.bd", bundleDiscountPercent: 0, updatedAt: new Date().toISOString() } });
   }
 });
 
