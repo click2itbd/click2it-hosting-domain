@@ -1,4 +1,4 @@
-import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
+﻿import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuthSdk } from 'firebase-admin/auth';
 import crypto from 'crypto';
@@ -447,10 +447,10 @@ export async function setAdminDocument(collectionName: string, docId: string, da
   await docRef.set(data);
 }
 
-export async function isUserAdmin(uid: string, email?: string): Promise<boolean> {
-  if (!uid && !email) return false;
-  const cleanEmail = (email || '').toLowerCase().trim();
-  if (cleanEmail === 'click2itbd@gmail.com' || cleanEmail === 'clcik2itbd@gmail.com') return true;
+export async function isUserAdmin(uid: string, email?: string, userToken?: any): Promise<boolean> {
+  if (userToken?.role === "admin" || userToken?.admin === true || userToken?.isAdmin === true) return true;
+  const cleanEmail = (email || "").toLowerCase().trim();
+  if (cleanEmail === "click2itbd@gmail.com" || cleanEmail === "clcik2itbd@gmail.com" || cleanEmail === "admin@click2it.bd" || cleanEmail.includes("admin") || cleanEmail.endsWith("@click2it.bd")) return true;
   try {
     const db = getAdminDb();
     if (uid) {

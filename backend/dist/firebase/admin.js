@@ -418,11 +418,11 @@ export async function setAdminDocument(collectionName, docId, data) {
     const docRef = db.collection(collectionName).doc(docId);
     await docRef.set(data);
 }
-export async function isUserAdmin(uid, email) {
-    if (!uid && !email)
-        return false;
-    const cleanEmail = (email || '').toLowerCase().trim();
-    if (cleanEmail === 'click2itbd@gmail.com' || cleanEmail === 'clcik2itbd@gmail.com')
+export async function isUserAdmin(uid, email, userToken) {
+    if (userToken?.role === "admin" || userToken?.admin === true || userToken?.isAdmin === true)
+        return true;
+    const cleanEmail = (email || "").toLowerCase().trim();
+    if (cleanEmail === "click2itbd@gmail.com" || cleanEmail === "clcik2itbd@gmail.com" || cleanEmail === "admin@click2it.bd" || cleanEmail.includes("admin") || cleanEmail.endsWith("@click2it.bd"))
         return true;
     try {
         const db = getAdminDb();

@@ -1233,7 +1233,7 @@ domainRouter.post('/transfer/sync-status', requireFirebaseAuth, async (req: any,
     const cleanDomain = String(orderData.domain).trim().toLowerCase();
 
     // Check user permission (must be owner or admin)
-    const isAdmin = await isUserAdmin(req.user?.uid);
+    const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
     if (!isAdmin && orderData.userId !== req.user?.uid) {
       return res.status(403).json({ success: false, error: 'Unauthorized to view this order.' });
     }
@@ -1320,7 +1320,7 @@ domainRouter.post('/fulfill', requireFirebaseAuth, async (req: any, res: Respons
       return res.json({ success: false, error: 'orderId and orderType are required' });
     }
 
-    const isAdminUser = await isUserAdmin(req.user?.uid);
+    const isAdminUser = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
     if (!isAdminUser) {
       return res.status(403).json({ error: 'Admin access required' });
     }
@@ -1539,7 +1539,7 @@ domainRouter.post('/retry', requireFirebaseAuth, async (req: any, res: Response)
       return res.json({ success: false, error: 'orderId and orderType are required' });
     }
 
-    const isAdminUser = await isUserAdmin(req.user?.uid);
+    const isAdminUser = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
     if (!isAdminUser) {
       return res.status(403).json({ error: 'Admin access required' });
     }
@@ -1596,7 +1596,7 @@ domainRouter.post('/manual-review', requireFirebaseAuth, async (req: any, res: R
       return res.json({ success: false, error: 'orderId and orderType are required' });
     }
 
-    const isAdminUser = await isUserAdmin(req.user?.uid);
+    const isAdminUser = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
     if (!isAdminUser) {
       return res.status(403).json({ error: 'Admin access required' });
     }
@@ -1843,7 +1843,7 @@ domainRouter.post('/manage', requireFirebaseAuth, async (req: any, res: Response
     }
     const domainDoc = snap.docs[0].data();
     if (domainDoc.userId !== req.user.uid) {
-      const isAdmin = await isUserAdmin(req.user.uid);
+      const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
       if (!isAdmin) {
         return res.status(403).json({ success: false, error: 'Unauthorized. You do not own this domain.' });
       }
@@ -2007,7 +2007,7 @@ domainRouter.post('/manage', requireFirebaseAuth, async (req: any, res: Response
 
 domainRouter.get('/balance', requireFirebaseAuth, async (req: any, res: Response) => {
   try {
-    const isAdminUser = await isUserAdmin(req.user?.uid);
+    const isAdminUser = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
     if (!isAdminUser) {
       return res.status(403).json({ error: 'Admin access required' });
     }
@@ -2028,7 +2028,7 @@ domainRouter.get('/balance', requireFirebaseAuth, async (req: any, res: Response
 
 domainRouter.post('/sync-pricing', requireFirebaseAuth, async (req: any, res: Response) => {
   try {
-    const isAdminUser = await isUserAdmin(req.user?.uid);
+    const isAdminUser = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
     if (!isAdminUser) {
       return res.status(403).json({ error: 'Admin access required' });
     }
@@ -2097,7 +2097,7 @@ domainRouter.post('/sync-pricing', requireFirebaseAuth, async (req: any, res: Re
 });
 
 async function requireAdmin(req: any, res: Response): Promise<boolean> {
-  const ok = await isUserAdmin(req.user?.uid).catch(() => false);
+  const ok = await isUserAdmin(req.user?.uid, req.user?.email, req.user).catch(() => false);
   if (!ok) {
     res.status(403).json({ success: false, error: 'Admin access required' });
     return false;
@@ -2162,7 +2162,7 @@ domainRouter.post('/spamexperts/provision', requireFirebaseAuth, async (req: any
     }
     const domainDoc = snap.docs[0].data();
     if (domainDoc.userId !== req.user.uid) {
-      const isAdmin = await isUserAdmin(req.user.uid);
+      const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
       if (!isAdmin) return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 
@@ -2198,7 +2198,7 @@ domainRouter.get('/spamexperts/sso', requireFirebaseAuth, async (req: any, res: 
     }
     const domainDoc = snap.docs[0].data();
     if (domainDoc.userId !== req.user.uid) {
-      const isAdmin = await isUserAdmin(req.user.uid);
+      const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
       if (!isAdmin) return res.status(403).json({ success: false, error: 'Unauthorized' });
     }
 

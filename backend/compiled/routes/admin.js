@@ -36,7 +36,7 @@ const FORBIDDEN_SECRET_FIELDS = new Set([
 ]);
 adminRouter.get('/api-config', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -60,7 +60,7 @@ adminRouter.get('/api-config', async (req, res) => {
 });
 adminRouter.get('/hosting-config', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -91,7 +91,7 @@ adminRouter.get('/hosting-config', async (req, res) => {
 });
 adminRouter.post('/hosting-config', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -116,7 +116,7 @@ adminRouter.post('/hosting-config', async (req, res) => {
 });
 adminRouter.post('/api-config', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -141,7 +141,7 @@ adminRouter.post('/api-config', async (req, res) => {
 });
 adminRouter.post('/hosting/test-connection', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -157,7 +157,7 @@ adminRouter.post('/hosting/test-connection', async (req, res) => {
 });
 adminRouter.post('/domain/test-connection', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -201,7 +201,7 @@ adminRouter.post('/domain/test-connection', async (req, res) => {
 });
 adminRouter.post('/hosting/cloudlinux/test-connection', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -215,7 +215,7 @@ adminRouter.post('/hosting/cloudlinux/test-connection', async (req, res) => {
 });
 adminRouter.post('/email/test-connection', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
@@ -228,7 +228,7 @@ adminRouter.post('/email/test-connection', async (req, res) => {
 });
 adminRouter.get('/connections-status', async (req, res) => {
     try {
-        const isAdmin = await isUserAdmin(req.user.uid);
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
         if (!isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
