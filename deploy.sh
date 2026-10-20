@@ -79,15 +79,16 @@ if [ -d "backend" ]; then
     /bin/cp -f "$BACKEND_DEST/.env.example" "$BACKEND_DEST/.env"
   fi
 
-  # Restart cPanel Phusion Passenger / Node.js App
+  # Restart cPanel Phusion Passenger / PM2 Node.js App
   /bin/mkdir -p "$BACKEND_DEST/tmp"
-  touch "$BACKEND_DEST/tmp/restart.txt"
+  touch "$BACKEND_DEST/tmp/restart.txt" 2>/dev/null || true
 
-  # Clean up any leftover unmanaged standalone node processes
-  fuser -k 4001/tcp 2>/dev/null || true
-  pkill -u "$(whoami)" -f "dist/server.js" 2>/dev/null || true
+  # Ensure PM2 reloads the updated backend code
+  if command -v npx >/dev/null 2>&1; then
+    (cd "$BACKEND_DEST" && npx pm2 reload click2it-api 2>/dev/null || npx pm2 restart all 2>/dev/null || true)
+  fi
 
-  echo "✅ Backend deployed and Passenger restarted for api.click2it.bd"
+  echo "✅ Backend deployed and restarted (Passenger & PM2)"
 fi
 
 echo "=================================================="
