@@ -1,4 +1,4 @@
-﻿import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
+import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuthSdk } from 'firebase-admin/auth';
 import crypto from 'crypto';
