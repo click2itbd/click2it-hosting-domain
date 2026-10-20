@@ -35,6 +35,7 @@ import {
   Send,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
 import { useSettings } from '../context/SettingsContext';
 import { useSiteContext } from '../hooks/useSiteContext';
 
@@ -235,11 +236,11 @@ export const Login: React.FC = () => {
     } catch (error: any) {
       if (error?.code === 'auth/unauthorized-domain') {
         const hostname = window.location.hostname;
-        toast.error(`Domain "${hostname}" is not authorized in Firebase Console. Please sign in with Email and Password.`);
+        toast.error('Google sign-in is currently unavailable. Please sign in with Email and Password.');
       } else if (error?.code === 'auth/popup-blocked') {
         toast.error('Pop-up was blocked by your browser. Please allow pop-ups or sign in with Email and Password.');
       } else if (error?.code !== 'auth/popup-closed-by-user') {
-        toast.error(error?.message || 'Google sign-in failed. Please use Email and Password.');
+        toast.error(getFriendlyErrorMessage(error, 'Google sign-in could not be completed. Please use Email and Password.'));
       }
     } finally {
       setLoading(false);
@@ -300,7 +301,7 @@ export const Login: React.FC = () => {
       } else if (error?.code === 'auth/too-many-requests') {
         toast.error('Too many failed login attempts. Please try again later or reset your password.');
       } else {
-        toast.error(error?.message || 'Authentication failed. Please try again.');
+        toast.error(getFriendlyErrorMessage(error, 'Authentication could not be completed. Please check your credentials and try again.'));
       }
     } finally {
       setLoading(false);
@@ -340,7 +341,7 @@ export const Login: React.FC = () => {
         setResetEmailSent(true);
         toast.success('Password reset link sent! Please check your email inbox.');
       } catch (fbErr: any) {
-        toast.error(fbErr?.message || 'Failed to send password reset email. Please try again.');
+        toast.error(getFriendlyErrorMessage(fbErr, 'Unable to send password reset email. Please verify your address and try again.'));
       }
     } finally {
       setIsResetting(false);

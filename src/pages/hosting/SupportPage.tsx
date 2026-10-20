@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { toast } from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Search, 
@@ -271,7 +272,7 @@ export default function SupportPage() {
       formRef.current?.reset();
     } catch (error) {
       console.error('Error submitting ticket:', error);
-      toast.error('Failed to submit ticket. Please contact us via phone or WhatsApp.');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to submit ticket. Please contact us via phone or WhatsApp.'));
     } finally {
       setIsSubmitting(false);
     }

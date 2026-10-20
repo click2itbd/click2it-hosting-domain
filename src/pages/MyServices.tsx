@@ -24,6 +24,7 @@ import { DomainOwnershipModal } from '../components/hosting/DomainOwnershipModal
 import { UserAffiliateTab } from '../components/hosting/UserAffiliateTab';
 import { HostingUpgradeModal } from '../components/hosting/HostingUpgradeModal';
 import { apiPost } from '../services/apiClient';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
 
 interface DomainOrder {
   id: string;
@@ -181,7 +182,7 @@ export const MyServices: React.FC = () => {
       });
       toast.success(`Auto-renew ` + (!currentVal ? 'enabled' : 'disabled'));
     } catch (err: any) {
-      toast.error('Failed to update auto-renew: ' + err.message);
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update auto-renew status. Please try again.'));
     }
   };
 
@@ -211,10 +212,10 @@ export const MyServices: React.FC = () => {
         addToCart(renewalProduct as any);
         navigate('/hosting/checkout');
       } else {
-        toast.error((res as any).error || (res as any).message || 'Renewal failed');
+        toast.error(getFriendlyErrorMessage((res as any).error || (res as any).message, 'Domain renewal request could not be processed. Please try again.'));
       }
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to renew domain');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to renew domain. Please try again.'));
     } finally {
       setDomainLoading(null);
     }
@@ -222,7 +223,7 @@ export const MyServices: React.FC = () => {
 
   const handleFetchUsage = async (account: HostingAccount) => {
     if (!account.providerAccountId) {
-      toast.error('Hosting account not fully provisioned yet.');
+      toast.error('Hosting account is being provisioned. Please check back shortly.');
       return;
     }
     
@@ -235,10 +236,10 @@ export const MyServices: React.FC = () => {
           [account.id]: res
         }));
       } else {
-        toast.error('Failed to fetch usage data');
+        toast.error(getFriendlyErrorMessage(null, 'Failed to fetch usage data'));
       }
     } catch (err) {
-      toast.error('Error fetching usage data');
+      toast.error(getFriendlyErrorMessage(err, 'Error fetching usage data'));
     } finally {
       setUsageLoading(null);
     }

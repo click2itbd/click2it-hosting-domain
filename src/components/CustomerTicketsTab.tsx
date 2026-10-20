@@ -3,6 +3,7 @@ import { collection, query, where, orderBy, getDocs, doc, updateDoc, addDoc, onS
 import { db } from '../firebase';
 import { MessageSquare, Plus, X, Send, AlertCircle, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
 
 interface TicketMessage {
   id?: string;
@@ -73,7 +74,7 @@ export const CustomerTicketsTab = ({ currentUser }: { currentUser: any }) => {
       setTickets(fetched);
     } catch (error) {
       console.error('Error fetching tickets:', error);
-      toast.error('Failed to load tickets');
+      toast.error(getFriendlyErrorMessage(error, 'Could not retrieve your support tickets. Please refresh or try again shortly.'));
     } finally {
       setLoading(false);
     }
@@ -113,7 +114,7 @@ export const CustomerTicketsTab = ({ currentUser }: { currentUser: any }) => {
       fetchTickets();
     } catch (error) {
       console.error('Error creating ticket:', error);
-      toast.error('Failed to create ticket');
+      toast.error(getFriendlyErrorMessage(error, 'Unable to submit your support ticket right now. Please try again.'));
     }
   };
 
@@ -141,7 +142,7 @@ export const CustomerTicketsTab = ({ currentUser }: { currentUser: any }) => {
       fetchTickets(); // Refresh list to update status
     } catch (error) {
       console.error('Error sending reply:', error);
-      toast.error('Failed to send reply');
+      toast.error(getFriendlyErrorMessage(error, 'Unable to deliver your reply. Please try again.'));
     }
   };
 

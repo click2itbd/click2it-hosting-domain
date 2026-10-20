@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiPost } from '../../services/apiClient';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 interface DomainOwnershipModalProps {
   domain: string;
@@ -118,10 +119,10 @@ export const DomainOwnershipModal: React.FC<DomainOwnershipModalProps> = ({
         if (onUpdated) onUpdated();
         onClose();
       } else {
-        toast.error(res?.error || 'Failed to transfer domain', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res?.error, 'Failed to transfer domain. Please verify recipient email.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Server error while pushing domain', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to transfer domain. Please try again.'), { id: toastId });
     } finally {
       setPushing(false);
     }
@@ -155,10 +156,10 @@ export const DomainOwnershipModal: React.FC<DomainOwnershipModalProps> = ({
         toast.success('Domain legal registrant updated successfully at registry!', { id: toastId });
         if (onUpdated) onUpdated();
       } else {
-        toast.error(res?.error || 'Failed to update domain contacts', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res?.error, 'Failed to update domain contacts at registry.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Server error while updating contact', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain contacts. Please try again.'), { id: toastId });
     } finally {
       setSavingWhois(false);
     }
@@ -184,10 +185,10 @@ export const DomainOwnershipModal: React.FC<DomainOwnershipModalProps> = ({
         setRegistryDetails((prev: any) => ({ ...prev, is_locked: nextState }));
         if (onUpdated) onUpdated();
       } else {
-        toast.error(res?.error || 'Failed to update lock', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res?.error, 'Failed to update domain lock status.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Error updating lock', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain lock status. Please try again.'), { id: toastId });
     } finally {
       setUpdatingLock(false);
     }

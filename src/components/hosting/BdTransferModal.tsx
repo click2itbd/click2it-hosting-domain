@@ -5,6 +5,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { sendEmail } from '../../services/emailService';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 interface BdTransferModalProps {
   isOpen: boolean;
@@ -171,7 +172,7 @@ Email: ${applicantEmail || '[Your Email Address]'}
       toast.success('Your .BD domain transfer request has been received!');
     } catch (err: any) {
       console.error('Failed to submit .BD transfer application:', err);
-      toast.error(err?.message || 'Failed to submit request. Please try again.');
+      toast.error(getFriendlyErrorMessage(err, 'Failed to submit request. Please try again or contact support.'));
     } finally {
       setIsSubmitting(false);
     }

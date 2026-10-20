@@ -25,6 +25,7 @@ import { toast } from 'react-hot-toast';
 import { checkTransferEligibility, getTldPricing } from '../../services/domainApi';
 import { getDomainPricing } from '../../services/hostingApi';
 import { BdTransferModal } from '../../components/hosting/BdTransferModal';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 const DomainTransferPage = () => {
   const navigate = useNavigate();
@@ -129,7 +130,7 @@ const DomainTransferPage = () => {
       const msg = error?.message?.includes('fetch failed')
         ? 'Network request failed. Please check your internet connection or verify the domain is unlocked.'
         : error?.message || 'Failed to verify transfer eligibility.';
-      setEligibilityError(msg);
+      setEligibilityError(getFriendlyErrorMessage(error, 'Unable to verify transfer eligibility with the registry at this time. Please ensure the domain is active and unlocked.'));
       setIsEligible(false);
       return false;
     } finally {

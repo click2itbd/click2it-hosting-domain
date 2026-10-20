@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Wallet, PlusCircle, History, Clock, ArrowDownLeft, ArrowUpRight, AlertCircle, X, Copy, Check, RefreshCw } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { toast } from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
 import { Spinner } from '../pages/hosting-dashboard/components/SharedUI';
 import { auth, db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -188,7 +189,7 @@ export function CustomerWalletTab() {
         success = true;
       } catch (fErr: any) {
         console.error('Direct Firestore deposit write failed:', fErr);
-        toast.error(fErr.message || 'Failed to submit deposit request. Please try again.');
+        toast.error(getFriendlyErrorMessage(fErr, 'Failed to submit deposit request. Please try again.'));
         setSubmittingDeposit(false);
         return;
       }

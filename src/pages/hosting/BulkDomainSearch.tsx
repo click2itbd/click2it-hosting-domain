@@ -5,6 +5,7 @@ import { Layout } from '../../components/Layout';
 import { searchDomain } from '../../services/domainApi';
 import { useCart } from '../../context/CartContext';
 import { toast } from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 import { formatCurrency } from '../../lib/utils';
 import { SEO } from '../../components/SEO';
 
@@ -51,10 +52,10 @@ export const BulkDomainSearch = () => {
           // the api returns { status: 'available', price: ... } or { success: true, data: { status... } }
           searchResults.push(res.data || res);
         } else {
-          searchResults.push({ domain, status: 'error', reason: res.error });
+          searchResults.push({ domain, status: 'error', reason: getFriendlyErrorMessage(res.error, 'Lookup temporarily unavailable') });
         }
       } catch (err: any) {
-        searchResults.push({ domain, status: 'error', reason: err.message });
+        searchResults.push({ domain, status: 'error', reason: getFriendlyErrorMessage(err, 'Lookup temporarily unavailable') });
       }
     }
     
@@ -212,7 +213,7 @@ export const BulkDomainSearch = () => {
                           )}
                         </div>
                         <div className="text-sm text-gray-500 capitalize">
-                          {res.available === true ? (res.isPremium ? 'Available (Premium Domain)' : 'Available') : res.error ? 'Error' : 'Taken'}
+                          {res.available === true ? (res.isPremium ? 'Available (Premium Domain)' : 'Available') : res.error ? 'Unavailable for instant lookup' : 'Taken'}
                         </div>
                       </div>
                     </div>

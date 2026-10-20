@@ -19,6 +19,7 @@ import { SupportTicketsClient } from '../components/hosting/SupportTicketsClient
 import { NameserverModal } from '../components/hosting/NameserverModal';
 import { HostingUpgradeModal } from '../components/hosting/HostingUpgradeModal';
 import { apiPost, apiGet } from '../services/apiClient';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
 
 interface DomainOrder {
   id: string;
@@ -158,7 +159,7 @@ export const MyServicesTab: React.FC = () => {
       });
       toast.success(`Auto-renew ${!currentVal ? 'enabled' : 'disabled'}`);
     } catch (err: any) {
-      toast.error('Failed to update auto-renew: ' + err.message);
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update auto-renew status. Please try again.'));
     }
   };
 
@@ -192,7 +193,7 @@ export const MyServicesTab: React.FC = () => {
         navigate('/hosting/checkout');
       }
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to renew domain');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to renew domain. Please try again.'));
     } finally {
       setDomainLoading(null);
     }
@@ -216,10 +217,10 @@ export const MyServicesTab: React.FC = () => {
       if (res.success && res.data) {
         setDomainDetails(res.data);
       } else {
-        toast.error(res.error || 'Could not fetch domain settings');
+        toast.error(getFriendlyErrorMessage(res.error, 'Could not fetch domain settings'));
       }
     } catch (err: any) {
-      toast.error(err.message || 'Error fetching domain details');
+      toast.error(getFriendlyErrorMessage(err, 'Error fetching domain details'));
     } finally {
       setLoadingDetails(false);
     }
@@ -237,10 +238,10 @@ export const MyServicesTab: React.FC = () => {
         toast.success(`Domain ${!currentLock ? 'locked' : 'unlocked'} successfully!`, { id: loadingToast });
         setDomainDetails((prev: any) => prev ? ({ ...prev, is_locked: !currentLock }) : prev);
       } else {
-        toast.error(res.error || 'Failed to update domain lock', { id: loadingToast });
+        toast.error(getFriendlyErrorMessage(res.error, 'Failed to update domain lock'), { id: loadingToast });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Server error', { id: loadingToast });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain lock'), { id: loadingToast });
     }
   };
 
@@ -256,10 +257,10 @@ export const MyServicesTab: React.FC = () => {
         toast.success(`WHOIS Privacy ${!currentPrivacy ? 'enabled' : 'disabled'}!`, { id: loadingToast });
         setDomainDetails((prev: any) => prev ? ({ ...prev, is_whois_privacy_enabled: !currentPrivacy }) : prev);
       } else {
-        toast.error(res.error || 'Failed to update WHOIS privacy', { id: loadingToast });
+        toast.error(getFriendlyErrorMessage(res.error, 'Failed to update WHOIS privacy'), { id: loadingToast });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Server error', { id: loadingToast });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain lock'), { id: loadingToast });
     }
   };
 
@@ -288,10 +289,10 @@ export const MyServicesTab: React.FC = () => {
       if (res.success && res.data) {
         setDnsRecords(res.data.records || []);
       } else {
-        toast.error(res.error || 'Failed to fetch DNS records');
+        toast.error(getFriendlyErrorMessage(res.error, 'Failed to fetch DNS records'));
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to load DNS records');
+      toast.error(getFriendlyErrorMessage(err, 'Failed to load DNS records'));
     } finally {
       setLoadingDns(false);
     }
@@ -324,10 +325,10 @@ export const MyServicesTab: React.FC = () => {
       if (res.success) {
         toast.success('DNS Zone updated successfully!', { id: loadingToast });
       } else {
-        toast.error(res.error || 'Failed to update DNS records', { id: loadingToast });
+        toast.error(getFriendlyErrorMessage(res.error, 'Failed to update DNS records'), { id: loadingToast });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Server error', { id: loadingToast });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain lock'), { id: loadingToast });
     }
   };
 
@@ -372,10 +373,10 @@ export const MyServicesTab: React.FC = () => {
         toast.success('WHOIS contacts updated successfully!', { id: loadingToast });
         setManagingWhoisDomain(null);
       } else {
-        toast.error(res.error || 'Failed to update WHOIS details', { id: loadingToast });
+        toast.error(getFriendlyErrorMessage(res.error, 'Failed to update WHOIS details'), { id: loadingToast });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Server error', { id: loadingToast });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain lock'), { id: loadingToast });
     } finally {
       setLoadingWhois(false);
     }
@@ -391,10 +392,10 @@ export const MyServicesTab: React.FC = () => {
         toast.success('Redirecting to SpamExperts...', { id: toastId });
         window.open(res.url, '_blank');
       } else {
-        toast.error(res.error || 'SpamExperts SSO is not yet provisioned for this domain.', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res.error, 'SpamExperts panel is not yet provisioned for this domain.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to access SpamExperts panel', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to access SpamExperts panel. Please try again.'), { id: toastId });
     } finally {
       setSpamLoading(null);
     }
@@ -412,10 +413,10 @@ export const MyServicesTab: React.FC = () => {
         toast.success('SpamExperts Protection activated successfully!', { id: toastId });
         setDomains(prev => prev.map(d => d.id === domain.id ? { ...d, spamExpertsEnabled: true } : d));
       } else {
-        toast.error(res.error || 'Failed to provision SpamExperts', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res.error, 'Failed to activate SpamExperts'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Provisioning error', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to activate SpamExperts. Please try again.'), { id: toastId });
     } finally {
       setSpamLoading(null);
     }
@@ -491,10 +492,10 @@ ITCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAM9b${Date.now()}
         toast.success(res.message || 'SSL configuration submitted!', { id: toastId });
         setConfiguringSsl(null);
       } else {
-        toast.error(res.error || 'Failed to submit SSL configuration', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res.error, 'Failed to submit SSL configuration'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Server error', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to submit SSL configuration. Please try again.'), { id: toastId });
     } finally {
       setSubmittingSsl(false);
     }
@@ -507,10 +508,10 @@ ITCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAM9b${Date.now()}
       if (res.success) {
         toast.success(res.message || 'Validation email resent!', { id: toastId });
       } else {
-        toast.error(res.error || 'Could not resend email', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res.error, 'Could not resend email'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err.message || 'Server error', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to submit SSL configuration. Please try again.'), { id: toastId });
     }
   };
 
@@ -524,10 +525,10 @@ ITCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAM9b${Date.now()}
         toast.success('Login session created!', { id: loadingToast });
         window.open(response.url, '_blank');
       } else {
-        toast.error(response?.error || 'Failed to login to cPanel', { id: loadingToast });
+        toast.error(getFriendlyErrorMessage(response?.error, 'Failed to login to cPanel'), { id: loadingToast });
       }
     } catch (e: any) {
-      toast.error('Error connecting to server', { id: loadingToast });
+      toast.error(getFriendlyErrorMessage(e, 'Error connecting to server. Please try again.'), { id: loadingToast });
     }
   };
 
@@ -538,7 +539,7 @@ ITCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAM9b${Date.now()}
       const data = await getHostingUsage(account.providerAccountId || '');
       setUsageData(prev => ({ ...prev, [account.id]: data }));
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to fetch usage');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to fetch usage data. Please try again.'));
     } finally {
       setUsageLoading(null);
     }

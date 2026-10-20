@@ -1,3 +1,4 @@
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -250,7 +251,7 @@ export const HostingCheckout: React.FC = () => {
         await setDoc(depRef, depositData);
         success = true;
       } catch (fErr: any) {
-        toast.error(fErr?.message || 'Failed to submit deposit request');
+        toast.error(getFriendlyErrorMessage(fErr, 'Failed to submit deposit request. Please try again.'));
         setSubmittingAddFund(false);
         return;
       }
@@ -718,7 +719,7 @@ export const HostingCheckout: React.FC = () => {
           }
         } catch (error: any) {
           console.error('Failed to store transfer auth codes:', error);
-          toast.error(error?.message || 'Failed to secure transfer authorization codes. Please try again.');
+          toast.error(getFriendlyErrorMessage(error, 'Failed to secure transfer authorization codes. Please try again.'));
           setIsProcessing(false);
           return;
         }
@@ -822,7 +823,7 @@ export const HostingCheckout: React.FC = () => {
       navigate(`/order-success/${orderId}`);
     } catch (error: any) {
       console.error('Checkout error:', error);
-      toast.error(error.message || 'Failed to place order');
+      toast.error(getFriendlyErrorMessage(error, 'Unable to complete your order at this time. Please try again or reach out to our billing support.'));
       setIsProcessing(false);
     }
   };

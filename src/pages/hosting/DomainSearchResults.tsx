@@ -1,3 +1,4 @@
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
@@ -233,7 +234,7 @@ export default function DomainSearchResults() {
       setOfferPhone('');
     } catch (error: any) {
       console.error('Error submitting offer:', error);
-      toast.error(error?.message || 'Failed to submit offer. Please try again.');
+      toast.error(getFriendlyErrorMessage(error, 'Could not submit your offer right now. Please try again or reach out to our sales team.'));
     } finally {
       setIsSubmittingOffer(false);
     }

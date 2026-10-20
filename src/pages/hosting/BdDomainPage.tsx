@@ -9,6 +9,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../../firebase';
 import { useSettings } from '../../context/SettingsContext';
 import toast from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 export default function BdDomainPage() {
   const { settings } = useSettings();
@@ -107,7 +108,7 @@ export default function BdDomainPage() {
       setTradeLicenseFile(null);
     } catch (error) {
       console.error('Error submitting application:', error);
-      toast.error('Failed to submit application. Please try again.');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to submit application. Please try again or reach out to our team.'));
     } finally {
       setIsSubmitting(false);
     }

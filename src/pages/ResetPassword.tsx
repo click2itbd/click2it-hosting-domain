@@ -17,6 +17,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
 import { useSettings } from '../context/SettingsContext';
 
 interface PasswordEvaluation {
@@ -238,7 +239,7 @@ export const ResetPassword = () => {
         navigate('/login');
       }, 2500);
     } catch (err: any) {
-      toast.error(err?.message || 'Could not reset password. Please request a new reset link.');
+      toast.error(getFriendlyErrorMessage(err, 'Could not reset password. Please request a new reset link.'));
     } finally {
       setSubmitting(false);
     }

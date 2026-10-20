@@ -18,6 +18,7 @@ interface NameserverModalProps {
 }
 
 import { apiPost } from '../../services/apiClient';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClose, onUpdate }) => {
   const [ns, setNs] = useState<string[]>(['', '', '', '']);
@@ -119,7 +120,7 @@ export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClos
       onClose();
     } catch (error: any) {
       console.error('Error updating nameservers:', error);
-      toast.error(error.message || 'Failed to update nameservers');
+      toast.error(getFriendlyErrorMessage(error, 'Failed to update nameservers. Please try again.'));
     } finally {
       setSaving(false);
     }

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiPost } from '../../services/apiClient';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 import { NameserverModal } from '../../components/hosting/NameserverModal';
 import { DomainOwnershipModal } from '../../components/hosting/DomainOwnershipModal';
 
@@ -81,10 +82,10 @@ export const DomainSecurityPage: React.FC = () => {
       if (res && res.success && res.data) {
         setDetails(res.data);
       } else {
-        toast.error(res?.error || `Could not fetch registry data for ${domName}`);
+        toast.error(getFriendlyErrorMessage(res?.error, `Could not retrieve registry status for ${domName}. Please try again.`));
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to connect to domain registry');
+      toast.error(getFriendlyErrorMessage(err, 'Unable to connect to domain registry right now. Please try again shortly.'));
     } finally {
       setLoadingDetails(false);
     }
@@ -120,10 +121,10 @@ export const DomainSecurityPage: React.FC = () => {
         toast.success(`Domain ${nextLock ? 'Locked (Transfer Prohibited)' : 'Unlocked (Transfer Allowed)'}!`, { id: toastId });
         setDetails((prev: any) => ({ ...prev, is_locked: nextLock }));
       } else {
-        toast.error(res?.error || 'Failed to update lock status', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res?.error, 'Failed to update domain lock status. Please try again.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Server error', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain lock status. Please try again.'), { id: toastId });
     } finally {
       setUpdatingLock(false);
     }
@@ -147,10 +148,10 @@ export const DomainSecurityPage: React.FC = () => {
         toast.success(`WHOIS Privacy ${nextPrivacy ? 'Enabled' : 'Disabled'}!`, { id: toastId });
         setDetails((prev: any) => ({ ...prev, is_whois_privacy_enabled: nextPrivacy }));
       } else {
-        toast.error(res?.error || 'Failed to update privacy', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res?.error, 'Failed to update WHOIS privacy. Please try again.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Server error', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update WHOIS privacy. Please try again.'), { id: toastId });
     } finally {
       setUpdatingPrivacy(false);
     }

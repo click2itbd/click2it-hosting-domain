@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { Globe, Server, Save, Loader2, CalendarClock, Settings, Lock, Unlock, Key, Shield, UserCheck, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiPost } from '../services/apiClient';
+import { getFriendlyErrorMessage } from '../utils/errorUtils';
 import { getDomainRenewalPrice } from '../services/domainApi';
 import { DomainOwnershipModal } from './hosting/DomainOwnershipModal';
 
@@ -49,7 +50,7 @@ export const MyDomainsTab = ({ currentUser }: { currentUser: any }) => {
       toast.success('Renewal added to cart');
       navigate('/hosting/checkout');
     } catch (error: any) {
-      toast.error(error.message || 'Could not load the live Openprovider renewal price.');
+      toast.error(getFriendlyErrorMessage(error, 'Could not retrieve domain renewal price. Please try again.'));
     }
   };
 
@@ -95,10 +96,10 @@ export const MyDomainsTab = ({ currentUser }: { currentUser: any }) => {
       if (response.success && response.data) {
         setDomainDetails(response.data);
       } else {
-        toast.error(response.error || 'Failed to fetch domain details');
+        toast.error(getFriendlyErrorMessage(response.error, 'Failed to fetch domain details'));
       }
     } catch (e: any) {
-      toast.error('Error fetching details');
+      toast.error(getFriendlyErrorMessage(e, 'Error fetching details'));
     } finally {
       setLoadingDetails(false);
     }
@@ -116,10 +117,10 @@ export const MyDomainsTab = ({ currentUser }: { currentUser: any }) => {
         toast.success(currentStatus ? 'Domain unlocked successfully!' : 'Domain locked successfully!', { id: loadingToast });
         setDomainDetails({ ...domainDetails, is_locked: !currentStatus });
       } else {
-        toast.error(response.error || 'Failed to update lock status', { id: loadingToast });
+        toast.error(getFriendlyErrorMessage(response.error, 'Failed to update lock status'), { id: loadingToast });
       }
     } catch (e: any) {
-      toast.error('Error updating lock status', { id: loadingToast });
+      toast.error(getFriendlyErrorMessage(e, 'Error updating lock status'), { id: loadingToast });
     }
   };
 
@@ -150,11 +151,11 @@ export const MyDomainsTab = ({ currentUser }: { currentUser: any }) => {
         fetchDomains();
         setManagingDomain(null);
       } else {
-        toast.error(response.error || 'Failed to update NameServers. Check your Openprovider API settings.');
+        toast.error(getFriendlyErrorMessage(response.error, 'Failed to update NameServers. Please verify nameserver values.'), { id: undefined });
       }
     } catch (error: any) {
       console.error('NS Update Error:', error);
-      toast.error(error.message || 'Error communicating with server');
+      toast.error(getFriendlyErrorMessage(error, 'Error communicating with domain registry'));
     } finally {
       setSavingNs(false);
     }

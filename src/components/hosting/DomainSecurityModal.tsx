@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { apiPost } from '../../services/apiClient';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 interface DomainSecurityModalProps {
   domain: string;
@@ -35,10 +36,10 @@ export const DomainSecurityModal: React.FC<DomainSecurityModalProps> = ({
       if (res && res.success && res.data) {
         setDetails(res.data);
       } else {
-        toast.error(res?.error || 'Could not fetch domain registry status');
+        toast.error(getFriendlyErrorMessage(res?.error, 'Could not retrieve domain security status. Please try again.'));
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to connect to domain registry');
+      toast.error(getFriendlyErrorMessage(err, 'Unable to connect to domain registry right now. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -70,10 +71,10 @@ export const DomainSecurityModal: React.FC<DomainSecurityModalProps> = ({
         setDetails((prev: any) => ({ ...prev, is_locked: nextState }));
         if (onUpdate) onUpdate();
       } else {
-        toast.error(res?.error || 'Failed to update domain lock status', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res?.error, 'Failed to update domain lock status. Please try again.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Server error while updating lock', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update domain lock status. Please try again.'), { id: toastId });
     } finally {
       setUpdatingLock(false);
     }
@@ -99,10 +100,10 @@ export const DomainSecurityModal: React.FC<DomainSecurityModalProps> = ({
         setDetails((prev: any) => ({ ...prev, is_whois_privacy_enabled: nextPrivacy }));
         if (onUpdate) onUpdate();
       } else {
-        toast.error(res?.error || 'Failed to update WHOIS privacy', { id: toastId });
+        toast.error(getFriendlyErrorMessage(res?.error, 'Failed to update WHOIS privacy. Please try again.'), { id: toastId });
       }
     } catch (err: any) {
-      toast.error(err?.message || 'Server error while updating privacy', { id: toastId });
+      toast.error(getFriendlyErrorMessage(err, 'Failed to update WHOIS privacy. Please try again.'), { id: toastId });
     } finally {
       setUpdatingPrivacy(false);
     }
