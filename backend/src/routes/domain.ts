@@ -58,6 +58,11 @@ export const DEFAULT_FALLBACK_PRICING: DomainPricing[] = [
   { tld: '.link', registerPrice: 750, renewPrice: 1850, transferPrice: 1850, currency: 'BDT', isActive: true },
 ];
 
+domainPricingCache = {
+  expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+  data: DEFAULT_FALLBACK_PRICING
+};
+
 export async function fetchLiveOpenproviderPricingList(): Promise<DomainPricing[]> {
   if (Date.now() < livePricingCooldownUntil) {
     return [];
@@ -569,13 +574,12 @@ domainRouter.get('/server-ip', async (req: any, res: Response) => {
 
 domainRouter.get('/pricing', async (req: any, res: Response) => {
   try {
-    const list = await getEffectiveDomainPricingList();
-    if (list && list.length > 0) {
-      return res.json({ success: true, data: list });
+    if (domainPricingCache && domainPricingCache.data && domainPricingCache.data.length > 0) {
+      return res.json({ success: true, data: domainPricingCache.data });
     }
-    return res.json({ success: true, data: DEFAULT_FALLBACK_PRICING });
+    const list = await getEffectiveDomainPricingList();
+    return res.json({ success: true, data: list && list.length > 0 ? list : DEFAULT_FALLBACK_PRICING });
   } catch (error: any) {
-    console.error('Failed to fetch domain pricing:', error);
     return res.json({ success: true, data: DEFAULT_FALLBACK_PRICING });
   }
 });

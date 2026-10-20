@@ -92,6 +92,35 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
 let domainPricingCache: { expiresAt: number; data: DomainPricing[] } | null = null;
 let domainPricingRequest: Promise<DomainPricing[]> | null = null;
 
+export const FALLBACK_TLD_PRICING: DomainPricing[] = [
+  { tld: '.com', registerPrice: 1450, renewPrice: 1450, transferPrice: 1450, currency: 'BDT', isActive: true },
+  { tld: '.net', registerPrice: 1650, renewPrice: 1650, transferPrice: 1650, currency: 'BDT', isActive: true },
+  { tld: '.org', registerPrice: 1550, renewPrice: 1550, transferPrice: 1550, currency: 'BDT', isActive: true },
+  { tld: '.xyz', registerPrice: 350, renewPrice: 1250, transferPrice: 1250, currency: 'BDT', isActive: true },
+  { tld: '.bd', registerPrice: 1800, renewPrice: 1800, transferPrice: 1800, currency: 'BDT', isActive: true },
+  { tld: '.info', registerPrice: 1250, renewPrice: 1850, transferPrice: 1850, currency: 'BDT', isActive: true },
+  { tld: '.biz', registerPrice: 1350, renewPrice: 1750, transferPrice: 1750, currency: 'BDT', isActive: true },
+  { tld: '.store', registerPrice: 450, renewPrice: 3200, transferPrice: 3200, currency: 'BDT', isActive: true },
+  { tld: '.co', registerPrice: 2200, renewPrice: 2800, transferPrice: 2800, currency: 'BDT', isActive: true },
+  { tld: '.io', registerPrice: 4800, renewPrice: 4800, transferPrice: 4800, currency: 'BDT', isActive: true },
+  { tld: '.dev', registerPrice: 1950, renewPrice: 1950, transferPrice: 1950, currency: 'BDT', isActive: true },
+  { tld: '.online', registerPrice: 450, renewPrice: 2600, transferPrice: 2600, currency: 'BDT', isActive: true },
+  { tld: '.site', registerPrice: 450, renewPrice: 2500, transferPrice: 2500, currency: 'BDT', isActive: true },
+  { tld: '.tech', registerPrice: 650, renewPrice: 3200, transferPrice: 3200, currency: 'BDT', isActive: true },
+  { tld: '.app', registerPrice: 1950, renewPrice: 1950, transferPrice: 1950, currency: 'BDT', isActive: true },
+  { tld: '.ai', registerPrice: 8500, renewPrice: 8500, transferPrice: 8500, currency: 'BDT', isActive: true },
+  { tld: '.shop', registerPrice: 550, renewPrice: 3400, transferPrice: 3400, currency: 'BDT', isActive: true },
+  { tld: '.me', registerPrice: 1450, renewPrice: 2200, transferPrice: 2200, currency: 'BDT', isActive: true },
+  { tld: '.pro', registerPrice: 1200, renewPrice: 1800, transferPrice: 1800, currency: 'BDT', isActive: true },
+  { tld: '.live', registerPrice: 650, renewPrice: 2800, transferPrice: 2800, currency: 'BDT', isActive: true },
+  { tld: '.cloud', registerPrice: 1350, renewPrice: 2400, transferPrice: 2400, currency: 'BDT', isActive: true },
+  { tld: '.digital', registerPrice: 950, renewPrice: 2700, transferPrice: 2700, currency: 'BDT', isActive: true },
+  { tld: '.space', registerPrice: 450, renewPrice: 2500, transferPrice: 2500, currency: 'BDT', isActive: true },
+  { tld: '.agency', registerPrice: 1850, renewPrice: 2900, transferPrice: 2900, currency: 'BDT', isActive: true },
+  { tld: '.link', registerPrice: 750, renewPrice: 1850, transferPrice: 1850, currency: 'BDT', isActive: true },
+];
+
+
 export async function checkDomainAvailability(domains: string[]): Promise<DomainAvailabilityResult[]> {
   const response = await apiRequest<{ success: boolean; data: DomainAvailabilityResult[]; error?: string }>('/api/domains/check', {
     method: 'POST',
@@ -143,7 +172,7 @@ export async function getDomainPricing(): Promise<DomainPricing[]> {
       console.warn('[DomainPricing] Failed to fetch live domain pricing:', err);
     }
 
-    return [];
+    return FALLBACK_TLD_PRICING;
   })();
 
   try {
