@@ -338,18 +338,58 @@ async function fulfillDomainOrder(domainOrderId, domainData, actorUid) {
                 updatedAt: now,
             });
             transferSubmissionMarked = true;
-            const nameParts = (domainData.customerName || '').trim().split(/\s+/);
-            const transferContact = domainData.contact || {
-                firstName: nameParts[0] || 'Customer',
-                lastName: nameParts.slice(1).join(' ') || (nameParts[0] ? nameParts[0] : 'User'),
-                email: domainData.customerEmail,
-                phone: domainData.customerPhone,
-                companyName: domainData.company || '',
-                address: domainData.shippingAddress || 'Dhaka',
-                city: 'Dhaka',
-                state: 'Dhaka',
-                zipcode: '1200',
-                country: 'BD'
+            // Fetch Order Document to obtain customer profile and contact details
+            let ordData = null;
+            if (domainData.orderId) {
+                try {
+                    const ordSnap = await db.collection('orders').doc(domainData.orderId).get();
+                    if (ordSnap.exists) {
+                        ordData = ordSnap.data();
+                    }
+                }
+                catch (e) {
+                    console.warn('[Fulfillment] Failed to fetch order for transfer contact:', e.message);
+                }
+            }
+            // Fetch User Profile fallback
+            const targetUserId = domainData.userId || ordData?.userId;
+            let userData = null;
+            if (targetUserId) {
+                try {
+                    const uSnap = await db.collection('users').doc(targetUserId).get();
+                    if (uSnap.exists) {
+                        userData = uSnap.data();
+                    }
+                }
+                catch (e) {
+                    console.warn('[Fulfillment] Failed to fetch user profile for transfer contact:', e.message);
+                }
+            }
+            const resolvedEmail = (domainData.contact?.email ||
+                domainData.customerEmail ||
+                ordData?.customerEmail ||
+                userData?.email ||
+                '').trim().toLowerCase();
+            const rawFullName = ((domainData.contact?.firstName ? `${domainData.contact.firstName} ${domainData.contact.lastName || ''}` : '') ||
+                domainData.customerName ||
+                ordData?.customerName ||
+                userData?.displayName ||
+                userData?.name ||
+                '').trim();
+            const nameParts = rawFullName ? rawFullName.split(/\s+/) : [];
+            const firstName = domainData.contact?.firstName || nameParts[0] || 'Customer';
+            const lastName = domainData.contact?.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : (firstName !== 'Customer' ? firstName : 'User'));
+            const transferContact = {
+                firstName,
+                lastName,
+                email: resolvedEmail,
+                phone: domainData.contact?.phone || domainData.customerPhone || ordData?.customerPhone || userData?.phoneNumber || '01700000000',
+                companyName: domainData.contact?.companyName || domainData.company || ordData?.company || '',
+                address: domainData.contact?.address || domainData.shippingAddress || ordData?.shippingAddress || 'House 1, Road 1, Dhaka',
+                city: domainData.contact?.city || ordData?.city || userData?.city || 'Dhaka',
+                state: domainData.contact?.state || ordData?.state || userData?.state || 'Dhaka',
+                zipcode: domainData.contact?.zipcode || ordData?.zipcode || userData?.zipcode || '1200',
+                country: domainData.contact?.country || ordData?.country || userData?.country || 'BD',
             };
             const rawDomainNs = domainData.nameServers || domainData.nameservers || [];
             const transferNs = Array.isArray(rawDomainNs) && rawDomainNs.length > 0 ? rawDomainNs : ['ns1.click2itbd.com', 'ns2.click2itbd.com'];

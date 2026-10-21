@@ -110,6 +110,7 @@ export interface DomainTransferResult {
   success: boolean;
   domain: string;
   transferId?: string;
+  customerHandle?: string;
   status?: string;
   error?: string;
   providerHttpStatus?: number;

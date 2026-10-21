@@ -1788,29 +1788,40 @@ domainRouter.post('/admin/execute-transfer', requireFirebaseAuth, async (req, re
         const effectiveOrderId = dData.orderId || orderId;
         // Resolve Auth Code with fallbacks
         let authCode = (inputAuthCode || dData.authCode || dData.eppCode || '').trim();
-        if (!authCode && effectiveOrderId) {
-            try {
-                const authSnap = await db.collection('transferAuthCodes').doc(`${effectiveOrderId}_${cleanDomain}`).get();
-                if (authSnap.exists) {
-                    authCode = (authSnap.data()?.authCode || '').trim();
-                }
-            }
-            catch { }
-        }
-        if (!authCode && effectiveOrderId) {
+        // 1. Fetch Order Document to obtain customer profile and contact details
+        let ordData = null;
+        if (effectiveOrderId) {
             try {
                 const ordSnap = await db.collection('orders').doc(effectiveOrderId).get();
                 if (ordSnap.exists) {
-                    const ordData = ordSnap.data();
-                    const matchItem = (ordData?.items || []).find((i) => (i.domain && i.domain.toLowerCase() === cleanDomain) ||
-                        (i.id && i.id.toLowerCase().includes(cleanDomain)) ||
-                        i.itemType === 'domain_transfer');
-                    if (matchItem?.authCode || matchItem?.eppCode) {
-                        authCode = String(matchItem.authCode || matchItem.eppCode).trim();
+                    ordData = ordSnap.data();
+                    if (!authCode) {
+                        const matchItem = (ordData?.items || []).find((i) => (i.domain && i.domain.toLowerCase() === cleanDomain) ||
+                            (i.id && i.id.toLowerCase().includes(cleanDomain)) ||
+                            i.itemType === 'domain_transfer');
+                        if (matchItem?.authCode || matchItem?.eppCode) {
+                            authCode = String(matchItem.authCode || matchItem.eppCode).trim();
+                        }
                     }
                 }
             }
-            catch { }
+            catch (e) {
+                console.warn('[Domain] Failed to fetch order for transfer contact:', e.message);
+            }
+        }
+        // 2. Fetch User Profile to obtain customer email & name fallback
+        const targetUserId = dData.userId || ordData?.userId;
+        let userData = null;
+        if (targetUserId) {
+            try {
+                const uSnap = await db.collection('users').doc(targetUserId).get();
+                if (uSnap.exists) {
+                    userData = uSnap.data();
+                }
+            }
+            catch (e) {
+                console.warn('[Domain] Failed to fetch user profile for transfer contact:', e.message);
+            }
         }
         if (!authCode || authCode.length < 3) {
             return res.status(400).json({
@@ -1823,18 +1834,49 @@ domainRouter.post('/admin/execute-transfer', requireFirebaseAuth, async (req, re
         if (!provider || typeof provider.transferDomain !== 'function') {
             return res.status(500).json({ success: false, error: 'Configured registrar does not support domain transfers.' });
         }
-        const nameParts = (dData.contact?.firstName ? `${dData.contact.firstName} ${dData.contact.lastName || ''}` : dData.customerName || '').trim().split(/\s+/);
-        const transferContact = dData.contact || {
-            firstName: nameParts[0] || 'Customer',
-            lastName: nameParts.slice(1).join(' ') || (nameParts[0] ? nameParts[0] : 'User'),
-            email: dData.customerEmail,
-            phone: dData.customerPhone,
-            companyName: dData.company || '',
-            address: dData.shippingAddress || 'Dhaka',
-            city: 'Dhaka',
-            state: 'Dhaka',
-            zipcode: '1200',
-            country: 'BD',
+        // Multi-tier customer contact resolution to ensure Domain Owner in Openprovider matches customer
+        const resolvedEmail = (dData.contact?.email ||
+            dData.customerEmail ||
+            ordData?.customerEmail ||
+            userData?.email ||
+            '').trim().toLowerCase();
+        const rawFullName = ((dData.contact?.firstName ? `${dData.contact.firstName} ${dData.contact.lastName || ''}` : '') ||
+            dData.customerName ||
+            ordData?.customerName ||
+            userData?.displayName ||
+            userData?.name ||
+            '').trim();
+        const nameParts = rawFullName ? rawFullName.split(/\s+/) : [];
+        const firstName = dData.contact?.firstName || nameParts[0] || 'Customer';
+        const lastName = dData.contact?.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : (firstName !== 'Customer' ? firstName : 'User'));
+        const resolvedPhone = (dData.contact?.phone ||
+            dData.contact?.phoneNumber ||
+            dData.customerPhone ||
+            ordData?.customerPhone ||
+            userData?.phoneNumber ||
+            userData?.phone ||
+            '01700000000').trim();
+        const resolvedAddress = (dData.contact?.address ||
+            dData.shippingAddress ||
+            ordData?.shippingAddress ||
+            userData?.address ||
+            'House 1, Road 1, Dhaka').trim();
+        const resolvedCompany = (dData.contact?.companyName ||
+            dData.company ||
+            ordData?.company ||
+            userData?.company ||
+            '').trim();
+        const transferContact = {
+            firstName,
+            lastName,
+            email: resolvedEmail,
+            phone: resolvedPhone,
+            companyName: resolvedCompany,
+            address: resolvedAddress,
+            city: dData.contact?.city || ordData?.city || userData?.city || 'Dhaka',
+            state: dData.contact?.state || ordData?.state || userData?.state || 'Dhaka',
+            zipcode: dData.contact?.zipcode || ordData?.zipcode || userData?.zipcode || userData?.zip || '1200',
+            country: dData.contact?.country || ordData?.country || userData?.country || 'BD',
         };
         const now = new Date().toISOString();
         const rawNs = dData.nameServers || dData.nameservers || [];
@@ -1848,6 +1890,8 @@ domainRouter.post('/admin/execute-transfer', requireFirebaseAuth, async (req, re
                 providerStatus: 'REQ',
                 transferId: transferId,
                 registrationId: transferId,
+                contactId: result.customerHandle || dData.contactId || null,
+                contact: transferContact,
                 transferSubmittedAt: now,
                 fulfillmentError: null,
                 errorCode: null,
