@@ -854,6 +854,8 @@ interface StaffHostMember {
   email: string;
   phone?: string;
   role: string;
+  systemRole?: 'admin' | 'manager' | 'staff';
+  permissions?: string[];
   status: 'active' | 'inactive' | 'on_leave';
   avatar?: string;
   assignedHosts: string[];
@@ -862,76 +864,58 @@ interface StaffHostMember {
   updatedAt: string;
 }
 
-let staffHostsList: StaffHostMember[] = [
-  {
-    id: 'staff_1',
-    name: 'Alex M.',
-    email: 'alex@click2it.bd',
-    phone: '+880 1711-000111',
-    role: 'Support Admin',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-    assignedHosts: ['Server Host BDIX #1 (Dhaka)', 'cPanel USA NVMe #2 (Dallas)', 'KVM VPS Node #1'],
-    assignedChannels: ['chan_main', 'chan_vip'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'staff_2',
-    name: 'Sarah K.',
-    email: 'sarah@click2it.bd',
-    phone: '+880 1711-000222',
-    role: 'Sales & Operations Lead',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=100&auto=format&fit=crop&q=80',
-    assignedHosts: ['cPanel USA NVMe #2 (Dallas)', 'Enterprise WordPress Cloud'],
-    assignedChannels: ['chan_main', 'chan_vip'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'staff_3',
-    name: 'Imran H.',
-    email: 'imran@click2it.bd',
-    phone: '+880 1711-000333',
-    role: 'Technical Support Specialist',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80',
-    assignedHosts: ['Server Host BDIX #1 (Dhaka)', 'KVM VPS Node #1 (Germany)'],
-    assignedChannels: ['chan_main'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'staff_4',
-    name: 'Kamal R.',
-    email: 'kamal@click2it.bd',
-    phone: '+880 1711-000444',
-    role: 'Billing & Accounting Specialist',
-    status: 'active',
-    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80',
-    assignedHosts: ['WHMCS Billing Node #1'],
-    assignedChannels: ['chan_vip'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+let staffHostsList: StaffHostMember[] = [];
 
 campaignRouter.get('/staff-hosts', async (req: any, res: Response) => {
   try {
     try {
       const db = getAdminDb();
       if (db && typeof db.collection === 'function') {
-        const snap = await db.collection('staff_hosts').get();
-        if (!snap.empty) {
-          const loaded: any[] = [];
-          snap.docs.forEach((d: any) => {
-            loaded.push({ id: d.id, ...d.data() });
+        const usersSnap = await db.collection('users').get().catch(() => ({ empty: true, docs: [] }));
+        const loadedMap = new Map<string, any>();
+
+        if (!usersSnap.empty) {
+          usersSnap.docs.forEach((d: any) => {
+            const uData = d.data() || {};
+            if (uData.role === 'admin' || uData.role === 'manager' || uData.role === 'staff' || uData.isAdmin === true) {
+              const sysRole = uData.role === 'admin' || uData.isAdmin ? 'admin' : uData.role === 'manager' ? 'manager' : 'staff';
+              loadedMap.set(d.id, {
+                id: d.id,
+                name: uData.displayName || uData.name || (uData.email ? uData.email.split('@')[0] : 'Staff Member'),
+                email: uData.email || '',
+                phone: uData.phone || '',
+                role: uData.company || (sysRole === 'admin' ? 'Support Admin' : sysRole === 'manager' ? 'Sales & Operations Lead' : 'Technical Support Specialist'),
+                systemRole: sysRole,
+                permissions: Array.isArray(uData.permissions) ? uData.permissions : [],
+                status: uData.status || 'active',
+                avatar: uData.photoURL || uData.avatar || '',
+                assignedHosts: Array.isArray(uData.assignedHosts) ? uData.assignedHosts : ['Server Host BDIX #1 (Dhaka)'],
+                assignedChannels: Array.isArray(uData.assignedChannels) ? uData.assignedChannels : ['Official Sales & Technical Support Line'],
+                createdAt: uData.createdAt || new Date().toISOString(),
+                updatedAt: uData.updatedAt || new Date().toISOString()
+              });
+            }
           });
-          if (loaded.length > 0) {
-            staffHostsList = loaded;
-          }
         }
+
+        const snap = await db.collection('staff_hosts').get().catch(() => ({ empty: true, docs: [] }));
+        if (!snap.empty) {
+          snap.docs.forEach((d: any) => {
+            const sData = d.data() || {};
+            if (sData.deleted) {
+              loadedMap.delete(d.id);
+              return;
+            }
+            const existing = loadedMap.get(d.id) || {};
+            loadedMap.set(d.id, {
+              ...existing,
+              id: d.id,
+              ...sData,
+            });
+          });
+        }
+
+        staffHostsList = Array.from(loadedMap.values());
       }
     } catch (fsErr) {
       // Fallback
@@ -954,42 +938,80 @@ campaignRouter.get('/staff-hosts', async (req: any, res: Response) => {
 
 campaignRouter.post('/staff-hosts', async (req: any, res: Response) => {
   try {
-    const { name, email, phone, role, status, assignedHosts, assignedChannels, avatar } = req.body;
+    const { name, email, password, phone, role, systemRole, permissions, status, assignedHosts, assignedChannels, avatar } = req.body;
     if (!name || !email) {
       return res.status(400).json({ success: false, error: 'Name and email are required' });
     }
 
-    const id = `staff_${Date.now()}`;
+    const cleanEmail = String(email).trim().toLowerCase();
+    let id = `staff_${Date.now()}`;
+
+    // If password is provided, create a real Firebase Auth account via Identity Toolkit REST API
+    if (password && String(password).trim().length >= 6) {
+      try {
+        const apiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || 'AIzaSyB_STUjdz0fPcYAk0JWz59SiMyJ-WKwCuw';
+        const signUpRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: String(password).trim(),
+            returnSecureToken: true
+          })
+        });
+        const signUpJson: any = await signUpRes.json();
+        if (signUpRes.ok && signUpJson?.localId) {
+          id = signUpJson.localId;
+        }
+      } catch (authErr) {
+        console.warn('[StaffHosts] Firebase Auth creation warning:', authErr);
+      }
+    }
+
+    const resolvedSystemRole: 'admin' | 'manager' | 'staff' =
+      systemRole && ['admin', 'manager', 'staff'].includes(systemRole)
+        ? systemRole
+        : role?.toLowerCase().includes('admin')
+        ? 'admin'
+        : role?.toLowerCase().includes('lead') || role?.toLowerCase().includes('manager')
+        ? 'manager'
+        : 'staff';
+
     const newMember: StaffHostMember = {
       id,
-      name,
-      email,
+      name: String(name).trim(),
+      email: cleanEmail,
       phone: phone || '',
       role: role || 'Technical Support Specialist',
+      systemRole: resolvedSystemRole,
+      permissions: Array.isArray(permissions) ? permissions : [],
       status: status || 'active',
-      avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
+      avatar: avatar || '',
       assignedHosts: Array.isArray(assignedHosts) ? assignedHosts : [],
-      assignedChannels: Array.isArray(assignedChannels) ? assignedChannels : ['chan_main'],
+      assignedChannels: Array.isArray(assignedChannels) ? assignedChannels : ['Official Sales & Technical Support Line'],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    staffHostsList.push(newMember);
+    staffHostsList = [newMember, ...staffHostsList.filter(s => s.id !== id)];
 
-    // Sync into Firestore 'staff_hosts' and 'users' collection
     try {
       const db = getAdminDb();
       if (db && typeof db.collection === 'function') {
-        await db.collection('staff_hosts').doc(id).set(newMember);
+        await db.collection('staff_hosts').doc(id).set(newMember, { merge: true });
         await db.collection('users').doc(id).set({
           uid: id,
-          displayName: name,
-          name,
-          email,
+          displayName: newMember.name,
+          name: newMember.name,
+          email: cleanEmail,
           phone: phone || '',
-          role: role?.toLowerCase().includes('admin') ? 'admin' : (role?.toLowerCase().includes('lead') ? 'manager' : 'staff'),
+          company: newMember.role,
+          role: resolvedSystemRole,
+          isAdmin: resolvedSystemRole === 'admin',
+          permissions: newMember.permissions,
           status: status || 'active',
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         }, { merge: true });
       }
     } catch (fsErr) {
@@ -1005,23 +1027,49 @@ campaignRouter.post('/staff-hosts', async (req: any, res: Response) => {
 campaignRouter.put('/staff-hosts/:id', async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    const member = staffHostsList.find(s => s.id === id);
+    const { name, email, phone, role, systemRole, permissions, status, assignedHosts, assignedChannels, avatar } = req.body;
+
+    const resolvedSystemRole: 'admin' | 'manager' | 'staff' =
+      systemRole && ['admin', 'manager', 'staff'].includes(systemRole)
+        ? systemRole
+        : role?.toLowerCase().includes('admin')
+        ? 'admin'
+        : role?.toLowerCase().includes('lead') || role?.toLowerCase().includes('manager')
+        ? 'manager'
+        : 'staff';
+
+    let member = staffHostsList.find(s => s.id === id);
     if (!member) {
-      return res.status(404).json({ success: false, error: 'Staff member not found' });
+      member = {
+        id,
+        name: name || 'Staff Member',
+        email: email || '',
+        phone: phone || '',
+        role: role || 'Technical Support Specialist',
+        systemRole: resolvedSystemRole,
+        permissions: Array.isArray(permissions) ? permissions : [],
+        status: status || 'active',
+        avatar: avatar || '',
+        assignedHosts: Array.isArray(assignedHosts) ? assignedHosts : [],
+        assignedChannels: Array.isArray(assignedChannels) ? assignedChannels : [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      staffHostsList.push(member);
+    } else {
+      if (name !== undefined) member.name = name;
+      if (email !== undefined) member.email = email;
+      if (phone !== undefined) member.phone = phone;
+      if (role !== undefined) member.role = role;
+      member.systemRole = resolvedSystemRole;
+      if (permissions !== undefined) member.permissions = Array.isArray(permissions) ? permissions : [];
+      if (status !== undefined) member.status = status;
+      if (avatar !== undefined) member.avatar = avatar;
+      if (assignedHosts !== undefined) member.assignedHosts = Array.isArray(assignedHosts) ? assignedHosts : [];
+      if (assignedChannels !== undefined) member.assignedChannels = Array.isArray(assignedChannels) ? assignedChannels : [];
+      member.updatedAt = new Date().toISOString();
     }
 
-    const { name, email, phone, role, status, assignedHosts, assignedChannels, avatar } = req.body;
-    if (name !== undefined) member.name = name;
-    if (email !== undefined) member.email = email;
-    if (phone !== undefined) member.phone = phone;
-    if (role !== undefined) member.role = role;
-    if (status !== undefined) member.status = status;
-    if (avatar !== undefined) member.avatar = avatar;
-    if (assignedHosts !== undefined) member.assignedHosts = Array.isArray(assignedHosts) ? assignedHosts : [];
-    if (assignedChannels !== undefined) member.assignedChannels = Array.isArray(assignedChannels) ? assignedChannels : [];
-    member.updatedAt = new Date().toISOString();
-
-    // Sync into Firestore
     try {
       const db = getAdminDb();
       if (db && typeof db.collection === 'function') {
@@ -1031,8 +1079,12 @@ campaignRouter.put('/staff-hosts/:id', async (req: any, res: Response) => {
           name: member.name,
           email: member.email,
           phone: member.phone,
-          role: member.role?.toLowerCase().includes('admin') ? 'admin' : (member.role?.toLowerCase().includes('lead') ? 'manager' : 'staff'),
-          status: member.status
+          company: member.role,
+          role: resolvedSystemRole,
+          isAdmin: resolvedSystemRole === 'admin',
+          permissions: member.permissions || [],
+          status: member.status,
+          updatedAt: new Date().toISOString()
         }, { merge: true });
       }
     } catch (fsErr) {
@@ -1040,6 +1092,25 @@ campaignRouter.put('/staff-hosts/:id', async (req: any, res: Response) => {
     }
 
     res.json({ success: true, member, staffHosts: staffHostsList });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+campaignRouter.delete('/staff-hosts/:id', async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    staffHostsList = staffHostsList.filter(s => s.id !== id);
+    try {
+      const db = getAdminDb();
+      if (db && typeof db.collection === 'function') {
+        await db.collection('staff_hosts').doc(id).set({ deleted: true, updatedAt: new Date().toISOString() }, { merge: true });
+        await db.collection('users').doc(id).set({ role: 'user', isAdmin: false, permissions: [], updatedAt: new Date().toISOString() }, { merge: true });
+      }
+    } catch (fsErr) {
+      console.warn('[StaffHosts] Firestore delete error:', fsErr);
+    }
+    res.json({ success: true, staffHosts: staffHostsList });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
