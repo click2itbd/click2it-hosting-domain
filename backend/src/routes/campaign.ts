@@ -1124,111 +1124,22 @@ interface HostingCrmLead {
   email: string;
   phone: string;
   targetDomain?: string;
-  leadStage: 'new_inbound' | 'domain_consultation' | 'vps_quote_sent' | 'invoice_pending' | 'active_customer' | 'renewal_upsell';
+  leadStage: string;
   interestedProducts: string[];
   dealValueBdt: number;
   assignedStaffId?: string;
   assignedStaffName?: string;
   whmcsAccountId?: string;
+  customerUid?: string;
   notes: string[];
   timeline?: any[];
   lastContactTime: string;
-  source: 'WhatsApp' | 'Meta Ads' | 'Web Form' | 'Direct Referral' | 'Phone';
+  source: string;
   createdAt: string;
   updatedAt: string;
 }
 
-let hostingCrmLeads: HostingCrmLead[] = [
-  {
-    id: 'lead_1',
-    contactName: 'Tanvir Ahmed',
-    companyName: 'Prime Tech Solutions Ltd',
-    email: 'tanvir@primetechbd.com',
-    phone: '+880 1712-345678',
-    leadStage: 'active_customer',
-    interestedProducts: ['Cloud NVMe VPS - 4 vCPU / 8GB RAM', 'primetechbd.com (.COM)'],
-    dealValueBdt: 18500,
-    assignedStaffId: 'staff_1',
-    assignedStaffName: 'Alex M. (Support Admin)',
-    whmcsAccountId: 'CUST-10492',
-    notes: ['Converted from Meta Ad campaign.', 'Wants automatic weekly VPS snapshots.'],
-    lastContactTime: '10:42 AM Today',
-    source: 'Meta Ads',
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'lead_2',
-    contactName: 'Nusrat Jahan',
-    companyName: 'Dhaka Designs Studio',
-    email: 'nusrat@dhakadesigns.net',
-    phone: '+880 1891-987654',
-    leadStage: 'invoice_pending',
-    interestedProducts: ['Pro cPanel Web Hosting (Annual)', 'dhakadesigns.net (.NET)'],
-    dealValueBdt: 6200,
-    assignedStaffId: 'staff_2',
-    assignedStaffName: 'Sarah K. (Sales Lead)',
-    whmcsAccountId: 'CUST-10811',
-    notes: ['Invoice INV-8491 generated on bKash merchant link.'],
-    lastContactTime: '11:15 AM Today',
-    source: 'WhatsApp',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'lead_3',
-    contactName: 'Rashid Al-Mamun',
-    companyName: 'Green Bazaar E-Commerce',
-    email: 'rashid@greenbazaar.org',
-    phone: '+880 1622-114477',
-    leadStage: 'vps_quote_sent',
-    interestedProducts: ['Custom Enterprise KVM Node - 6 vCPU / 16GB RAM', 'greenbazaar.org (.ORG)'],
-    dealValueBdt: 34000,
-    assignedStaffId: 'staff_3',
-    assignedStaffName: 'Imran H. (Technical Support)',
-    whmcsAccountId: 'CUST-10994',
-    notes: ['Requested custom quote with BDIX high-speed bandwidth.'],
-    lastContactTime: '09:05 AM Today',
-    source: 'Web Form',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'lead_4',
-    contactName: 'Mahbubur Rahman',
-    companyName: 'BENGAL ERP Systems',
-    email: 'mahbub@bengalerp.com',
-    phone: '+880 1715-998877',
-    leadStage: 'domain_consultation',
-    interestedProducts: ['.BD Official Domain (.COM.BD)', 'cPanel Business Starter'],
-    dealValueBdt: 4500,
-    assignedStaffId: 'staff_1',
-    assignedStaffName: 'Alex M. (Support Admin)',
-    notes: ['Consulting on BTCL NID verification documents for .com.bd domain.'],
-    lastContactTime: 'Yesterday 4:20 PM',
-    source: 'Direct Referral',
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'lead_5',
-    contactName: 'Sultana Parveen',
-    companyName: 'Chittagong Maritime Logistics',
-    email: 'sultana@cml-bd.com',
-    phone: '+880 1819-223344',
-    leadStage: 'renewal_upsell',
-    interestedProducts: ['Renewal: cPanel Premier Hosting + .COM', 'SSL Certificate Upgrade'],
-    dealValueBdt: 12800,
-    assignedStaffId: 'staff_4',
-    assignedStaffName: 'Kamal R. (Billing Specialist)',
-    whmcsAccountId: 'CUST-10112',
-    notes: ['Annual hosting renewal due in 7 days.'],
-    lastContactTime: 'Yesterday 2:10 PM',
-    source: 'Phone',
-    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+let hostingCrmLeads: HostingCrmLead[] = [];
 
 campaignRouter.get('/crm/leads', async (req: any, res: Response) => {
   try {
@@ -1236,22 +1147,21 @@ campaignRouter.get('/crm/leads', async (req: any, res: Response) => {
       const db = getAdminDb();
       if (db && typeof db.collection === 'function') {
         const snap = await db.collection('hosting_crm_leads').get();
-        if (!snap.empty) {
-          const loaded: any[] = [];
-          snap.docs.forEach((d: any) => {
-            loaded.push({ id: d.id, ...d.data() });
-          });
-          if (loaded.length > 0) {
-            hostingCrmLeads = loaded;
+        const loaded: any[] = [];
+        snap.docs.forEach((d: any) => {
+          const val = d.data();
+          if (val && !val.deleted) {
+            loaded.push({ id: d.id, ...val });
           }
-        }
+        });
+        hostingCrmLeads = loaded;
       }
     } catch (fsErr) {
-      // Fallback
+      // Fallback to in-memory leads
     }
 
     const totalPipelineValue = hostingCrmLeads.reduce((acc, l) => acc + (l.dealValueBdt || 0), 0);
-    const convertedLeads = hostingCrmLeads.filter(l => l.leadStage === 'active_customer').length;
+    const convertedLeads = hostingCrmLeads.filter(l => l.leadStage === 'active_customer' || l.leadStage === 'converted').length;
     const conversionRatePercent = hostingCrmLeads.length > 0 ? Math.round((convertedLeads / hostingCrmLeads.length) * 100) : 0;
 
     res.json({
@@ -1262,11 +1172,12 @@ campaignRouter.get('/crm/leads', async (req: any, res: Response) => {
         totalPipelineValue,
         conversionRatePercent,
         stageCounts: {
-          new_inbound: hostingCrmLeads.filter(l => l.leadStage === 'new_inbound').length,
-          domain_consultation: hostingCrmLeads.filter(l => l.leadStage === 'domain_consultation').length,
+          new_inbound: hostingCrmLeads.filter(l => l.leadStage === 'new_inbound' || l.leadStage === 'new').length,
+          domain_consultation: hostingCrmLeads.filter(l => l.leadStage === 'domain_consultation' || l.leadStage === 'contacted').length,
+          qualified: hostingCrmLeads.filter(l => l.leadStage === 'qualified').length,
           vps_quote_sent: hostingCrmLeads.filter(l => l.leadStage === 'vps_quote_sent').length,
           invoice_pending: hostingCrmLeads.filter(l => l.leadStage === 'invoice_pending').length,
-          active_customer: hostingCrmLeads.filter(l => l.leadStage === 'active_customer').length,
+          active_customer: convertedLeads,
           renewal_upsell: hostingCrmLeads.filter(l => l.leadStage === 'renewal_upsell').length
         }
       }
@@ -1279,13 +1190,6 @@ campaignRouter.get('/crm/leads', async (req: any, res: Response) => {
 let lastAssignedStaffIndex = 0;
 
 async function getNextRoundRobinStaff() {
-  const fallbackStaff = [
-    { id: 'staff_1', name: 'Alex M. (Support Admin)', email: 'alex@click2it.bd' },
-    { id: 'staff_2', name: 'Sarah K. (Sales Lead)', email: 'sarah@click2it.bd' },
-    { id: 'staff_3', name: 'Imran H. (Technical Support)', email: 'imran@click2it.bd' },
-    { id: 'staff_4', name: 'Kamal R. (Billing Specialist)', email: 'kamal@click2it.bd' }
-  ];
-
   try {
     const db = getAdminDb();
     if (db && typeof db.collection === 'function') {
@@ -1294,10 +1198,11 @@ async function getNextRoundRobinStaff() {
         const activeStaffList: any[] = [];
         snap.docs.forEach((d: any) => {
           const data = d.data();
-          if (data.role === 'admin' || data.role === 'staff' || data.role === 'manager') {
+          if (data && (data.role === 'admin' || data.role === 'staff' || data.role === 'manager' || data.isAdmin === true) && data.status !== 'inactive') {
+            const roleLabel = data.company || (data.role === 'admin' || data.isAdmin ? 'Super Admin' : data.role === 'manager' ? 'Sales Manager' : 'Support Staff');
             activeStaffList.push({
               id: d.id,
-              name: `${data.displayName || data.name || data.email?.split('@')[0] || 'Support Agent'} (${data.role === 'admin' ? 'Support Admin' : 'Sales Lead'})`,
+              name: `${data.displayName || data.name || data.email?.split('@')[0] || 'Support Agent'} (${roleLabel})`,
               email: data.email || ''
             });
           }
@@ -1310,16 +1215,29 @@ async function getNextRoundRobinStaff() {
       }
     }
   } catch (err) {
-    console.warn('[RoundRobin] Error querying staff, using fallback:', err);
+    console.warn('[RoundRobin] Error querying staff:', err);
   }
 
-  lastAssignedStaffIndex = (lastAssignedStaffIndex + 1) % fallbackStaff.length;
-  return fallbackStaff[lastAssignedStaffIndex];
+  if (staffHostsList.length > 0) {
+    lastAssignedStaffIndex = (lastAssignedStaffIndex + 1) % staffHostsList.length;
+    const chosen = staffHostsList[lastAssignedStaffIndex];
+    return {
+      id: chosen.id,
+      name: `${chosen.name} (${chosen.role})`,
+      email: chosen.email
+    };
+  }
+
+  return {
+    id: 'admin',
+    name: 'Administrator (Super Admin)',
+    email: ''
+  };
 }
 
 campaignRouter.post('/crm/leads', async (req: any, res: Response) => {
   try {
-    const { contactName, companyName, email, phone, targetDomain, leadStage, interestedProducts, dealValueBdt, assignedStaffId, assignedStaffName, notes, timeline, source, useRoundRobin } = req.body;
+    const { id, contactName, companyName, email, phone, targetDomain, leadStage, interestedProducts, dealValueBdt, assignedStaffId, assignedStaffName, whmcsAccountId, customerUid, notes, timeline, source, useRoundRobin } = req.body;
     if (!contactName || !email) {
       return res.status(400).json({ success: false, error: 'Contact name and email are required' });
     }
@@ -1327,30 +1245,33 @@ campaignRouter.post('/crm/leads', async (req: any, res: Response) => {
     let finalStaffId = assignedStaffId;
     let finalStaffName = assignedStaffName;
 
-    if (!finalStaffId || useRoundRobin) {
+    if (!finalStaffId || (useRoundRobin && !assignedStaffName)) {
       const roundRobinStaff = await getNextRoundRobinStaff();
       finalStaffId = roundRobinStaff.id;
       finalStaffName = roundRobinStaff.name;
     }
 
-    const newLead: any = {
-      id: `lead_${Date.now()}`,
+    const leadId = id || `lead_${Date.now()}`;
+    const newLead: HostingCrmLead = {
+      id: leadId,
       contactName,
       companyName: companyName || '',
       email,
       phone: phone || '',
       targetDomain: targetDomain || '',
-      leadStage: leadStage || 'new_inbound',
+      leadStage: leadStage || 'new',
       interestedProducts: Array.isArray(interestedProducts) ? interestedProducts : ['cPanel Hosting + Domain'],
       dealValueBdt: Number(dealValueBdt) || 5000,
       assignedStaffId: finalStaffId,
       assignedStaffName: finalStaffName,
+      whmcsAccountId: whmcsAccountId || '',
+      customerUid: customerUid || '',
       notes: Array.isArray(notes) ? notes : ['New lead added from Domain & Hosting CRM.'],
       timeline: Array.isArray(timeline) ? timeline : [{
         id: `tl_${Date.now()}`,
         type: 'status_change',
         title: 'Lead Created (Round-Robin Assigned)',
-        description: `Lead created and automatically assigned to ${finalStaffName} via Round-Robin queue.`,
+        description: `Lead created and assigned to ${finalStaffName}.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today',
         performedBy: 'Automated Round-Robin Engine'
       }],
@@ -1360,12 +1281,17 @@ campaignRouter.post('/crm/leads', async (req: any, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    hostingCrmLeads.unshift(newLead);
+    const existingIdx = hostingCrmLeads.findIndex(l => l.id === leadId);
+    if (existingIdx !== -1) {
+      hostingCrmLeads[existingIdx] = newLead;
+    } else {
+      hostingCrmLeads.unshift(newLead);
+    }
 
     try {
       const db = getAdminDb();
       if (db && typeof db.collection === 'function') {
-        await db.collection('hosting_crm_leads').doc(newLead.id).set(newLead);
+        await db.collection('hosting_crm_leads').doc(newLead.id).set(newLead, { merge: true });
       }
     } catch (fsErr) {
       console.warn('[HostingCRM] Firestore sync error:', fsErr);
@@ -1380,28 +1306,52 @@ campaignRouter.post('/crm/leads', async (req: any, res: Response) => {
 campaignRouter.put('/crm/leads/:id', async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    const lead = hostingCrmLeads.find(l => l.id === id);
-    if (!lead) {
-      return res.status(404).json({ success: false, error: 'CRM Lead not found' });
-    }
+    let lead = hostingCrmLeads.find(l => l.id === id);
 
-    const { contactName, companyName, email, phone, targetDomain, leadStage, interestedProducts, dealValueBdt, assignedStaffId, assignedStaffName, notes, timeline, source, whmcsAccountId } = req.body;
-    if (contactName !== undefined) lead.contactName = contactName;
-    if (companyName !== undefined) lead.companyName = companyName;
-    if (email !== undefined) lead.email = email;
-    if (phone !== undefined) lead.phone = phone;
-    if (targetDomain !== undefined) lead.targetDomain = targetDomain;
-    if (leadStage !== undefined) lead.leadStage = leadStage;
-    if (interestedProducts !== undefined) lead.interestedProducts = Array.isArray(interestedProducts) ? interestedProducts : [];
-    if (dealValueBdt !== undefined) lead.dealValueBdt = Number(dealValueBdt);
-    if (assignedStaffId !== undefined) lead.assignedStaffId = assignedStaffId;
-    if (assignedStaffName !== undefined) lead.assignedStaffName = assignedStaffName;
-    if (notes !== undefined) lead.notes = Array.isArray(notes) ? notes : [notes];
-    if (timeline !== undefined) lead.timeline = Array.isArray(timeline) ? timeline : lead.timeline || [];
-    if (source !== undefined) lead.source = source;
-    if (whmcsAccountId !== undefined) lead.whmcsAccountId = whmcsAccountId;
-    lead.lastContactTime = 'Just now';
-    lead.updatedAt = new Date().toISOString();
+    const { contactName, companyName, email, phone, targetDomain, leadStage, interestedProducts, dealValueBdt, assignedStaffId, assignedStaffName, notes, timeline, source, whmcsAccountId, customerUid, lastContactTime } = req.body;
+
+    if (!lead) {
+      lead = {
+        id,
+        contactName: contactName || 'Client Lead',
+        companyName: companyName || '',
+        email: email || '',
+        phone: phone || '',
+        targetDomain: targetDomain || '',
+        leadStage: leadStage || 'new',
+        interestedProducts: Array.isArray(interestedProducts) ? interestedProducts : [],
+        dealValueBdt: Number(dealValueBdt) || 0,
+        assignedStaffId: assignedStaffId || '',
+        assignedStaffName: assignedStaffName || '',
+        whmcsAccountId: whmcsAccountId || '',
+        customerUid: customerUid || '',
+        notes: Array.isArray(notes) ? notes : (notes ? [notes] : []),
+        timeline: Array.isArray(timeline) ? timeline : [],
+        lastContactTime: lastContactTime || 'Just now',
+        source: source || 'Web Form',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      hostingCrmLeads.unshift(lead);
+    } else {
+      if (contactName !== undefined) lead.contactName = contactName;
+      if (companyName !== undefined) lead.companyName = companyName;
+      if (email !== undefined) lead.email = email;
+      if (phone !== undefined) lead.phone = phone;
+      if (targetDomain !== undefined) lead.targetDomain = targetDomain;
+      if (leadStage !== undefined) lead.leadStage = leadStage;
+      if (interestedProducts !== undefined) lead.interestedProducts = Array.isArray(interestedProducts) ? interestedProducts : [];
+      if (dealValueBdt !== undefined) lead.dealValueBdt = Number(dealValueBdt);
+      if (assignedStaffId !== undefined) lead.assignedStaffId = assignedStaffId;
+      if (assignedStaffName !== undefined) lead.assignedStaffName = assignedStaffName;
+      if (notes !== undefined) lead.notes = Array.isArray(notes) ? notes : [notes];
+      if (timeline !== undefined) lead.timeline = Array.isArray(timeline) ? timeline : lead.timeline || [];
+      if (source !== undefined) lead.source = source;
+      if (whmcsAccountId !== undefined) lead.whmcsAccountId = whmcsAccountId;
+      if (customerUid !== undefined) lead.customerUid = customerUid;
+      lead.lastContactTime = lastContactTime || 'Just now';
+      lead.updatedAt = new Date().toISOString();
+    }
 
     try {
       const db = getAdminDb();

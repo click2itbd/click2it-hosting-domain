@@ -3,19 +3,21 @@ import {
   Users, UserPlus, DollarSign, Search, Filter, Plus, Edit2, Trash2, Phone, Mail, 
   Globe, Server, Shield, CheckCircle2, Clock, AlertCircle, Sparkles, RefreshCw, 
   ArrowRight, FileText, Send, MessageSquare, ChevronRight, Zap, Building, CheckSquare,
-  Download, Copy, ExternalLink, Sliders, Check, Activity, Eye, MessageCircle, Calendar,
+  Download, Copy, ExternalLink, Sliders, Check, Activity, Eye, EyeOff, MessageCircle, Calendar,
   Bell, BellOff, TrendingUp, BarChart2, Volume2, BookOpen, Tag, Layers, RotateCw, UserCheck, Scale,
-  Upload, X, FileSpreadsheet
+  Upload, X, FileSpreadsheet, Key, Lock
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { doc, setDoc, getDocs, collection } from 'firebase/firestore';
+import { doc, setDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
 import { 
   FunnelChart, Funnel, Tooltip, ResponsiveContainer, Cell, LabelList, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
   PieChart, Pie
 } from 'recharts';
-import { db } from '../../../firebase';
+import { db, auth } from '../../../firebase';
 import { useStaffHosts } from '../../../hooks/useStaffHosts';
 import { formatCurrency } from '../../../lib/utils';
+import { sendEmail as sendRealEmail } from '../../../services/emailService';
+import { createCustomerAccountByAdmin, generateCustomerPassword } from '../../../utils/customerAdminUtils';
 
 export interface LeadActivityLog {
   id: string;
@@ -40,6 +42,7 @@ export interface HostingCrmLead {
   assignedStaffId?: string;
   assignedStaffName?: string;
   whmcsAccountId?: string;
+  customerUid?: string;
   targetDomain?: string;
   notes: string[];
   timeline: LeadActivityLog[];
@@ -68,9 +71,59 @@ export interface LeadEmailTemplate {
   updatedAt: string;
 }
 
+const DEFAULT_EMAIL_TEMPLATES: LeadEmailTemplate[] = [
+  {
+    id: 'tpl_1',
+    name: 'Initial Inbound & Domain Consultation Response',
+    category: 'welcome',
+    subject: 'Domain & Hosting Inquiry — {{targetDomain}} | Click2IT Bangladesh',
+    body: `Hello {{contactName}},\n\nThank you for reaching out to Click2IT Hosting regarding {{targetDomain}}.\n\nWe have checked domain availability and prepared your NVMe Cloud hosting options. All our packages feature BDIX 10Gbps local peering, cPanel control panel, and automated daily backups.\n\nAssigned Account Specialist: {{assignedStaffName}}\nEstimated Investment: {{dealValueBdt}}\n\nPlease reply to this email or chat with us on WhatsApp to schedule a quick consultation.`,
+    updatedAt: 'Default Template'
+  },
+  {
+    id: 'tpl_2',
+    name: 'Official Hosting & NVMe VPS Quotation Proposal',
+    category: 'quote',
+    subject: 'Official Quotation Proposal for {{contactName}} — {{targetDomain}}',
+    body: `Dear {{contactName}},\n\nPlease find your requested domain and server proposal for {{targetDomain}} below:\n\nTarget Domain: {{targetDomain}}\nCompany: {{companyName}}\nTotal Deal Value: {{dealValueBdt}}\nIncluded Features: NVMe SSD Storage, BDIX Speed Boost, Free SSL Certificate, 24/7 BDIX Support.\n\nAssigned Specialist: {{assignedStaffName}}\n\nTo proceed with instant server activation, reply to this email or visit your client portal to complete payment.`,
+    updatedAt: 'Default Template'
+  },
+  {
+    id: 'tpl_3',
+    name: 'bKash / Nagad Invoice Payment Link Reminder',
+    category: 'followup',
+    subject: 'Payment Invoice Reminder — {{targetDomain}} Hosting Order',
+    body: `Hello {{contactName}},\n\nYour invoice for {{targetDomain}} is ready for payment.\n\nTotal Payable: {{dealValueBdt}}\n\nOnce completed, your server node will be provisioned automatically. Contact {{assignedStaffName}} if you need any invoice modifications.`,
+    updatedAt: 'Default Template'
+  },
+  {
+    id: 'tpl_4',
+    name: 'Welcome & cPanel Account Delivery',
+    category: 'converted',
+    subject: '🎉 Server Provisioned & Welcome to Click2IT Hosting — {{targetDomain}}',
+    body: `Dear {{contactName}},\n\nCongratulations! Your web hosting service for {{targetDomain}} has been successfully provisioned on our high-speed NVMe KVM node.\n\nYour assigned account specialist is {{assignedStaffName}}.\nIf you require free website migration support or DNS pointing assistance, please open a support ticket or reply to this email directly.`,
+    updatedAt: 'Default Template'
+  },
+  {
+    id: 'tpl_5',
+    name: 'Annual Domain & Server Renewal Offer',
+    category: 'renewal',
+    subject: 'Annual Renewal Notice for {{targetDomain}} — 10% Loyalty Discount',
+    body: `Hello {{contactName}},\n\nThis is a friendly reminder that your hosting and domain renewal for {{targetDomain}} is due soon.\n\nRenewal Amount: {{dealValueBdt}}\n\nRenew for 2 years today to claim an additional 10% loyalty discount!`,
+    updatedAt: 'Default Template'
+  }
+];
+
 export function HostingCrmTab({ state }: { state?: any }) {
   const { staffMembers, activeStaffMembers } = useStaffHosts();
-  
+
+  const getCurrentActorName = () => {
+    const u = auth.currentUser;
+    if (u?.displayName) return `${u.displayName} (Admin)`;
+    if (u?.email) return `${u.email.split('@')[0]} (Admin)`;
+    return 'Administrator';
+  };
+
   // Navigation Sub-Module State
   const [crmMainSubTab, setCrmMainSubTab] = useState<'pipeline' | 'templates'>('pipeline');
 
@@ -79,255 +132,14 @@ export function HostingCrmTab({ state }: { state?: any }) {
   const [enableRoundRobin, setEnableRoundRobin] = useState<boolean>(true);
   const [showWorkloadModal, setShowWorkloadModal] = useState<boolean>(false);
 
-  const [leads, setLeads] = useState<HostingCrmLead[]>([
-    {
-      id: 'lead_1',
-      contactName: 'Tanvir Ahmed',
-      companyName: 'Prime Tech Solutions Ltd',
-      email: 'tanvir@primetechbd.com',
-      phone: '+880 1712-345678',
-      leadStage: 'converted',
-      interestedProducts: ['Cloud NVMe VPS - 4 vCPU / 8GB RAM', 'primetechbd.com (.COM)'],
-      dealValueBdt: 18500,
-      assignedStaffId: 'staff_1',
-      assignedStaffName: 'Alex M. (Support Admin)',
-      whmcsAccountId: 'CUST-10492',
-      targetDomain: 'primetechbd.com',
-      notes: ['Converted from Meta Ad campaign.', 'Wants automatic weekly VPS snapshots.'],
-      timeline: [
-        {
-          id: 'tl_101',
-          type: 'status_change',
-          title: 'Stage Changed to Converted',
-          description: 'Lead converted to active hosting customer and provisioned on KVM Node 04.',
-          timestamp: '10:42 AM Today',
-          performedBy: 'Alex M. (Support Admin)',
-          isHighPriority: true
-        },
-        {
-          id: 'tl_102',
-          type: 'email_sent',
-          title: 'Welcome & cPanel Login Details Sent',
-          description: 'Sent cPanel access credentials and DNS nameservers email to tanvir@primetechbd.com.',
-          timestamp: '10:15 AM Today',
-          performedBy: 'System Automation'
-        },
-        {
-          id: 'tl_103',
-          type: 'quote',
-          title: 'Official Quotation Issued',
-          description: 'Issued ৳18,500 BDT quote for 4 vCPU NVMe VPS + .COM Domain.',
-          timestamp: 'Yesterday 3:30 PM',
-          performedBy: 'Alex M. (Support Admin)'
-        },
-        {
-          id: 'tl_104',
-          type: 'status_change',
-          title: 'Moved to Qualified Stage',
-          description: 'Verified server requirement specs (8GB RAM, BDIX bandwidth priority).',
-          timestamp: 'Yesterday 11:20 AM',
-          performedBy: 'Alex M. (Support Admin)'
-        },
-        {
-          id: 'tl_105',
-          type: 'whatsapp',
-          title: 'Inbound WhatsApp Inquiry',
-          description: 'Customer inquired about high-speed hosting in Bangladesh.',
-          timestamp: '2 days ago',
-          performedBy: 'Tanvir Ahmed'
-        }
-      ],
-      lastContactTime: '10:42 AM Today',
-      source: 'Meta Ads'
-    },
-    {
-      id: 'lead_2',
-      contactName: 'Nusrat Jahan',
-      companyName: 'Dhaka Designs Studio',
-      email: 'nusrat@dhakadesigns.net',
-      phone: '+880 1891-987654',
-      leadStage: 'invoice_pending',
-      interestedProducts: ['Pro cPanel Web Hosting (Annual)', 'dhakadesigns.net (.NET)'],
-      dealValueBdt: 6200,
-      assignedStaffId: 'staff_2',
-      assignedStaffName: 'Sarah K. (Sales Lead)',
-      whmcsAccountId: 'CUST-10811',
-      targetDomain: 'dhakadesigns.net',
-      notes: ['Invoice INV-8491 generated on bKash merchant link.'],
-      timeline: [
-        {
-          id: 'tl_201',
-          type: 'status_change',
-          title: 'Invoice Issued (Invoice Pending)',
-          description: 'Sent bKash & Nagad merchant invoice link for ৳6,200 BDT.',
-          timestamp: '11:15 AM Today',
-          performedBy: 'Sarah K. (Sales Lead)'
-        },
-        {
-          id: 'tl_202',
-          type: 'email_sent',
-          title: 'Sent Pro cPanel Quote Email',
-          description: 'Emailed quotation and annual discount breakdown to nusrat@dhakadesigns.net.',
-          timestamp: '09:40 AM Today',
-          performedBy: 'Sarah K. (Sales Lead)'
-        },
-        {
-          id: 'tl_203',
-          type: 'status_change',
-          title: 'Marked as Contacted',
-          description: 'Discussed website migration from previous provider.',
-          timestamp: 'Yesterday 2:10 PM',
-          performedBy: 'Sarah K. (Sales Lead)'
-        }
-      ],
-      lastContactTime: '11:15 AM Today',
-      source: 'WhatsApp'
-    },
-    {
-      id: 'lead_3',
-      contactName: 'Rashid Al-Mamun',
-      companyName: 'Green Bazaar E-Commerce',
-      email: 'rashid@greenbazaar.org',
-      phone: '+880 1622-114477',
-      leadStage: 'vps_quote_sent',
-      interestedProducts: ['Custom Enterprise KVM Node - 6 vCPU / 16GB RAM', 'greenbazaar.org (.ORG)'],
-      dealValueBdt: 34000,
-      assignedStaffId: 'staff_3',
-      assignedStaffName: 'Imran H. (Technical Support)',
-      whmcsAccountId: 'CUST-10994',
-      targetDomain: 'greenbazaar.org',
-      notes: ['Requested custom quote with BDIX high-speed bandwidth.'],
-      timeline: [
-        {
-          id: 'tl_301',
-          type: 'quote',
-          title: 'Custom KVM VPS Quote Generated',
-          description: 'Sent custom quote proposal for 6 vCPU / 16GB RAM KVM Node (৳34,000 BDT).',
-          timestamp: '09:05 AM Today',
-          performedBy: 'Imran H. (Technical Support)',
-          isHighPriority: true
-        },
-        {
-          id: 'tl_302',
-          type: 'call',
-          title: 'Phone Consultation Completed',
-          description: 'Discussed peak e-commerce traffic handling and daily automated backups.',
-          timestamp: 'Yesterday 5:00 PM',
-          performedBy: 'Imran H. (Technical Support)'
-        }
-      ],
-      lastContactTime: '09:05 AM Today',
-      source: 'Web Form'
-    },
-    {
-      id: 'lead_4',
-      contactName: 'Mahbubur Rahman',
-      companyName: 'BENGAL ERP Systems',
-      email: 'mahbub@bengalerp.com',
-      phone: '+880 1715-998877',
-      leadStage: 'contacted',
-      interestedProducts: ['.BD Official Domain (.COM.BD)', 'cPanel Business Starter'],
-      dealValueBdt: 4500,
-      assignedStaffId: 'staff_1',
-      assignedStaffName: 'Alex M. (Support Admin)',
-      targetDomain: 'bengalerp.com.bd',
-      notes: ['Consulting on BTCL NID verification documents for .com.bd domain.'],
-      timeline: [
-        {
-          id: 'tl_401',
-          type: 'status_change',
-          title: 'Moved to Contacted Stage',
-          description: 'Initial phone discussion completed. Requested BTCL domain registration requirements.',
-          timestamp: 'Yesterday 4:20 PM',
-          performedBy: 'Alex M. (Support Admin)'
-        },
-        {
-          id: 'tl_402',
-          type: 'status_change',
-          title: 'New Lead Inbound',
-          description: 'Lead submitted referral inquiry via website.',
-          timestamp: 'Yesterday 3:00 PM',
-          performedBy: 'System'
-        }
-      ],
-      lastContactTime: 'Yesterday 4:20 PM',
-      source: 'Direct Referral'
-    },
-    {
-      id: 'lead_5',
-      contactName: 'Sultana Parveen',
-      companyName: 'Chittagong Maritime Logistics',
-      email: 'sultana@cml-bd.com',
-      phone: '+880 1819-223344',
-      leadStage: 'renewal_upsell',
-      interestedProducts: ['Renewal: cPanel Premier Hosting + .COM', 'SSL Certificate Upgrade'],
-      dealValueBdt: 12800,
-      assignedStaffId: 'staff_4',
-      assignedStaffName: 'Kamal R. (Billing Specialist)',
-      whmcsAccountId: 'CUST-10112',
-      targetDomain: 'cml-bd.com',
-      notes: ['Annual hosting renewal due in 7 days.'],
-      timeline: [
-        {
-          id: 'tl_501',
-          type: 'note',
-          title: 'Renewal Notice Logged',
-          description: 'Upcoming renewal invoice sent. Offered 10% discount on 2-year renewal.',
-          timestamp: 'Yesterday 2:10 PM',
-          performedBy: 'Kamal R. (Billing Specialist)'
-        }
-      ],
-      lastContactTime: 'Yesterday 2:10 PM',
-      source: 'Phone'
-    }
-  ]);
+  const [leads, setLeads] = useState<HostingCrmLead[]>([]);
+  const [syncingInquiries, setSyncingInquiries] = useState<boolean>(false);
 
   // BULK SELECTION STATE
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
 
   // LEAD EMAIL TEMPLATES SUB-MODULE STATE
-  const [emailTemplates, setEmailTemplates] = useState<LeadEmailTemplate[]>([
-    {
-      id: 'tpl_1',
-      name: 'Initial Inbound & Domain Consultation Response',
-      category: 'welcome',
-      subject: 'Domain & Hosting Inquiry — {{targetDomain}} | Click2IT Bangladesh',
-      body: `Hello {{contactName}},\n\nThank you for reaching out to Click2IT Hosting regarding {{targetDomain}}.\n\nWe have checked domain availability and prepared your NVMe Cloud hosting options. All our packages feature BDIX 10Gbps local peering, cPanel control panel, and automated daily backups.\n\nAssigned Account Specialist: {{assignedStaffName}}\nEstimated Investment: {{dealValueBdt}}\n\nPlease reply to this email or chat with us on WhatsApp to schedule a quick consultation.`,
-      updatedAt: 'Today'
-    },
-    {
-      id: 'tpl_2',
-      name: 'Official Hosting & NVMe VPS Quotation Proposal',
-      category: 'quote',
-      subject: 'Official Quotation Proposal for {{contactName}} — {{targetDomain}}',
-      body: `Dear {{contactName}},\n\nPlease find your requested domain and server proposal for {{targetDomain}} below:\n\nTarget Domain: {{targetDomain}}\nCompany: {{companyName}}\nTotal Deal Value: {{dealValueBdt}}\nIncluded Features: NVMe SSD Storage, BDIX Speed Boost, Free SSL Certificate, 24/7 BDIX Support.\n\nAssigned Specialist: {{assignedStaffName}}\n\nTo proceed with instant server activation, reply to this email or click the merchant bKash/Nagad payment link below: https://click2it.bd/pay`,
-      updatedAt: 'Today'
-    },
-    {
-      id: 'tpl_3',
-      name: 'bKash / Nagad Invoice Payment Link Reminder',
-      category: 'followup',
-      subject: 'Payment Invoice Reminder — {{targetDomain}} Hosting Order',
-      body: `Hello {{contactName}},\n\nYour invoice for {{targetDomain}} is ready for payment.\n\nTotal Payable: {{dealValueBdt}}\nInstant Payment Link: https://click2it.bd/pay\n\nOnce completed, your server node will be provisioned automatically within 5 minutes. Contact {{assignedStaffName}} if you need invoice modifications.`,
-      updatedAt: 'Today'
-    },
-    {
-      id: 'tpl_4',
-      name: 'Welcome & cPanel Account Delivery',
-      category: 'converted',
-      subject: '🎉 Server Provisioned & Welcome to Click2IT Hosting — {{targetDomain}}',
-      body: `Dear {{contactName}},\n\nCongratulations! Your web hosting service for {{targetDomain}} has been successfully provisioned on our high-speed NVMe KVM node.\n\nYour assigned account specialist is {{assignedStaffName}}.\nIf you require free website migration support or DNS pointing assistance, please open a support ticket or reply to this email directly.`,
-      updatedAt: 'Today'
-    },
-    {
-      id: 'tpl_5',
-      name: 'Annual Domain & Server Renewal Offer',
-      category: 'renewal',
-      subject: 'Annual Renewal Notice for {{targetDomain}} — 10% Loyalty Discount',
-      body: `Hello {{contactName}},\n\nThis is a friendly reminder that your hosting and domain renewal for {{targetDomain}} is due soon.\n\nRenewal Amount: {{dealValueBdt}}\n\nRenew for 2 years today to claim an additional 10% loyalty discount!`,
-      updatedAt: 'Today'
-    }
-  ]);
+  const [emailTemplates, setEmailTemplates] = useState<LeadEmailTemplate[]>(DEFAULT_EMAIL_TEMPLATES);
 
   const [showTemplateModal, setShowTemplateModal] = useState<boolean>(false);
   const [editingTemplate, setEditingTemplate] = useState<LeadEmailTemplate | null>(null);
@@ -339,33 +151,13 @@ export function HostingCrmTab({ state }: { state?: any }) {
   });
 
   // Automated CRM Notification Center State
-  const [notifications, setNotifications] = useState<CrmNotification[]>([
-    {
-      id: 'notif_1',
-      title: '🎉 Lead Converted: Tanvir Ahmed',
-      message: 'Tanvir Ahmed (Prime Tech Solutions) converted to active NVMe VPS customer (৳18,500 BDT).',
-      type: 'converted',
-      leadId: 'lead_1',
-      leadName: 'Tanvir Ahmed',
-      timestamp: '10:42 AM Today',
-      read: false
-    },
-    {
-      id: 'notif_2',
-      title: '🚨 High-Priority Interaction: Rashid Al-Mamun',
-      message: 'High-priority KVM VPS quote & custom BDIX bandwidth test requested for greenbazaar.org.',
-      type: 'high_priority',
-      leadId: 'lead_3',
-      leadName: 'Rashid Al-Mamun',
-      timestamp: '09:05 AM Today',
-      read: false
-    }
-  ]);
+  const [notifications, setNotifications] = useState<CrmNotification[]>([]);
 
   const [showNotificationDrawer, setShowNotificationDrawer] = useState<boolean>(false);
   const [showAnalyticsDashboard, setShowAnalyticsDashboard] = useState<boolean>(true);
 
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [sendingEmail, setSendingEmail] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
@@ -379,6 +171,31 @@ export function HostingCrmTab({ state }: { state?: any }) {
   const [donutCustomEnd, setDonutCustomEnd] = useState<string>('');
   const [showModal, setShowModal] = useState<boolean>(false);
   const [editingLead, setEditingLead] = useState<HostingCrmLead | null>(null);
+
+  // Convert Lead to Customer Account Modal State
+  const [showConvertModal, setShowConvertModal] = useState<boolean>(false);
+  const [convertingLead, setConvertingLead] = useState<HostingCrmLead | null>(null);
+  const [convertingSubmitting, setConvertingSubmitting] = useState<boolean>(false);
+  const [showConvertPassword, setShowConvertPassword] = useState<boolean>(false);
+  const [convertedCredentials, setConvertedCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    accountId: string;
+  } | null>(null);
+  const [convertForm, setConvertForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    company: '',
+    password: '',
+    address1: 'Dhaka, Bangladesh',
+    city: 'Dhaka',
+    postcode: '1000',
+    country: 'Bangladesh',
+    sendWelcomeEmail: true
+  });
 
   // Lead Detail View & Interactive Timeline Drawer/Modal State
   const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<HostingCrmLead | null>(null);
@@ -394,6 +211,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
   // Quote Generator Modal State
   const [showQuoteModal, setShowQuoteModal] = useState<boolean>(false);
   const [quoteLead, setQuoteLead] = useState<HostingCrmLead | null>(null);
+  const [sendingQuoteEmail, setSendingQuoteEmail] = useState<boolean>(false);
   const [quoteDetails, setQuoteDetails] = useState({
     package: 'Cloud NVMe Hosting (Starter Package)',
     billingPeriod: '1 Year (Annual)',
@@ -446,52 +264,309 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
   useEffect(() => {
     fetchLeads();
+    fetchEmailTemplates();
   }, []);
+
+  const fetchEmailTemplates = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'emailTemplates'));
+      if (!snap.empty) {
+        const loaded: LeadEmailTemplate[] = [];
+        snap.docs.forEach(d => {
+          const val = d.data() as any;
+          if (val && val.name && val.subject && val.body && (val.isCrmTemplate || d.id.startsWith('tpl_'))) {
+            loaded.push({
+              id: d.id,
+              name: val.name,
+              subject: val.subject,
+              body: val.body,
+              category: val.category || 'custom',
+              updatedAt: val.updatedAt || 'Saved'
+            });
+          }
+        });
+        if (loaded.length > 0) {
+          setEmailTemplates(loaded);
+        }
+      }
+    } catch (err) {
+      console.warn('[HostingCRM] Could not load emailTemplates from Firestore:', err);
+    }
+  };
+
+  const buildNotificationsFromLeads = (leadList: HostingCrmLead[]) => {
+    const generated: CrmNotification[] = [];
+    leadList.forEach(l => {
+      if (normalizeStage(l.leadStage) === 'converted') {
+        generated.push({
+          id: `notif_conv_${l.id}`,
+          title: `🎉 Lead Converted: ${l.contactName}`,
+          message: `${l.contactName} (${l.companyName || l.email}) converted to active customer (${formatCurrency(l.dealValueBdt)}).`,
+          type: 'converted',
+          leadId: l.id,
+          leadName: l.contactName,
+          timestamp: l.lastContactTime || 'Recently',
+          read: false
+        });
+      }
+      const urgentLog = (l.timeline || []).find(t => t.isHighPriority);
+      if (urgentLog && normalizeStage(l.leadStage) !== 'converted') {
+        generated.push({
+          id: `notif_hp_${l.id}_${urgentLog.id}`,
+          title: `🚨 High-Priority Activity: ${l.contactName}`,
+          message: `${urgentLog.title}: ${urgentLog.description}`,
+          type: 'high_priority',
+          leadId: l.id,
+          leadName: l.contactName,
+          timestamp: urgentLog.timestamp || 'Recently',
+          read: false
+        });
+      }
+    });
+    setNotifications(generated.slice(0, 15));
+  };
 
   const fetchLeads = async () => {
     setLoading(true);
+    const mergedMap = new Map<string, HostingCrmLead>();
+
+    // 1. Load from Firestore 'hosting_crm_leads'
+    try {
+      const snap = await getDocs(collection(db, 'hosting_crm_leads'));
+      if (!snap.empty) {
+        snap.docs.forEach(d => {
+          const val = d.data() as any;
+          if (val && !val.deleted && val.contactName) {
+            mergedMap.set(d.id, {
+              id: d.id,
+              ...val,
+              interestedProducts: Array.isArray(val.interestedProducts) ? val.interestedProducts : ['Web Hosting & Domain'],
+              notes: Array.isArray(val.notes) ? val.notes : [],
+              leadStage: normalizeStage(val.leadStage),
+              timeline: Array.isArray(val.timeline) ? val.timeline : []
+            });
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('Could not read hosting_crm_leads from Firestore:', err);
+    }
+
+    // 2. Load from Backend '/api/crm/leads'
     try {
       const res = await fetch('/api/crm/leads');
       const data = await res.json();
       if (data.success && Array.isArray(data.leads) && data.leads.length > 0) {
-        const normalized = data.leads.map((l: any) => ({
-          ...l,
-          leadStage: normalizeStage(l.leadStage),
-          timeline: Array.isArray(l.timeline) ? l.timeline : []
-        }));
-        setLeads(normalized);
-      } else {
-        const snap = await getDocs(collection(db, 'hosting_crm_leads'));
-        if (!snap.empty) {
-          const loaded: HostingCrmLead[] = [];
-          snap.docs.forEach(d => {
-            const val = d.data() as any;
-            loaded.push({
-              id: d.id,
-              ...val,
-              leadStage: normalizeStage(val.leadStage),
-              timeline: Array.isArray(val.timeline) ? val.timeline : []
+        data.leads.forEach((l: any) => {
+          if (l && l.id && !l.deleted && l.contactName) {
+            const existing = mergedMap.get(l.id);
+            mergedMap.set(l.id, {
+              ...existing,
+              ...l,
+              interestedProducts: Array.isArray(l.interestedProducts) ? l.interestedProducts : (existing?.interestedProducts || ['Web Hosting & Domain']),
+              notes: Array.isArray(l.notes) ? l.notes : (existing?.notes || []),
+              leadStage: normalizeStage(l.leadStage),
+              timeline: Array.isArray(l.timeline) ? l.timeline : (existing?.timeline || [])
             });
-          });
-          setLeads(loaded);
-        }
+          }
+        });
       }
     } catch (err) {
-      console.warn('Failed to fetch CRM leads, using fallback:', err);
-    } finally {
-      setLoading(false);
+      console.warn('Failed to fetch CRM leads from backend API:', err);
     }
+
+    const finalLeads = Array.from(mergedMap.values());
+    setLeads(finalLeads);
+    buildNotificationsFromLeads(finalLeads);
+    setLoading(false);
+  };
+
+  // Sync Website Inquiries, Quote Requests & Domain Offer Requests into CRM Pipeline
+  const handleSyncWebsiteInquiries = async (silent = false) => {
+    setSyncingInquiries(true);
+    let newlySyncedCount = 0;
+    const existingEmailsOrIds = new Set(leads.map(l => l.id));
+    const staffPool = getActiveStaffPool();
+    let rrPointer = roundRobinIndex;
+    const syncedLeads: HostingCrmLead[] = [];
+
+    try {
+      // 1. Sync Contact Us 'inquiries'
+      const inqSnap = await getDocs(collection(db, 'inquiries')).catch(() => null);
+      if (inqSnap && !inqSnap.empty) {
+        for (const d of inqSnap.docs) {
+          const leadId = `lead_inq_${d.id}`;
+          if (existingEmailsOrIds.has(leadId)) continue;
+          const val = d.data() as any;
+          if (!val || !val.email) continue;
+          const staff = staffPool[rrPointer % staffPool.length];
+          rrPointer++;
+          const assignedStaffName = `${staff.name} (${staff.role})`;
+          const newLead: HostingCrmLead = {
+            id: leadId,
+            contactName: val.name || val.email.split('@')[0],
+            companyName: val.company || '',
+            email: val.email,
+            phone: val.phone || '+880 1700-000000',
+            leadStage: 'new',
+            interestedProducts: [val.subject || 'Website Contact Inquiry'],
+            dealValueBdt: 5000,
+            assignedStaffId: staff.id,
+            assignedStaffName,
+            notes: [val.message || 'Submitted via Website Contact Form'],
+            timeline: [{
+              id: `tl_inq_${d.id}`,
+              type: 'note',
+              title: 'Synced from Website Contact Inquiry',
+              description: val.message || 'Customer submitted an inquiry via Contact Us page.',
+              timestamp: val.createdAt ? new Date(val.createdAt).toLocaleDateString() : 'Recently',
+              performedBy: 'CRM Auto-Sync'
+            }],
+            lastContactTime: 'Recently',
+            source: 'Web Form',
+            createdAt: val.createdAt || new Date().toISOString()
+          };
+          syncedLeads.push(newLead);
+          existingEmailsOrIds.add(leadId);
+          newlySyncedCount++;
+        }
+      }
+
+      // 2. Sync 'domain_offers'
+      const offerSnap = await getDocs(collection(db, 'domain_offers')).catch(() => null);
+      if (offerSnap && !offerSnap.empty) {
+        for (const d of offerSnap.docs) {
+          const leadId = `lead_offer_${d.id}`;
+          if (existingEmailsOrIds.has(leadId)) continue;
+          const val = d.data() as any;
+          if (!val || !val.email) continue;
+          const staff = staffPool[rrPointer % staffPool.length];
+          rrPointer++;
+          const assignedStaffName = `${staff.name} (${staff.role})`;
+          const newLead: HostingCrmLead = {
+            id: leadId,
+            contactName: val.name || val.buyerName || val.email.split('@')[0],
+            companyName: val.company || '',
+            email: val.email,
+            phone: val.phone || '+880 1700-000000',
+            targetDomain: val.domain || val.domainName || '',
+            leadStage: val.status === 'accepted' ? 'converted' : 'qualified',
+            interestedProducts: [`Domain Offer: ${val.domain || val.domainName || 'Premium Domain'}`],
+            dealValueBdt: Number(val.offerAmount || val.price || 10000),
+            assignedStaffId: staff.id,
+            assignedStaffName,
+            notes: [val.message || val.notes || `Domain Offer Request for ${val.domain || ''}`],
+            timeline: [{
+              id: `tl_offer_${d.id}`,
+              type: 'quote',
+              title: 'Synced from Domain Offer Request',
+              description: `Customer offered ${formatCurrency(Number(val.offerAmount || val.price || 10000))} for ${val.domain || 'domain'}.`,
+              timestamp: val.createdAt ? new Date(val.createdAt).toLocaleDateString() : 'Recently',
+              performedBy: 'CRM Auto-Sync'
+            }],
+            lastContactTime: 'Recently',
+            source: 'Web Form',
+            createdAt: val.createdAt || new Date().toISOString()
+          };
+          syncedLeads.push(newLead);
+          existingEmailsOrIds.add(leadId);
+          newlySyncedCount++;
+        }
+      }
+
+      // 3. Sync 'quote_requests'
+      const quoteSnap = await getDocs(collection(db, 'quote_requests')).catch(() => null);
+      if (quoteSnap && !quoteSnap.empty) {
+        for (const d of quoteSnap.docs) {
+          const leadId = `lead_quote_${d.id}`;
+          if (existingEmailsOrIds.has(leadId)) continue;
+          const val = d.data() as any;
+          if (!val || !val.email) continue;
+          const staff = staffPool[rrPointer % staffPool.length];
+          rrPointer++;
+          const assignedStaffName = `${staff.name} (${staff.role})`;
+          const newLead: HostingCrmLead = {
+            id: leadId,
+            contactName: val.name || val.contactName || val.email.split('@')[0],
+            companyName: val.company || '',
+            email: val.email,
+            phone: val.phone || '+880 1700-000000',
+            targetDomain: val.domain || '',
+            leadStage: 'vps_quote_sent',
+            interestedProducts: [val.service || val.package || 'Custom Server / VPS Quote'],
+            dealValueBdt: Number(val.budget || val.estimatedPrice || 15000),
+            assignedStaffId: staff.id,
+            assignedStaffName,
+            notes: [val.message || val.requirements || 'Custom server quotation request.'],
+            timeline: [{
+              id: `tl_qr_${d.id}`,
+              type: 'quote',
+              title: 'Synced from Custom Quote Request',
+              description: val.message || val.requirements || 'Customer requested a custom server quotation.',
+              timestamp: val.createdAt ? new Date(val.createdAt).toLocaleDateString() : 'Recently',
+              performedBy: 'CRM Auto-Sync'
+            }],
+            lastContactTime: 'Recently',
+            source: 'Web Form',
+            createdAt: val.createdAt || new Date().toISOString()
+          };
+          syncedLeads.push(newLead);
+          existingEmailsOrIds.add(leadId);
+          newlySyncedCount++;
+        }
+      }
+
+      if (syncedLeads.length > 0) {
+        setRoundRobinIndex(rrPointer);
+        setLeads(prev => {
+          const combined = [...syncedLeads, ...prev];
+          buildNotificationsFromLeads(combined);
+          return combined;
+        });
+
+        for (const sLead of syncedLeads) {
+          await setDoc(doc(db, 'hosting_crm_leads', sLead.id), sLead, { merge: true }).catch(() => null);
+          fetch('/api/crm/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sLead)
+          }).catch(() => null);
+        }
+
+        if (!silent) {
+          toast.success(`Synced ${newlySyncedCount} new inquiries & offers into CRM pipeline!`);
+        }
+      } else if (!silent) {
+        toast.success('All website inquiries, domain offers, and quote requests are already up to date in CRM!');
+      }
+    } catch (err) {
+      if (!silent) toast.error('Could not sync inquiries at this moment.');
+    } finally {
+      setSyncingInquiries(false);
+    }
+  };
+
+  const getActiveStaffPool = () => {
+    if (activeStaffMembers && activeStaffMembers.length > 0) {
+      return activeStaffMembers;
+    }
+    if (staffMembers && staffMembers.length > 0) {
+      return staffMembers;
+    }
+    const u = auth.currentUser;
+    return [
+      {
+        id: u?.uid || 'admin',
+        name: u?.displayName || u?.email?.split('@')[0] || 'Administrator',
+        role: 'Super Admin',
+        email: u?.email || ''
+      }
+    ];
   };
 
   // ROUND-ROBIN AUTOMATED DISTRIBUTOR HELPER FUNCTION
   const getNextRoundRobinStaffMember = () => {
-    const staffPool = activeStaffMembers && activeStaffMembers.length > 0 ? activeStaffMembers : [
-      { id: 'staff_1', name: 'Alex M.', role: 'Support Admin', email: 'alex@click2it.bd' },
-      { id: 'staff_2', name: 'Sarah K.', role: 'Sales Lead', email: 'sarah@click2it.bd' },
-      { id: 'staff_3', name: 'Imran H.', role: 'Technical Support', email: 'imran@click2it.bd' },
-      { id: 'staff_4', name: 'Kamal R.', role: 'Billing Specialist', email: 'kamal@click2it.bd' }
-    ];
-
+    const staffPool = getActiveStaffPool();
     const nextIdx = roundRobinIndex % staffPool.length;
     setRoundRobinIndex(nextIdx + 1);
     const chosen = staffPool[nextIdx];
@@ -503,19 +578,13 @@ export function HostingCrmTab({ state }: { state?: any }) {
   };
 
   // Equalize Active Lead Workload Across Active Staff Members
-  const handleRebalanceLeadWorkload = () => {
-    const staffPool = activeStaffMembers && activeStaffMembers.length > 0 ? activeStaffMembers : [
-      { id: 'staff_1', name: 'Alex M.', role: 'Support Admin' },
-      { id: 'staff_2', name: 'Sarah K.', role: 'Sales Lead' },
-      { id: 'staff_3', name: 'Imran H.', role: 'Technical Support' },
-      { id: 'staff_4', name: 'Kamal R.', role: 'Billing Specialist' }
-    ];
-
+  const handleRebalanceLeadWorkload = async () => {
+    const staffPool = getActiveStaffPool();
     let pointer = 0;
     const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const actor = getCurrentActorName();
 
-    setLeads(prev => prev.map(lead => {
-      // Reassign open active leads
+    const updatedList: HostingCrmLead[] = leads.map(lead => {
       if (normalizeStage(lead.leadStage) !== 'converted') {
         const staff = staffPool[pointer % staffPool.length];
         pointer++;
@@ -526,7 +595,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
           title: 'Workload Rebalanced',
           description: `Lead load equalized & assigned to ${staffName}.`,
           timestamp: nowTimestamp,
-          performedBy: 'Automated Round-Robin Engine'
+          performedBy: actor
         };
 
         return {
@@ -537,10 +606,29 @@ export function HostingCrmTab({ state }: { state?: any }) {
         };
       }
       return lead;
-    }));
+    });
 
-    toast.success(`⚡ Rebalanced active leads equally across ${staffPool.length} staff members!`);
+    setLeads(updatedList);
+    toast.success(`⚡ Rebalanced active leads equally across ${staffPool.length} team member(s)!`);
     setShowWorkloadModal(false);
+
+    // Persist rebalanced leads to Firestore and Backend
+    for (const l of updatedList) {
+      setDoc(doc(db, 'hosting_crm_leads', l.id), {
+        assignedStaffId: l.assignedStaffId,
+        assignedStaffName: l.assignedStaffName,
+        timeline: l.timeline
+      }, { merge: true }).catch(() => null);
+      fetch(`/api/crm/leads/${l.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assignedStaffId: l.assignedStaffId,
+          assignedStaffName: l.assignedStaffName,
+          timeline: l.timeline
+        })
+      }).catch(() => null);
+    }
   };
 
   // Helper to parse lead date for date range filtering
@@ -704,9 +792,11 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
   // CSV SAMPLE TEMPLATE DOWNLOAD
   const handleDownloadSampleCsv = () => {
+    const staffPool = getActiveStaffPool();
+    const firstStaff = staffPool[0] ? `${staffPool[0].name} (${staffPool[0].role})` : getCurrentActorName();
     const sampleHeaders = ['Contact Name', 'Company Name', 'Email Address', 'Phone Number', 'Target Domain', 'Lead Stage', 'Deal Value BDT', 'Assigned Staff', 'Lead Source', 'Notes'];
-    const sampleRow1 = ['"Monir Hossain"', '"Chittagong Maritime Ltd"', '"monir@ctgbd.com"', '"+880 1711-223344"', '"ctgbd.com"', '"new"', '"15000"', '"Alex M. (Support Admin)"', '"WhatsApp"', '"Requires NVMe Cloud VPS + BDIX bandwidth"'];
-    const sampleRow2 = ['"Faria Yasmin"', '"Dhaka Digital Studio"', '"faria@dhakadigital.net"', '"+880 1812-445566"', '"dhakadigital.net"', '"qualified"', '"22000"', '"Sarah K. (Sales Lead)"', '"Meta Ads"', '"Needs cPanel Premier and .NET domain"'];
+    const sampleRow1 = ['"Monir Hossain"', '"Chittagong Maritime Ltd"', '"monir@ctgbd.com"', '"+880 1711-223344"', '"ctgbd.com"', '"new"', '"15000"', `"${firstStaff}"`, '"WhatsApp"', '"Requires NVMe Cloud VPS + BDIX bandwidth"'];
+    const sampleRow2 = ['"Faria Yasmin"', '"Dhaka Digital Studio"', '"faria@dhakadigital.net"', '"+880 1812-445566"', '"dhakadigital.net"', '"qualified"', '"22000"', `"${firstStaff}"`, '"Meta Ads"', '"Needs cPanel Premier and .NET domain"'];
     const sampleContent = [sampleHeaders.join(','), sampleRow1.join(','), sampleRow2.join(',')].join('\r\n');
     const blob = new Blob([sampleContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1092,6 +1182,9 @@ export function HostingCrmTab({ state }: { state?: any }) {
     if (selectedLeadIds.length === 0) return;
     const stageObj = leadStagesConfig.find(s => s.id === newStage);
     const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const actor = getCurrentActorName();
+
+    const updatedMap = new Map<string, LeadActivityLog[]>();
 
     setLeads(prev => prev.map(lead => {
       if (selectedLeadIds.includes(lead.id)) {
@@ -1101,13 +1194,15 @@ export function HostingCrmTab({ state }: { state?: any }) {
           title: `Bulk Stage Update to ${stageObj?.label || newStage}`,
           description: `Lead moved in batch update to "${stageObj?.label || newStage}".`,
           timestamp: nowTimestamp,
-          performedBy: 'Alex M. (Support Admin)',
+          performedBy: actor,
           isHighPriority: newStage === 'converted'
         };
+        const nextTimeline = [logItem, ...(lead.timeline || [])];
+        updatedMap.set(lead.id, nextTimeline);
         return {
           ...lead,
           leadStage: newStage,
-          timeline: [logItem, ...(lead.timeline || [])]
+          timeline: nextTimeline
         };
       }
       return lead;
@@ -1119,15 +1214,16 @@ export function HostingCrmTab({ state }: { state?: any }) {
       toast.success(`Updated ${selectedLeadIds.length} leads to "${stageObj?.label}"`);
     }
 
-    // Backend sync for each selected lead
+    // Backend & Firestore sync for each selected lead
     selectedLeadIds.forEach(async (id) => {
       try {
+        const nextTimeline = updatedMap.get(id);
         await fetch(`/api/crm/leads/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ leadStage: newStage })
+          body: JSON.stringify({ leadStage: newStage, ...(nextTimeline ? { timeline: nextTimeline } : {}) })
         });
-        await setDoc(doc(db, 'hosting_crm_leads', id), { leadStage: newStage }, { merge: true }).catch(() => null);
+        await setDoc(doc(db, 'hosting_crm_leads', id), { leadStage: newStage, ...(nextTimeline ? { timeline: nextTimeline } : {}) }, { merge: true }).catch(() => null);
       } catch (e) {
         console.warn('Batch update sync error:', e);
       }
@@ -1139,11 +1235,14 @@ export function HostingCrmTab({ state }: { state?: any }) {
   // BULK ACTION 2: Batch Staff Reassignment
   const handleBatchAssignStaff = async (staffId: string) => {
     if (selectedLeadIds.length === 0) return;
-    const assignedStaff = activeStaffMembers.find(s => s.id === staffId);
+    const staffPool = getActiveStaffPool();
+    const assignedStaff = staffPool.find(s => s.id === staffId);
     if (!assignedStaff) return;
 
     const staffName = `${assignedStaff.name} (${assignedStaff.role})`;
     const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const actor = getCurrentActorName();
+    const updatedMap = new Map<string, LeadActivityLog[]>();
 
     setLeads(prev => prev.map(lead => {
       if (selectedLeadIds.includes(lead.id)) {
@@ -1153,13 +1252,15 @@ export function HostingCrmTab({ state }: { state?: any }) {
           title: 'Staff Reassigned',
           description: `Account manager updated to ${staffName}.`,
           timestamp: nowTimestamp,
-          performedBy: 'Alex M. (Support Admin)'
+          performedBy: actor
         };
+        const nextTimeline = [logItem, ...(lead.timeline || [])];
+        updatedMap.set(lead.id, nextTimeline);
         return {
           ...lead,
           assignedStaffId: staffId,
           assignedStaffName: staffName,
-          timeline: [logItem, ...(lead.timeline || [])]
+          timeline: nextTimeline
         };
       }
       return lead;
@@ -1169,12 +1270,13 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
     selectedLeadIds.forEach(async (id) => {
       try {
+        const nextTimeline = updatedMap.get(id);
         await fetch(`/api/crm/leads/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignedStaffId: staffId, assignedStaffName: staffName })
+          body: JSON.stringify({ assignedStaffId: staffId, assignedStaffName: staffName, ...(nextTimeline ? { timeline: nextTimeline } : {}) })
         });
-        await setDoc(doc(db, 'hosting_crm_leads', id), { assignedStaffId: staffId, assignedStaffName: staffName }, { merge: true }).catch(() => null);
+        await setDoc(doc(db, 'hosting_crm_leads', id), { assignedStaffId: staffId, assignedStaffName: staffName, ...(nextTimeline ? { timeline: nextTimeline } : {}) }, { merge: true }).catch(() => null);
       } catch (e) {
         console.warn('Batch reassign sync error:', e);
       }
@@ -1194,6 +1296,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
     idsToDelete.forEach(async (id) => {
       try {
+        await deleteDoc(doc(db, 'hosting_crm_leads', id)).catch(() => null);
         await fetch(`/api/crm/leads/${id}`, { method: 'DELETE' });
       } catch (e) {
         console.warn('Batch delete error:', e);
@@ -1203,32 +1306,66 @@ export function HostingCrmTab({ state }: { state?: any }) {
     setSelectedLeadIds([]);
   };
 
-  // BULK ACTION 4: Batch Email Dispatch
-  const handleBatchSendEmailTemplate = (templateId: string) => {
+  // Helper to replace template placeholders for a specific lead
+  const populateTemplateForLead = (tpl: LeadEmailTemplate, lead: HostingCrmLead) => {
+    let populatedSubject = tpl.subject;
+    let populatedBody = tpl.body;
+    const replacements: Record<string, string> = {
+      '{{contactName}}': lead.contactName || 'Valued Client',
+      '{{companyName}}': lead.companyName || 'Individual',
+      '{{targetDomain}}': lead.targetDomain || 'yourdomain.com',
+      '{{dealValueBdt}}': formatCurrency(lead.dealValueBdt),
+      '{{assignedStaffName}}': lead.assignedStaffName || getCurrentActorName()
+    };
+    Object.entries(replacements).forEach(([tag, val]) => {
+      populatedSubject = populatedSubject.replaceAll(tag, val);
+      populatedBody = populatedBody.replaceAll(tag, val);
+    });
+    return { subject: populatedSubject, body: populatedBody };
+  };
+
+  // BULK ACTION 4: Batch Email Dispatch (Real Email via sendRealEmail)
+  const handleBatchSendEmailTemplate = async (templateId: string) => {
     const tpl = emailTemplates.find(t => t.id === templateId);
     if (!tpl || selectedLeadIds.length === 0) return;
 
     const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const actor = getCurrentActorName();
+    const targetLeads = leads.filter(l => selectedLeadIds.includes(l.id));
 
-    setLeads(prev => prev.map(lead => {
-      if (selectedLeadIds.includes(lead.id)) {
-        const logItem: LeadActivityLog = {
-          id: `tl_${Date.now()}_${Math.random().toString(36).substring(2,5)}`,
-          type: 'email_sent',
-          title: `Batch Email: ${tpl.name}`,
-          description: `Sent "${tpl.name}" email template to ${lead.email}`,
-          timestamp: nowTimestamp,
-          performedBy: 'Alex M. (Support Admin)'
-        };
-        return {
-          ...lead,
-          timeline: [logItem, ...(lead.timeline || [])]
-        };
-      }
-      return lead;
-    }));
+    toast.loading(`Sending "${tpl.name}" email to ${targetLeads.length} lead(s)...`, { id: 'batch-crm-email' });
 
-    toast.success(`Dispatched "${tpl.name}" template to ${selectedLeadIds.length} leads!`);
+    for (const lead of targetLeads) {
+      const { subject, body } = populateTemplateForLead(tpl, lead);
+      const htmlBody = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;">
+        <h2 style="color:#0f172a;margin-top:0;">${subject}</h2>
+        <div style="color:#334155;line-height:1.6;white-space:pre-line;">${body}</div>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
+        <p style="font-size:12px;color:#64748b;margin:0;">Click2IT Hosting & Domain Services</p>
+      </div>`;
+
+      await sendRealEmail(lead.email, subject, htmlBody).catch(() => false);
+
+      const logItem: LeadActivityLog = {
+        id: `tl_${Date.now()}_${Math.random().toString(36).substring(2,5)}`,
+        type: 'email_sent',
+        title: `Batch Email Sent: ${tpl.name}`,
+        description: `Dispatched "${subject}" to ${lead.email}`,
+        timestamp: nowTimestamp,
+        performedBy: actor
+      };
+
+      const nextTimeline = [logItem, ...(lead.timeline || [])];
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, timeline: nextTimeline, lastContactTime: 'Just now' } : l));
+      await setDoc(doc(db, 'hosting_crm_leads', lead.id), { timeline: nextTimeline, lastContactTime: 'Just now' }, { merge: true }).catch(() => null);
+      fetch(`/api/crm/leads/${lead.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeline: nextTimeline, lastContactTime: 'Just now' })
+      }).catch(() => null);
+    }
+
+    toast.success(`📧 Sent "${tpl.name}" email to ${targetLeads.length} lead(s)!`, { id: 'batch-crm-email' });
     setSelectedLeadIds([]);
   };
 
@@ -1255,43 +1392,54 @@ export function HostingCrmTab({ state }: { state?: any }) {
     setShowTemplateModal(true);
   };
 
-  const handleSaveTemplateSubmit = (e: React.FormEvent) => {
+  const handleSaveTemplateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!templateForm.name || !templateForm.subject || !templateForm.body) {
       toast.error('Please fill template name, subject, and body');
       return;
     }
 
+    const nowDate = new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const targetId = editingTemplate ? editingTemplate.id : `tpl_${Date.now()}`;
+    const savedTpl: LeadEmailTemplate = {
+      id: targetId,
+      name: templateForm.name,
+      category: templateForm.category,
+      subject: templateForm.subject,
+      body: templateForm.body,
+      updatedAt: nowDate
+    };
+
     if (editingTemplate) {
-      setEmailTemplates(prev => prev.map(t => t.id === editingTemplate.id ? {
-        ...t,
-        name: templateForm.name,
-        category: templateForm.category,
-        subject: templateForm.subject,
-        body: templateForm.body,
-        updatedAt: 'Just now'
-      } : t));
+      setEmailTemplates(prev => prev.map(t => t.id === editingTemplate.id ? savedTpl : t));
       toast.success(`Updated template "${templateForm.name}"`);
     } else {
-      const newTpl: LeadEmailTemplate = {
-        id: `tpl_${Date.now()}`,
-        name: templateForm.name,
-        category: templateForm.category,
-        subject: templateForm.subject,
-        body: templateForm.body,
-        updatedAt: 'Just now'
-      };
-      setEmailTemplates(prev => [newTpl, ...prev]);
+      setEmailTemplates(prev => [savedTpl, ...prev]);
       toast.success(`Created email template "${templateForm.name}"`);
     }
 
     setShowTemplateModal(false);
+
+    // Persist in Firestore 'emailTemplates'
+    try {
+      await setDoc(doc(db, 'emailTemplates', targetId), {
+        ...savedTpl,
+        isCrmTemplate: true
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Could not persist email template to Firestore:', err);
+    }
   };
 
-  const handleDeleteTemplate = (id: string, name: string) => {
+  const handleDeleteTemplate = async (id: string, name: string) => {
     if (!confirm(`Delete template "${name}"?`)) return;
     setEmailTemplates(prev => prev.filter(t => t.id !== id));
     toast.success(`Deleted template "${name}"`);
+    try {
+      await deleteDoc(doc(db, 'emailTemplates', id));
+    } catch (err) {
+      console.warn('Could not delete template from Firestore:', err);
+    }
   };
 
   const handleInsertPlaceholder = (placeholder: string) => {
@@ -1309,37 +1457,20 @@ export function HostingCrmTab({ state }: { state?: any }) {
     const tpl = emailTemplates.find(t => t.id === templateId);
     if (!tpl) return;
 
-    let populatedSubject = tpl.subject;
-    let populatedBody = tpl.body;
-
-    const replacements: Record<string, string> = {
-      '{{contactName}}': selectedLeadForDetail.contactName || 'Valued Client',
-      '{{companyName}}': selectedLeadForDetail.companyName || 'Individual',
-      '{{targetDomain}}': selectedLeadForDetail.targetDomain || 'yourdomain.com',
-      '{{dealValueBdt}}': formatCurrency(selectedLeadForDetail.dealValueBdt),
-      '{{assignedStaffName}}': selectedLeadForDetail.assignedStaffName || 'Alex M. (Support Admin)'
-    };
-
-    Object.entries(replacements).forEach(([tag, val]) => {
-      populatedSubject = populatedSubject.replaceAll(tag, val);
-      populatedBody = populatedBody.replaceAll(tag, val);
-    });
-
-    setNewEmailSubject(populatedSubject);
-    setNewEmailBody(populatedBody);
+    const { subject, body } = populateTemplateForLead(tpl, selectedLeadForDetail);
+    setNewEmailSubject(subject);
+    setNewEmailBody(body);
     toast.success(`Loaded template "${tpl.name}" with lead data!`);
   };
 
   const handleOpenAddModal = () => {
     setEditingLead(null);
-    let defaultStaffId = activeStaffMembers[0]?.id || 'staff_1';
-    let defaultStaffName = activeStaffMembers[0] ? `${activeStaffMembers[0].name} (${activeStaffMembers[0].role})` : 'Alex M. (Support Admin)';
+    const staffPool = getActiveStaffPool();
+    let defaultStaffId = staffPool[0]?.id || 'admin';
 
-    // If Auto Round-Robin is enabled, pick next staff in queue
     if (enableRoundRobin) {
       const rrStaff = getNextRoundRobinStaffMember();
       defaultStaffId = rrStaff.id;
-      defaultStaffName = rrStaff.name;
     }
 
     setForm({
@@ -1353,13 +1484,14 @@ export function HostingCrmTab({ state }: { state?: any }) {
       dealValueBdt: '12500',
       assignedStaffId: defaultStaffId,
       source: 'WhatsApp',
-      noteText: 'Inbound lead interested in domain & hosting packages.'
+      noteText: ''
     });
     setShowModal(true);
   };
 
   const handleOpenEditModal = (lead: HostingCrmLead) => {
     setEditingLead(lead);
+    const staffPool = getActiveStaffPool();
     setForm({
       contactName: lead.contactName,
       companyName: lead.companyName || '',
@@ -1369,7 +1501,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
       leadStage: normalizeStage(lead.leadStage),
       interestedProductsText: lead.interestedProducts.join(', '),
       dealValueBdt: String(lead.dealValueBdt || 0),
-      assignedStaffId: lead.assignedStaffId || 'staff_1',
+      assignedStaffId: lead.assignedStaffId || staffPool[0]?.id || '',
       source: lead.source || 'WhatsApp',
       noteText: lead.notes[0] || ''
     });
@@ -1379,7 +1511,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
   const handleOpenDetailModal = (lead: HostingCrmLead) => {
     setSelectedLeadForDetail(lead);
     setNewEmailSubject(`Special Quotation & Setup Details for ${lead.targetDomain || 'your website'}`);
-    setNewEmailBody(`Hello ${lead.contactName},\n\nThank you for reaching out to Click2IT Hosting. We have prepared your customized server and domain quotation.\n\nPackage: ${lead.interestedProducts[0] || 'Cloud NVMe Hosting'}\nEstimated Price: ${formatCurrency(lead.dealValueBdt)}\n\nPlease let us know if you would like to proceed with instant bKash/Nagad activation.`);
+    setNewEmailBody(`Hello ${lead.contactName},\n\nThank you for reaching out to Click2IT Hosting. We have prepared your customized server and domain quotation.\n\nPackage: ${lead.interestedProducts[0] || 'Cloud NVMe Hosting'}\nEstimated Price: ${formatCurrency(lead.dealValueBdt)}\n\nPlease let us know if you would like to proceed with instant activation.`);
   };
 
   const handleSaveLeadSubmit = async (e: React.FormEvent) => {
@@ -1389,14 +1521,18 @@ export function HostingCrmTab({ state }: { state?: any }) {
       return;
     }
 
+    const staffPool = getActiveStaffPool();
     let assignedStaffId = form.assignedStaffId;
     let assignedStaffName = '';
 
-    const matchedStaff = activeStaffMembers.find(s => s.id === form.assignedStaffId);
+    const matchedStaff = staffPool.find(s => s.id === form.assignedStaffId);
     if (matchedStaff) {
       assignedStaffName = `${matchedStaff.name} (${matchedStaff.role})`;
+    } else if (staffPool[0]) {
+      assignedStaffId = staffPool[0].id;
+      assignedStaffName = `${staffPool[0].name} (${staffPool[0].role})`;
     } else {
-      assignedStaffName = 'Alex M. (Support Admin)';
+      assignedStaffName = getCurrentActorName();
     }
 
     const productsArray = form.interestedProductsText
@@ -1407,6 +1543,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
     const isNew = !editingLead;
     const targetId = editingLead?.id || `lead_${Date.now()}`;
     const nowFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const actor = getCurrentActorName();
 
     const newTimelineItems: LeadActivityLog[] = [];
 
@@ -1417,10 +1554,9 @@ export function HostingCrmTab({ state }: { state?: any }) {
         title: 'Lead Created & Status Set',
         description: `New lead created in stage "${leadStagesConfig.find(s => s.id === form.leadStage)?.label || form.leadStage}" and assigned to ${assignedStaffName}.`,
         timestamp: nowFormatted,
-        performedBy: 'Administrator'
+        performedBy: actor
       });
     } else {
-      // Automatically attach log entry whenever status change occurs
       if (normalizeStage(editingLead.leadStage) !== normalizeStage(form.leadStage)) {
         const oldStageLabel = leadStagesConfig.find(s => s.id === normalizeStage(editingLead.leadStage))?.label || editingLead.leadStage;
         const newStageLabel = leadStagesConfig.find(s => s.id === normalizeStage(form.leadStage))?.label || form.leadStage;
@@ -1428,23 +1564,22 @@ export function HostingCrmTab({ state }: { state?: any }) {
           id: `tl_${Date.now()}_status`,
           type: 'status_change',
           title: `Status Changed: ${oldStageLabel} ➔ ${newStageLabel}`,
-          description: `User action: Administrator updated lead workflow status from "${oldStageLabel}" to "${newStageLabel}".`,
+          description: `${actor} updated lead workflow status from "${oldStageLabel}" to "${newStageLabel}".`,
           timestamp: nowFormatted,
-          performedBy: 'Administrator',
+          performedBy: actor,
           isHighPriority: form.leadStage === 'converted'
         });
       }
 
-      // Automatically attach log entry whenever staff re-assignment occurs
       if (editingLead.assignedStaffId !== assignedStaffId) {
         const prevStaff = editingLead.assignedStaffName || 'Unassigned';
         newTimelineItems.push({
           id: `tl_${Date.now()}_staff`,
           type: 'note',
           title: `Staff Reassigned: ${prevStaff} ➔ ${assignedStaffName}`,
-          description: `User action: Administrator re-assigned lead account manager from "${prevStaff}" to "${assignedStaffName}".`,
+          description: `${actor} re-assigned lead account manager from "${prevStaff}" to "${assignedStaffName}".`,
           timestamp: nowFormatted,
-          performedBy: 'Administrator'
+          performedBy: actor
         });
       }
 
@@ -1453,9 +1588,9 @@ export function HostingCrmTab({ state }: { state?: any }) {
           id: `tl_${Date.now()}`,
           type: 'note',
           title: 'Lead Details Updated',
-          description: `User action: Administrator updated lead specifications.`,
+          description: `${actor} updated lead specifications.`,
           timestamp: nowFormatted,
-          performedBy: 'Administrator'
+          performedBy: actor
         });
       }
     }
@@ -1463,7 +1598,8 @@ export function HostingCrmTab({ state }: { state?: any }) {
     const existingTimeline = editingLead?.timeline || [];
     const updatedTimeline = [...newTimelineItems, ...existingTimeline];
 
-    const payload = {
+    const payload: HostingCrmLead = {
+      id: targetId,
       contactName: form.contactName,
       companyName: form.companyName,
       email: form.email,
@@ -1474,51 +1610,46 @@ export function HostingCrmTab({ state }: { state?: any }) {
       dealValueBdt: Number(form.dealValueBdt) || 5000,
       assignedStaffId,
       assignedStaffName,
+      whmcsAccountId: editingLead?.whmcsAccountId || '',
+      customerUid: editingLead?.customerUid || '',
       source: form.source,
-      useRoundRobin: enableRoundRobin,
-      notes: form.noteText ? [form.noteText] : ['Updated in Hosting CRM Lead Module.'],
-      timeline: updatedTimeline
+      notes: form.noteText ? [form.noteText] : (editingLead?.notes || ['Added in Hosting CRM Lead Module.']),
+      timeline: updatedTimeline,
+      lastContactTime: 'Just now',
+      createdAt: editingLead?.createdAt || new Date().toISOString()
     };
 
     try {
-      let resData: any;
+      // Save to Firestore first
+      await setDoc(doc(db, 'hosting_crm_leads', targetId), payload, { merge: true });
+
+      // Update local state immediately
+      setLeads(prev => {
+        const exists = prev.some(l => l.id === targetId);
+        return exists ? prev.map(l => l.id === targetId ? payload : l) : [payload, ...prev];
+      });
+
+      // Sync to backend API
       if (editingLead) {
-        const res = await fetch(`/api/crm/leads/${editingLead.id}`, {
+        fetch(`/api/crm/leads/${editingLead.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        });
-        resData = await res.json();
+        }).catch(() => null);
       } else {
-        const res = await fetch('/api/crm/leads', {
+        fetch('/api/crm/leads', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        resData = await res.json();
+          body: JSON.stringify({ ...payload, useRoundRobin: enableRoundRobin })
+        }).catch(() => null);
       }
 
-      if (resData?.success && Array.isArray(resData.leads)) {
-        const normalized = resData.leads.map((l: any) => ({
-          ...l,
-          leadStage: normalizeStage(l.leadStage),
-          timeline: Array.isArray(l.timeline) ? l.timeline : []
-        }));
-        setLeads(normalized);
-      } else {
-        fetchLeads();
-      }
-
-      // Check for Converted Stage Notification Trigger
       if (form.leadStage === 'converted') {
         triggerConvertedAlert(payload.contactName, payload.dealValueBdt, targetId);
       }
 
-      // Save to Firestore
-      await setDoc(doc(db, 'hosting_crm_leads', targetId), { ...payload, id: targetId }, { merge: true }).catch(() => null);
-
       setShowModal(false);
-      toast.success(`🎉 Lead "${form.contactName}" saved and logged!`);
+      toast.success(`🎉 Lead "${form.contactName}" saved!`);
     } catch (err: any) {
       toast.error('Failed to save lead: ' + err.message);
     }
@@ -1575,27 +1706,25 @@ export function HostingCrmTab({ state }: { state?: any }) {
     const oldStageLabel = leadStagesConfig.find(s => s.id === normalizeStage(targetLead.leadStage))?.label || targetLead.leadStage;
     const newStageLabel = leadStagesConfig.find(s => s.id === newStage)?.label || newStage;
     const nowFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const actor = getCurrentActorName();
 
-    // Automatically attach log entry capturing timestamp and user action
     const stageTimelineEntry: LeadActivityLog = {
       id: `tl_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
       type: 'status_change',
       title: `Status Changed: ${oldStageLabel} ➔ ${newStageLabel}`,
-      description: `User action: Administrator moved lead workflow status from "${oldStageLabel}" to "${newStageLabel}".`,
+      description: `${actor} moved lead workflow status from "${oldStageLabel}" to "${newStageLabel}".`,
       timestamp: nowFormatted,
-      performedBy: 'Administrator',
+      performedBy: actor,
       isHighPriority: newStage === 'converted'
     };
 
     const updatedTimeline = [stageTimelineEntry, ...(targetLead.timeline || [])];
 
-    // Optimistic UI Update
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, leadStage: newStage, timeline: updatedTimeline } : l));
     if (selectedLeadForDetail?.id === leadId) {
       setSelectedLeadForDetail(prev => prev ? { ...prev, leadStage: newStage, timeline: updatedTimeline } : null);
     }
 
-    // Check Trigger for Automated Notification
     if (newStage === 'converted') {
       triggerConvertedAlert(targetLead.contactName, targetLead.dealValueBdt, leadId);
     } else {
@@ -1603,12 +1732,12 @@ export function HostingCrmTab({ state }: { state?: any }) {
     }
 
     try {
+      await setDoc(doc(db, 'hosting_crm_leads', leadId), { leadStage: newStage, timeline: updatedTimeline }, { merge: true }).catch(() => null);
       await fetch(`/api/crm/leads/${leadId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leadStage: newStage, timeline: updatedTimeline })
       });
-      await setDoc(doc(db, 'hosting_crm_leads', leadId), { leadStage: newStage, timeline: updatedTimeline }, { merge: true }).catch(() => null);
     } catch (e) {
       console.warn('Failed to update stage in backend:', e);
     }
@@ -1622,13 +1751,14 @@ export function HostingCrmTab({ state }: { state?: any }) {
     }
 
     const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const actor = getCurrentActorName();
     const noteEntry: LeadActivityLog = {
       id: `tl_${Date.now()}`,
       type: 'note',
       title: isHighPriorityNote ? '🚨 URGENT: High-Priority Note' : 'Internal Note Added',
       description: newTimelineNote.trim(),
       timestamp: nowTimestamp,
-      performedBy: 'Alex M. (Support Admin)',
+      performedBy: actor,
       isHighPriority: isHighPriorityNote
     };
 
@@ -1648,18 +1778,18 @@ export function HostingCrmTab({ state }: { state?: any }) {
     setIsHighPriorityNote(false);
 
     try {
+      await setDoc(doc(db, 'hosting_crm_leads', selectedLeadForDetail.id), { timeline: updatedTimeline }, { merge: true }).catch(() => null);
       await fetch(`/api/crm/leads/${selectedLeadForDetail.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ timeline: updatedTimeline })
       });
-      await setDoc(doc(db, 'hosting_crm_leads', selectedLeadForDetail.id), { timeline: updatedTimeline }, { merge: true }).catch(() => null);
     } catch (e) {
       console.warn('Backend sync failed:', e);
     }
   };
 
-  // Timeline Addition: Send & Log Email
+  // Timeline Addition: Send & Log Real Email
   const handleSendTimelineEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedLeadForDetail || !newEmailSubject.trim() || !newEmailBody.trim()) {
@@ -1667,34 +1797,48 @@ export function HostingCrmTab({ state }: { state?: any }) {
       return;
     }
 
+    setSendingEmail(true);
     const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
-    const emailEntry: LeadActivityLog = {
-      id: `tl_${Date.now()}`,
-      type: 'email_sent',
-      title: `Email Sent: ${newEmailSubject}`,
-      description: newEmailBody.substring(0, 150) + (newEmailBody.length > 150 ? '...' : ''),
-      timestamp: nowTimestamp,
-      performedBy: 'Alex M. (Support Admin)',
-      meta: { to: selectedLeadForDetail.email, fullBody: newEmailBody }
-    };
-
-    const updatedTimeline = [emailEntry, ...(selectedLeadForDetail.timeline || [])];
-    const updatedLead = { ...selectedLeadForDetail, timeline: updatedTimeline };
-
-    setSelectedLeadForDetail(updatedLead);
-    setLeads(prev => prev.map(l => l.id === selectedLeadForDetail.id ? updatedLead : l));
-
-    toast.success(`📧 Email dispatched to ${selectedLeadForDetail.email} and logged to timeline!`);
+    const actor = getCurrentActorName();
 
     try {
+      const htmlBody = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;">
+        <h2 style="color:#0f172a;margin-top:0;">${newEmailSubject}</h2>
+        <div style="color:#334155;line-height:1.6;white-space:pre-line;">${newEmailBody}</div>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
+        <p style="font-size:12px;color:#64748b;margin:0;">Sent by ${actor} — Click2IT Hosting & Domain Services</p>
+      </div>`;
+
+      await sendRealEmail(selectedLeadForDetail.email, newEmailSubject, htmlBody);
+
+      const emailEntry: LeadActivityLog = {
+        id: `tl_${Date.now()}`,
+        type: 'email_sent',
+        title: `Email Sent: ${newEmailSubject}`,
+        description: newEmailBody.substring(0, 150) + (newEmailBody.length > 150 ? '...' : ''),
+        timestamp: nowTimestamp,
+        performedBy: actor,
+        meta: { to: selectedLeadForDetail.email, fullBody: newEmailBody }
+      };
+
+      const updatedTimeline = [emailEntry, ...(selectedLeadForDetail.timeline || [])];
+      const updatedLead = { ...selectedLeadForDetail, timeline: updatedTimeline, lastContactTime: 'Just now' };
+
+      setSelectedLeadForDetail(updatedLead);
+      setLeads(prev => prev.map(l => l.id === selectedLeadForDetail.id ? updatedLead : l));
+
+      toast.success(`📧 Real email sent to ${selectedLeadForDetail.email} and logged!`);
+
+      await setDoc(doc(db, 'hosting_crm_leads', selectedLeadForDetail.id), { timeline: updatedTimeline, lastContactTime: 'Just now' }, { merge: true }).catch(() => null);
       await fetch(`/api/crm/leads/${selectedLeadForDetail.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timeline: updatedTimeline })
-      });
-      await setDoc(doc(db, 'hosting_crm_leads', selectedLeadForDetail.id), { timeline: updatedTimeline }, { merge: true }).catch(() => null);
-    } catch (e) {
-      console.warn('Backend sync failed:', e);
+        body: JSON.stringify({ timeline: updatedTimeline, lastContactTime: 'Just now' })
+      }).catch(() => null);
+    } catch (err) {
+      toast.error('Failed to send email. Please check email settings.');
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -1706,13 +1850,14 @@ export function HostingCrmTab({ state }: { state?: any }) {
     }
 
     const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const actor = getCurrentActorName();
     const logEntry: LeadActivityLog = {
       id: `tl_${Date.now()}`,
       type: newCallType,
       title: newCallType === 'whatsapp' ? 'WhatsApp Interaction Logged' : 'Phone Call Logged',
       description: newCallNote.trim(),
       timestamp: nowTimestamp,
-      performedBy: 'Alex M. (Support Admin)',
+      performedBy: actor,
       isHighPriority: isHighPriorityNote
     };
 
@@ -1732,14 +1877,13 @@ export function HostingCrmTab({ state }: { state?: any }) {
     setIsHighPriorityNote(false);
 
     try {
+      await setDoc(doc(db, 'hosting_crm_leads', selectedLeadForDetail.id), { timeline: updatedTimeline, lastContactTime: 'Just now' }, { merge: true }).catch(() => null);
       await fetch(`/api/crm/leads/${selectedLeadForDetail.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ timeline: updatedTimeline, lastContactTime: 'Just now' })
       });
-      await setDoc(doc(db, 'hosting_crm_leads', selectedLeadForDetail.id), { timeline: updatedTimeline, lastContactTime: 'Just now' }, { merge: true }).catch(() => null);
 
-      // Automatically include this chat in the WhatsApp CRM chat history
       if (newCallType === 'whatsapp' && selectedLeadForDetail.phone) {
         fetch('/api/whatsapp/instant-chat', {
           method: 'POST',
@@ -1748,8 +1892,8 @@ export function HostingCrmTab({ state }: { state?: any }) {
             phone: selectedLeadForDetail.phone,
             contactName: selectedLeadForDetail.contactName,
             initialMessage: newCallNote.trim(),
-            agentId: selectedLeadForDetail.assignedStaffId || 'staff_1',
-            agentName: selectedLeadForDetail.assignedStaffName || 'Alex M. (Support Admin)',
+            agentId: selectedLeadForDetail.assignedStaffId || 'admin',
+            agentName: selectedLeadForDetail.assignedStaffName || actor,
             leadStage: selectedLeadForDetail.leadStage === 'converted' ? 'customer' : 'lead',
             whmcsAccountId: selectedLeadForDetail.whmcsAccountId,
             tags: ['Lead CRM Interaction', 'WhatsApp CRM']
@@ -1765,12 +1909,113 @@ export function HostingCrmTab({ state }: { state?: any }) {
     if (!confirm(`Are you sure you want to remove lead "${name}"?`)) return;
 
     try {
-      await fetch(`/api/crm/leads/${id}`, { method: 'DELETE' });
+      await deleteDoc(doc(db, 'hosting_crm_leads', id)).catch(() => null);
+      await fetch(`/api/crm/leads/${id}`, { method: 'DELETE' }).catch(() => null);
       setLeads(prev => prev.filter(l => l.id !== id));
       if (selectedLeadForDetail?.id === id) setSelectedLeadForDetail(null);
       toast.success(`Removed lead "${name}"`);
     } catch (err: any) {
       toast.error('Delete failed: ' + err.message);
+    }
+  };
+
+  // CONVERT LEAD TO REAL CUSTOMER ACCOUNT (1-Click Customer Creation)
+  const handleOpenConvertModal = (lead: HostingCrmLead) => {
+    setConvertingLead(lead);
+    setConvertedCredentials(null);
+    const nameParts = (lead.contactName || 'Valued Customer').trim().split(/\s+/);
+    const firstName = nameParts[0] || 'Customer';
+    const lastName = nameParts.slice(1).join(' ') || 'Client';
+    setConvertForm({
+      firstName,
+      lastName,
+      email: lead.email || '',
+      phone: lead.phone || '+8801700000000',
+      company: lead.companyName || '',
+      password: generateCustomerPassword(12),
+      address1: 'Dhaka, Bangladesh',
+      city: 'Dhaka',
+      postcode: '1000',
+      country: 'Bangladesh',
+      sendWelcomeEmail: true
+    });
+    setShowConvertModal(true);
+  };
+
+  const handleConvertLeadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!convertingLead) return;
+    setConvertingSubmitting(true);
+
+    try {
+      const createdCustomer = await createCustomerAccountByAdmin({
+        firstName: convertForm.firstName,
+        lastName: convertForm.lastName,
+        email: convertForm.email,
+        password: convertForm.password,
+        phone: convertForm.phone,
+        company: convertForm.company,
+        address1: convertForm.address1,
+        city: convertForm.city,
+        state: convertForm.city,
+        postcode: convertForm.postcode,
+        country: convertForm.country,
+        sendWelcomeEmail: convertForm.sendWelcomeEmail
+      });
+
+      const accountCode = `CUST-${String(Date.now()).slice(-5)}`;
+      const nowFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+      const actor = getCurrentActorName();
+
+      const convertLog: LeadActivityLog = {
+        id: `tl_conv_${Date.now()}`,
+        type: 'status_change',
+        title: `🎉 Converted to Registered Customer (${accountCode})`,
+        description: `Created customer portal login account for ${convertForm.email} and moved lead to Converted stage.`,
+        timestamp: nowFormatted,
+        performedBy: actor,
+        isHighPriority: true
+      };
+
+      const updatedTimeline = [convertLog, ...(convertingLead.timeline || [])];
+      const updatedLead: HostingCrmLead = {
+        ...convertingLead,
+        contactName: `${convertForm.firstName} ${convertForm.lastName}`.trim(),
+        email: convertForm.email,
+        phone: convertForm.phone,
+        companyName: convertForm.company,
+        leadStage: 'converted',
+        whmcsAccountId: accountCode,
+        customerUid: createdCustomer?.id || createdCustomer?.uid || '',
+        timeline: updatedTimeline,
+        lastContactTime: 'Just now'
+      };
+
+      setLeads(prev => prev.map(l => l.id === convertingLead.id ? updatedLead : l));
+      if (selectedLeadForDetail?.id === convertingLead.id) {
+        setSelectedLeadForDetail(updatedLead);
+      }
+
+      await setDoc(doc(db, 'hosting_crm_leads', convertingLead.id), updatedLead, { merge: true }).catch(() => null);
+      fetch(`/api/crm/leads/${convertingLead.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedLead)
+      }).catch(() => null);
+
+      triggerConvertedAlert(updatedLead.contactName, updatedLead.dealValueBdt, convertingLead.id);
+
+      setConvertedCredentials({
+        name: updatedLead.contactName,
+        email: convertForm.email,
+        password: convertForm.password,
+        accountId: accountCode
+      });
+      setShowConvertModal(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not create customer account for this lead.');
+    } finally {
+      setConvertingSubmitting(false);
     }
   };
 
@@ -1788,6 +2033,109 @@ export function HostingCrmTab({ state }: { state?: any }) {
     setShowQuoteModal(true);
   };
 
+  const handleSaveQuoteToLead = async () => {
+    if (!quoteLead) return;
+    const finalTotal = Math.round(quoteDetails.priceBdt - (quoteDetails.priceBdt * quoteDetails.discountPercent) / 100);
+    const nowFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' Today';
+    const actor = getCurrentActorName();
+
+    const quoteLog: LeadActivityLog = {
+      id: `tl_quote_${Date.now()}`,
+      type: 'quote',
+      title: `Official Quotation Generated (${formatCurrency(finalTotal)})`,
+      description: `Package: ${quoteDetails.package} (${quoteDetails.billingPeriod}) | Domain: ${quoteDetails.domainName} | Discount: ${quoteDetails.discountPercent}%`,
+      timestamp: nowFormatted,
+      performedBy: actor,
+      isHighPriority: true
+    };
+
+    const nextStage: HostingCrmLead['leadStage'] = quoteLead.leadStage === 'converted' ? 'converted' : 'vps_quote_sent';
+    const updatedTimeline = [quoteLog, ...(quoteLead.timeline || [])];
+    const updatedLead: HostingCrmLead = {
+      ...quoteLead,
+      targetDomain: quoteDetails.domainName,
+      dealValueBdt: finalTotal,
+      interestedProducts: [quoteDetails.package, ...(quoteDetails.domainName ? [quoteDetails.domainName] : [])],
+      leadStage: nextStage,
+      timeline: updatedTimeline,
+      lastContactTime: 'Just now'
+    };
+
+    setLeads(prev => prev.map(l => l.id === quoteLead.id ? updatedLead : l));
+    if (selectedLeadForDetail?.id === quoteLead.id) {
+      setSelectedLeadForDetail(updatedLead);
+    }
+
+    await setDoc(doc(db, 'hosting_crm_leads', quoteLead.id), updatedLead, { merge: true }).catch(() => null);
+    fetch(`/api/crm/leads/${quoteLead.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedLead)
+    }).catch(() => null);
+
+    toast.success(`⚡ Saved quotation (${formatCurrency(finalTotal)}) & updated lead pipeline!`);
+  };
+
+  const handleSendQuoteEmail = async () => {
+    if (!quoteLead) return;
+    setSendingQuoteEmail(true);
+    const finalTotal = Math.round(quoteDetails.priceBdt - (quoteDetails.priceBdt * quoteDetails.discountPercent) / 100);
+    const discountAmount = Math.round((quoteDetails.priceBdt * quoteDetails.discountPercent) / 100);
+    const subject = `Official Hosting & Domain Quotation — ${quoteDetails.domainName || quoteLead.contactName}`;
+
+    const htmlBody = `
+      <div style="font-family:sans-serif;max-width:620px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px;background:#ffffff;">
+        <div style="background:#0f172a;color:#ffffff;padding:20px;border-radius:12px;margin-bottom:20px;">
+          <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#fbbf24;font-weight:bold;">Official Quotation Proposal</p>
+          <h2 style="margin:6px 0 0;font-size:20px;">Click2IT Hosting & Domain Services</h2>
+        </div>
+        <p style="color:#334155;font-size:14px;">Dear <strong>${quoteLead.contactName}</strong>,</p>
+        <p style="color:#475569;font-size:14px;line-height:1.6;">Thank you for your interest in our hosting and domain solutions. Below is your customized official quotation:</p>
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
+          <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <td style="padding:10px 12px;font-weight:bold;color:#475569;">Package / Service</td>
+            <td style="padding:10px 12px;color:#0f172a;font-weight:bold;">${quoteDetails.package}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:10px 12px;font-weight:bold;color:#475569;">Billing Cycle</td>
+            <td style="padding:10px 12px;color:#0f172a;">${quoteDetails.billingPeriod}</td>
+          </tr>
+          <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <td style="padding:10px 12px;font-weight:bold;color:#475569;">Target Domain</td>
+            <td style="padding:10px 12px;color:#2563eb;font-family:monospace;">${quoteDetails.domainName}</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:10px 12px;font-weight:bold;color:#475569;">Regular Price</td>
+            <td style="padding:10px 12px;color:#0f172a;">৳${quoteDetails.priceBdt.toLocaleString()} BDT</td>
+          </tr>
+          <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <td style="padding:10px 12px;font-weight:bold;color:#059669;">Special Discount (${quoteDetails.discountPercent}%)</td>
+            <td style="padding:10px 12px;color:#059669;font-weight:bold;">-৳${discountAmount.toLocaleString()} BDT</td>
+          </tr>
+          <tr style="background:#ecfdf5;">
+            <td style="padding:12px;font-weight:bold;color:#065f46;font-size:15px;">Total Payable</td>
+            <td style="padding:12px;font-weight:bold;color:#065f46;font-size:16px;">৳${finalTotal.toLocaleString()} BDT</td>
+          </tr>
+        </table>
+        <p style="color:#475569;font-size:13px;background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">
+          <strong>Included Benefits:</strong> ${quoteDetails.notes}
+        </p>
+        <p style="color:#475569;font-size:13px;line-height:1.6;">To proceed with instant activation, simply reply to this email or contact us on WhatsApp.</p>
+      </div>
+    `;
+
+    try {
+      await sendRealEmail(quoteLead.email, subject, htmlBody);
+      await handleSaveQuoteToLead();
+      toast.success(`📧 Sent official quotation email to ${quoteLead.email}!`);
+      setShowQuoteModal(false);
+    } catch (err) {
+      toast.error('Could not dispatch quotation email.');
+    } finally {
+      setSendingQuoteEmail(false);
+    }
+  };
+
   const handleInspectWhois = async (domainName: string) => {
     if (!domainName) {
       toast.error('No target domain specified for this lead');
@@ -1801,13 +2149,13 @@ export function HostingCrmTab({ state }: { state?: any }) {
     try {
       const res = await fetch(`/api/domains/check-availability?domain=${encodeURIComponent(domainName)}`);
       const data = await res.json();
-      if (data.success) {
+      if (data && typeof data.available === 'boolean') {
         setWhoisResult(data);
       } else {
         setWhoisResult({ available: true, message: `Domain "${domainName}" appears available for immediate registration!` });
       }
     } catch (err) {
-      setWhoisResult({ available: true, message: `Domain "${domainName}" checked - available via Click2IT Registrar.` });
+      setWhoisResult({ available: true, message: `Domain "${domainName}" checked via Click2IT Registrar.` });
     } finally {
       setWhoisLoading(false);
     }
@@ -1885,18 +2233,54 @@ export function HostingCrmTab({ state }: { state?: any }) {
         </div>
       </div>
 
+      {/* Newly Converted Customer Account Credentials Banner */}
+      {convertedCredentials && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-emerald-800 font-black text-sm">
+              <CheckCircle2 size={18} className="text-emerald-600" />
+              <span>Lead Converted & Customer Portal Login Created: {convertedCredentials.name} ({convertedCredentials.accountId})</span>
+            </div>
+            <p className="text-xs text-emerald-700">
+              Login Email: <strong className="font-mono">{convertedCredentials.email}</strong> &nbsp;|&nbsp;
+              Password: <strong className="font-mono bg-white px-2 py-0.5 rounded border border-emerald-200">{convertedCredentials.password}</strong>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const text = `Customer Name: ${convertedCredentials.name}\nAccount ID: ${convertedCredentials.accountId}\nLogin Email: ${convertedCredentials.email}\nPassword: ${convertedCredentials.password}`;
+                navigator.clipboard.writeText(text);
+                toast.success('Customer login credentials copied to clipboard!');
+              }}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Copy size={14} /> Copy Login Details
+            </button>
+            <button
+              type="button"
+              onClick={() => setConvertedCredentials(null)}
+              className="p-2 text-emerald-700 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* SUB-MODULE 1: LEAD PIPELINE, BULK ACTIONS & FUNNEL DASHBOARD */}
       {crmMainSubTab === 'pipeline' && (
         <>
-          {/* RECHARTS VISUAL FUNNEL DASHBOARD SECTION */}
+          {/* VISUAL FUNNEL DASHBOARD SECTION */}
           {showAnalyticsDashboard && (
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6 animate-in fade-in duration-300">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <div className="flex items-center gap-2">
                     <TrendingUp size={18} className="text-purple-600" />
                     <h2 className="text-base sm:text-lg font-black text-slate-900">
-                      Lead Conversion Funnel Analytics (Recharts)
+                      Lead Conversion & Sales Funnel Analytics
                     </h2>
                   </div>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -1904,7 +2288,17 @@ export function HostingCrmTab({ state }: { state?: any }) {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={syncingInquiries}
+                    onClick={() => handleSyncWebsiteInquiries(false)}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer border border-slate-200 transition-colors"
+                    title="Import inquiries from Contact Us, Domain Offers, and Custom Quote Requests"
+                  >
+                    <RefreshCw size={13} className={syncingInquiries ? 'animate-spin text-blue-600' : 'text-slate-600'} />
+                    <span>{syncingInquiries ? 'Syncing...' : 'Sync Website Inquiries'}</span>
+                  </button>
                   <button
                     onClick={handleOpenAddModal}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -2626,6 +3020,14 @@ export function HostingCrmTab({ state }: { state?: any }) {
                                 <div className="flex items-center gap-1">
                                   <button
                                     type="button"
+                                    onClick={() => handleOpenConvertModal(lead)}
+                                    className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors cursor-pointer"
+                                    title="Convert Lead to Customer Account"
+                                  >
+                                    <UserCheck size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleOpenEditModal(lead)}
                                     className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                                     title="Edit Lead"
@@ -2699,6 +3101,11 @@ export function HostingCrmTab({ state }: { state?: any }) {
                               {lead.contactName}
                             </div>
                             {lead.companyName && <div className="text-[11px] text-slate-500 font-normal">{lead.companyName}</div>}
+                            {lead.whmcsAccountId && (
+                              <span className="inline-block mt-0.5 text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                {lead.whmcsAccountId}
+                              </span>
+                            )}
                           </td>
                           <td className="p-4 space-y-0.5">
                             <div className="font-mono text-slate-900 font-bold">{lead.phone}</div>
@@ -2739,7 +3146,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
                               title="Re-assign account manager (automatically attaches activity log)"
                             >
                               <option value="">👤 Unassigned</option>
-                              {activeStaffMembers.map(staff => (
+                              {getActiveStaffPool().map(staff => (
                                 <option key={staff.id} value={staff.id}>
                                   👤 {staff.name}
                                 </option>
@@ -2754,6 +3161,13 @@ export function HostingCrmTab({ state }: { state?: any }) {
                                 title="View Timeline & Details"
                               >
                                 <Eye size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleOpenConvertModal(lead)}
+                                className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold cursor-pointer transition-colors"
+                                title="Convert Lead to Customer Account (with Login Password)"
+                              >
+                                <UserCheck size={14} />
                               </button>
                               <button
                                 onClick={() => handleOpenQuoteGenerator(lead)}
@@ -2785,8 +3199,8 @@ export function HostingCrmTab({ state }: { state?: any }) {
                       <tr>
                         <td colSpan={8} className="p-12 text-center text-slate-400">
                           <Filter size={32} className="mx-auto text-slate-300 mb-2" />
-                          <p className="font-bold text-sm text-slate-600">No leads match the selected filters</p>
-                          <p className="text-xs text-slate-400 mt-1">Try resetting the status, staff, date range, or search query.</p>
+                          <p className="font-bold text-sm text-slate-600">No leads found in pipeline</p>
+                          <p className="text-xs text-slate-400 mt-1">Click "+ Add Lead", "Import CSV", or "Sync Website Inquiries" to populate your sales pipeline.</p>
                           {isFilterActive && (
                             <button
                               onClick={handleClearAllFilters}
@@ -2931,24 +3345,20 @@ export function HostingCrmTab({ state }: { state?: any }) {
               {/* Staff Workload Table */}
               <div className="space-y-2">
                 <span className="font-extrabold text-slate-700 uppercase tracking-wider block text-[10px]">
-                  Active Staff Member Lead Distribution:
+                  Active Team Member Lead Distribution:
                 </span>
 
                 <div className="space-y-2">
-                  {(activeStaffMembers.length > 0 ? activeStaffMembers : [
-                    { id: 'staff_1', name: 'Alex M.', role: 'Support Admin', email: 'alex@click2it.bd' },
-                    { id: 'staff_2', name: 'Sarah K.', role: 'Sales Lead', email: 'sarah@click2it.bd' },
-                    { id: 'staff_3', name: 'Imran H.', role: 'Technical Support', email: 'imran@click2it.bd' },
-                    { id: 'staff_4', name: 'Kamal R.', role: 'Billing Specialist', email: 'kamal@click2it.bd' }
-                  ]).map((staff, idx) => {
-                    const assignedLeadsCount = leads.filter(l => l.assignedStaffId === staff.id || l.assignedStaffName?.includes(staff.name)).length;
-                    const isNextUp = (roundRobinIndex % (activeStaffMembers.length || 4)) === idx;
+                  {getActiveStaffPool().map((staff, idx) => {
+                    const poolLen = getActiveStaffPool().length || 1;
+                    const assignedLeadsCount = leads.filter(l => l.assignedStaffId === staff.id || (l.assignedStaffName && l.assignedStaffName.includes(staff.name))).length;
+                    const isNextUp = (roundRobinIndex % poolLen) === idx;
 
                     return (
                       <div key={staff.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-extrabold flex items-center justify-center text-xs">
-                            👤
+                            {(staff.name || 'S').charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <p className="font-extrabold text-slate-900 text-xs">{staff.name}</p>
@@ -3515,13 +3925,23 @@ export function HostingCrmTab({ state }: { state?: any }) {
 
             </div>
 
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-xs">
-              <button
-                onClick={() => handleOpenQuoteGenerator(selectedLeadForDetail)}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl flex items-center gap-1.5 cursor-pointer"
-              >
-                <Zap size={14} /> Generate Quotation
-              </button>
+            <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenQuoteGenerator(selectedLeadForDetail)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Zap size={14} /> Generate Quotation
+                </button>
+                {selectedLeadForDetail.leadStage !== 'converted' && (
+                  <button
+                    onClick={() => handleOpenConvertModal(selectedLeadForDetail)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <UserPlus size={14} /> Convert to Customer Account
+                  </button>
+                )}
+              </div>
 
               <button
                 onClick={() => setSelectedLeadForDetail(null)}
@@ -3658,7 +4078,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
                     onChange={(e) => setForm({ ...form, assignedStaffId: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   >
-                    {activeStaffMembers.map(s => (
+                    {getActiveStaffPool().map(s => (
                       <option key={s.id} value={s.id}>
                         {s.name} — {s.role} ({s.email})
                       </option>
@@ -3819,24 +4239,55 @@ export function HostingCrmTab({ state }: { state?: any }) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    const finalTotal = quoteDetails.priceBdt - (quoteDetails.priceBdt * quoteDetails.discountPercent) / 100;
-                    const msg = `Click2IT Hosting Official Quotation\nClient: ${quoteLead.contactName}\nService: ${quoteDetails.package}\nDomain: ${quoteDetails.domainName}\nTotal BDT: ৳${finalTotal}\nbKash Payment Link: https://click2it.bd/pay`;
-                    navigator.clipboard.writeText(msg);
-                    toast.success('Copied quotation text to clipboard!');
-                  }}
-                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl flex items-center gap-2 cursor-pointer"
+                  onClick={handleSaveQuoteToLead}
+                  className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Copy size={14} /> Copy Quote for WhatsApp
+                  <CheckCircle2 size={14} /> Save Quote to Pipeline
                 </button>
 
                 <button
                   type="button"
+                  disabled={sendingQuoteEmail}
+                  onClick={handleSendQuoteEmail}
+                  className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-black rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Mail size={14} className={sendingQuoteEmail ? 'animate-pulse' : ''} />
+                  {sendingQuoteEmail ? 'Sending Email...' : 'Send Official Email'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const finalTotal = Math.round(quoteDetails.priceBdt - (quoteDetails.priceBdt * quoteDetails.discountPercent) / 100);
+                    const msg = `Click2IT Hosting Official Quotation\nClient: ${quoteLead.contactName}\nService: ${quoteDetails.package} (${quoteDetails.billingPeriod})\nDomain: ${quoteDetails.domainName}\nTotal BDT: ৳${finalTotal.toLocaleString()}\nWebsite: ${window.location.origin}/pricing`;
+                    navigator.clipboard.writeText(msg);
+                    toast.success('Copied quotation text to clipboard!');
+                  }}
+                  className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Copy size={14} /> Copy Quote
+                </button>
+
+                {quoteLead.phone && (
+                  <a
+                    href={`https://wa.me/${quoteLead.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                      `Hello ${quoteLead.contactName},\n\nHere is your Official Quotation from Click2IT Hosting:\n• Package: ${quoteDetails.package} (${quoteDetails.billingPeriod})\n• Target Domain: ${quoteDetails.domainName}\n• Total Payable: ৳${Math.round(quoteDetails.priceBdt - (quoteDetails.priceBdt * quoteDetails.discountPercent) / 100).toLocaleString()}\n\nLet us know when you are ready to proceed!`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl flex items-center gap-1.5"
+                  >
+                    <MessageCircle size={14} /> Send via WhatsApp
+                  </a>
+                )}
+
+                <button
+                  type="button"
                   onClick={() => setShowQuoteModal(false)}
-                  className="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl"
+                  className="px-3.5 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl cursor-pointer"
                 >
                   Close
                 </button>
@@ -3868,13 +4319,22 @@ export function HostingCrmTab({ state }: { state?: any }) {
                   <RefreshCw size={24} className="animate-spin mx-auto text-blue-600" />
                   <p className="font-bold text-xs">Querying domain availability & registrar WHOIS records...</p>
                 </div>
-              ) : (
+              ) : whoisResult?.available ? (
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
                   <div className="flex items-center gap-2 font-black text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl">
                     <CheckCircle2 size={16} /> Domain Available for Registration!
                   </div>
                   <p className="text-slate-600 font-medium leading-relaxed">
-                    "{whoisDomain}" can be registered instantly via Click2IT Openprovider & BTCL Registrar module.
+                    "{whoisDomain}" is available and can be registered immediately via Click2IT Domain Registrar.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <div className="flex items-center gap-2 font-black text-amber-800 bg-amber-100 px-3 py-1.5 rounded-xl">
+                    <AlertCircle size={16} /> Domain Already Registered / Taken
+                  </div>
+                  <p className="text-slate-600 font-medium leading-relaxed">
+                    "{whoisDomain}" is already registered. You can offer Domain Transfer with EPP/Auth Code or suggest an alternative extension (.com.bd, .net, .org).
                   </p>
                 </div>
               )}
@@ -3883,12 +4343,121 @@ export function HostingCrmTab({ state }: { state?: any }) {
                 <button
                   type="button"
                   onClick={() => setShowWhoisModal(false)}
-                  className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 cursor-pointer"
                 >
                   Done
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONVERT LEAD TO CUSTOMER ACCOUNT MODAL */}
+      {showConvertModal && convertingLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto p-6 sm:p-8 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <UserPlus size={20} className="text-emerald-600" />
+                  Convert Lead to Customer Account
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Create a real Customer Portal Login for <span className="font-bold text-slate-700">{convertingLead.contactName}</span> ({convertingLead.email}) and mark this deal as Won.
+                </p>
+              </div>
+              <button onClick={() => setShowConvertModal(false)} className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConvertLeadSubmit} className="space-y-4 text-xs">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 space-y-1 text-emerald-950">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-xs">{convertingLead.contactName}</span>
+                  <span className="font-mono font-black text-emerald-700">{formatCurrency(convertingLead.dealValueBdt)}</span>
+                </div>
+                <p className="text-[11px] font-medium text-emerald-800">
+                  Email: <span className="font-mono font-bold">{convertingLead.email}</span> • Phone: <span className="font-mono">{convertingLead.phone || 'N/A'}</span>
+                </p>
+                {convertingLead.targetDomain && (
+                  <p className="text-[11px] font-mono text-emerald-700">Target Domain: {convertingLead.targetDomain}</p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">Customer Portal Login Password *</label>
+                  <button
+                    type="button"
+                    onClick={() => setConvertForm({ ...convertForm, password: generateRandomPassword(10) })}
+                    className="text-[10px] font-black text-blue-600 hover:text-blue-700 cursor-pointer"
+                  >
+                    ↻ Generate Strong Password
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  minLength={6}
+                  value={convertForm.password}
+                  onChange={(e) => setConvertForm({ ...convertForm, password: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Street Address</label>
+                  <input
+                    type="text"
+                    value={convertForm.street}
+                    onChange={(e) => setConvertForm({ ...convertForm, street: e.target.value })}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">City</label>
+                  <input
+                    type="text"
+                    value={convertForm.city}
+                    onChange={(e) => setConvertForm({ ...convertForm, city: e.target.value })}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 p-3 bg-blue-50/70 border border-blue-200 rounded-xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={convertForm.sendWelcomeEmail}
+                  onChange={(e) => setConvertForm({ ...convertForm, sendWelcomeEmail: e.target.checked })}
+                  className="rounded text-blue-600 focus:ring-blue-500"
+                />
+                <span className="font-bold text-slate-800 text-xs">
+                  Send Welcome Email with login credentials to {convertingLead.email}
+                </span>
+              </label>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowConvertModal(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={convertingLoading}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-black rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UserPlus size={14} />
+                  {convertingLoading ? 'Creating Customer Account...' : 'Create Account & Convert Lead'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
