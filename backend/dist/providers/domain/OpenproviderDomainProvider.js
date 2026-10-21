@@ -445,35 +445,52 @@ export class OpenproviderDomainProvider {
             };
         }
     }
-    async transferDomain(domain, authCode, years) {
+    async transferDomain(domain, authCode, years, contact, contactId) {
         const cleanDomain = domain.trim().toLowerCase();
         const domainObj = this.splitDomain(cleanDomain);
         const cleanAuthCode = (authCode || '').trim();
-        let handle = this.defaultHandle;
+        let ownerHandle = contactId && /^[A-Z0-9]+-[A-Z0-9]+$/i.test(contactId) ? contactId : '';
         let requestStartedAt;
         let responseReceivedAt;
         let providerHttpStatus;
         let providerCode;
         try {
             await this.authenticate();
-            if (!handle) {
+            // 1. Prioritize creating or retrieving the CUSTOMER'S handle so the domain owner in Openprovider is the customer
+            if (!ownerHandle && contact && (contact.email || contact.firstName)) {
+                try {
+                    ownerHandle = await this.getOrCreateCustomerHandle(contact);
+                    console.info(`[Openprovider] Using customer handle ${ownerHandle} as domain owner for transfer of ${cleanDomain}`);
+                }
+                catch (e) {
+                    console.warn('[Openprovider] Auto customer handle creation failed for transfer, falling back to default handle:', e.message);
+                }
+            }
+            // 2. Fall back to defaultHandle (reseller handle) only if customer handle could not be determined
+            if (!ownerHandle) {
+                ownerHandle = this.defaultHandle;
+            }
+            // 3. Fall back to first available customer handle in the account if defaultHandle is empty
+            if (!ownerHandle) {
                 try {
                     const custRes = await this.fetchApi('/customers?limit=1');
                     const firstHandle = custRes?.data?.results?.[0]?.handle || custRes?.data?.[0]?.handle;
                     if (firstHandle) {
-                        handle = firstHandle;
+                        ownerHandle = firstHandle;
                     }
                 }
                 catch (e) {
                     console.warn('[Openprovider] Customer handle lookup failed for transfer:', e.message);
                 }
             }
-            if (!handle) {
+            if (!ownerHandle) {
                 throw new Error('Openprovider requires a Customer Handle (e.g. JD000000-EA). Please set Default Handle in Domain Registrars settings or create a customer profile in https://cp.openprovider.eu/.');
             }
+            const techBillingHandle = this.defaultHandle || ownerHandle;
             requestStartedAt = new Date().toISOString();
             console.info('[Openprovider] Domain transfer request started', {
                 domain: cleanDomain,
+                ownerHandle,
                 operation: 'transfer',
                 requestStartedAt,
             });
@@ -483,10 +500,10 @@ export class OpenproviderDomainProvider {
                     domain: domainObj,
                     auth_code: cleanAuthCode,
                     period: years || 1,
-                    owner_handle: handle,
-                    admin_handle: handle,
-                    tech_handle: handle,
-                    billing_handle: handle
+                    owner_handle: ownerHandle, // <--- Customer Name & Contact!
+                    admin_handle: ownerHandle, // <--- Customer Name & Contact!
+                    tech_handle: techBillingHandle, // <--- Click2IT BD (technical reseller)
+                    billing_handle: techBillingHandle // <--- Click2IT BD (billing reseller)
                 })
             });
             providerHttpStatus = response._providerHttpStatus;

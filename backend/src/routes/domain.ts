@@ -1384,7 +1384,26 @@ domainRouter.post('/fulfill', requireFirebaseAuth, async (req: any, res: Respons
         if (!authCode) {
           return res.json({ success: false, error: 'Auth code is required for transfer' });
         }
-        result = await (provider as any).transferDomain?.(orderData.domain, authCode, orderData.years || orderData.termYears || 1);
+        const nameParts = (orderData.customerName || '').trim().split(/\s+/);
+        const transferContact = orderData.contact || {
+          firstName: nameParts[0] || 'Customer',
+          lastName: nameParts.slice(1).join(' ') || (nameParts[0] ? nameParts[0] : 'User'),
+          email: orderData.customerEmail,
+          phone: orderData.customerPhone,
+          companyName: orderData.company || '',
+          address: orderData.shippingAddress || 'Dhaka',
+          city: 'Dhaka',
+          state: 'Dhaka',
+          zipcode: '1200',
+          country: 'BD',
+        };
+        result = await (provider as any).transferDomain?.(
+          orderData.domain,
+          authCode,
+          orderData.years || orderData.termYears || 1,
+          transferContact,
+          orderData.contactId
+        );
         fulfillmentType = 'transfer';
       } else if (orderType === 'renewal') {
         result = await provider.renewDomain(orderData.domain, orderData.renewalPeriod || 1);

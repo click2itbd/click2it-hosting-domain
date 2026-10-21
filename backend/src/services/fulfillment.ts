@@ -367,7 +367,26 @@ async function fulfillDomainOrder(domainOrderId: string, domainData: any, actorU
         updatedAt: now,
       });
       transferSubmissionMarked = true;
-      result = await provider.transferDomain(cleanDomain, authCode, domainData.years || domainData.termYears || 1);
+      const nameParts = (domainData.customerName || '').trim().split(/\s+/);
+      const transferContact = domainData.contact || {
+        firstName: nameParts[0] || 'Customer',
+        lastName: nameParts.slice(1).join(' ') || (nameParts[0] ? nameParts[0] : 'User'),
+        email: domainData.customerEmail,
+        phone: domainData.customerPhone,
+        companyName: domainData.company || '',
+        address: domainData.shippingAddress || 'Dhaka',
+        city: 'Dhaka',
+        state: 'Dhaka',
+        zipcode: '1200',
+        country: 'BD'
+      };
+      result = await provider.transferDomain(
+        cleanDomain,
+        authCode,
+        domainData.years || domainData.termYears || 1,
+        transferContact,
+        domainData.contactId
+      );
     } else if (domainData.type === 'renewal' || domainData.action === 'renewal') {
       action = 'renew';
       result = await provider.renewDomain(domainData.domain, domainData.renewalPeriod || 1);
