@@ -1,10 +1,32 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Menu, ChevronDown, Bell, User, LogOut, Settings2, Server, Ticket, RefreshCw, Globe, CheckCheck } from 'lucide-react';
+import {
+  Menu,
+  ChevronDown,
+  Bell,
+  User,
+  LogOut,
+  Settings2,
+  Server,
+  Ticket,
+  Globe,
+  ShieldCheck,
+  ExternalLink,
+  Key,
+  Mail,
+  Phone,
+  CheckCircle2,
+  X,
+  Save,
+  Users
+} from 'lucide-react';
 import { AdminNotifications } from '../../../components/AdminNotifications';
 import { auth, db } from '../../../firebase';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { cn } from '../../../lib/utils';
+import { useAuth } from '../../../context/AuthContext';
+import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { updateProfile, updatePassword, sendPasswordResetEmail } from 'firebase/auth';
+import { toast } from 'react-hot-toast';
 
 const SETTINGS_MODULES = [
   { label: '📧 Email Templates', id: 'email-templates' },
@@ -20,40 +42,96 @@ const SETTINGS_MODULES = [
   { label: '🌐 Domain Registrars', id: 'domain-registrars' },
 ];
 
-function timeAgo(dateVal) {
-  if (!dateVal) return '';
-  const d = dateVal?.toDate ? dateVal.toDate() : new Date(dateVal);
-  const diff = (Date.now() - d.getTime()) / 1000;
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
-export function TopNavbar({ state }) {
+export function TopNavbar({ state }: { state: any }) {
   const navigate = useNavigate();
+  const { user, profile, isAdmin, isManager, logout } = useAuth();
   const { sidebarOpen, setSidebarOpen, activeTab, setActiveTab, tickets } = state;
 
-  const dropdownRef = useRef(null);
-  const bellRef = useRef(null);
-  const profileRef = useRef(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(true);
 
+  // Admin Profile Modal State
+  const [isAdminProfileModalOpen, setIsAdminProfileModalOpen] = useState(false);
+  const [adminName, setAdminName] = useState('');
+  const [adminPhone, setAdminPhone] = useState('');
+  const [adminNewPassword, setAdminNewPassword] = useState('');
+  const [savingAdminProfile, setSavingAdminProfile] = useState(false);
+
+  const displayAdminName =
+    profile?.displayName ||
+    (profile as any)?.name ||
+    user?.displayName ||
+    (user?.email ? user.email.split('@')[0] : 'Admin');
+  const displayAdminEmail = user?.email || profile?.email || 'admin@click2it.bd';
+  const displayAdminRole = isAdmin ? 'Super Admin' : isManager ? 'Manager' : 'Staff';
+
+  const openAdminProfileModal = () => {
+    setAdminName(displayAdminName);
+    setAdminPhone((profile as any)?.phone || '');
+    setAdminNewPassword('');
+    setProfileOpen(false);
+    setIsAdminProfileModalOpen(true);
+  };
+
+  const handleSaveAdminProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setSavingAdminProfile(true);
+    try {
+      const cleanName = adminName.trim() || 'Admin';
+      await updateDoc(doc(db, 'users', user.uid), {
+        displayName: cleanName,
+        name: cleanName,
+        phone: adminPhone.trim(),
+        updatedAt: new Date().toISOString(),
+      });
+      await updateProfile(user, { displayName: cleanName }).catch(() => null);
+
+      if (adminNewPassword.trim()) {
+        if (adminNewPassword.trim().length < 6) {
+          toast.error('New password must be at least 6 characters.');
+          setSavingAdminProfile(false);
+          return;
+        }
+        try {
+          await updatePassword(user, adminNewPassword.trim());
+          toast.success('Admin profile and password updated!');
+        } catch (pwErr: any) {
+          if (pwErr?.code === 'auth/requires-recent-login' && user.email) {
+            await sendPasswordResetEmail(auth, user.email);
+            toast.success('Profile saved! A password reset link was sent to your email for security verification.');
+          } else {
+            throw pwErr;
+          }
+        }
+      } else {
+        toast.success('Admin profile updated successfully!');
+      }
+      setIsAdminProfileModalOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update admin profile.');
+    } finally {
+      setSavingAdminProfile(false);
+    }
+  };
+
   // Close settings dropdown on outside click
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setSettingsOpen(false);
       }
-      if (bellRef.current && !bellRef.current.contains(e.target)) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
         setBellOpen(false);
       }
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false);
       }
     };
@@ -63,7 +141,7 @@ export function TopNavbar({ state }) {
 
   // Real-time notifications — domain & hosting only
   useEffect(() => {
-    const unsubs = [];
+    const unsubs: Array<() => void> = [];
 
     // Hosting orders
     const hostingQ = query(collection(db, 'hostingOrders'), orderBy('createdAt', 'desc'), limit(5));
@@ -82,13 +160,13 @@ export function TopNavbar({ state }) {
         const merged = [...items, ...filtered].sort((a, b) => {
           const aTime = a.time?.toDate ? a.time.toDate() : new Date(a.time || 0);
           const bTime = b.time?.toDate ? b.time.toDate() : new Date(b.time || 0);
-          return bTime - aTime;
+          return Number(bTime) - Number(aTime);
         }).slice(0, 15);
         setUnreadCount(merged.length);
         return merged;
       });
       setNotifLoading(false);
-    }, (err) => {
+    }, () => {
       setNotifLoading(false);
     }));
 
@@ -109,7 +187,7 @@ export function TopNavbar({ state }) {
         return [...items, ...filtered].sort((a, b) => {
           const aTime = a.time?.toDate ? a.time.toDate() : new Date(a.time || 0);
           const bTime = b.time?.toDate ? b.time.toDate() : new Date(b.time || 0);
-          return bTime - aTime;
+          return Number(bTime) - Number(aTime);
         }).slice(0, 15);
       });
     }, () => {}));
@@ -131,27 +209,13 @@ export function TopNavbar({ state }) {
         return [...items, ...filtered].sort((a, b) => {
           const aTime = a.time?.toDate ? a.time.toDate() : new Date(a.time || 0);
           const bTime = b.time?.toDate ? b.time.toDate() : new Date(b.time || 0);
-          return bTime - aTime;
+          return Number(bTime) - Number(aTime);
         }).slice(0, 15);
       });
     }, () => {}));
 
     return () => unsubs.forEach(u => u());
   }, []);
-
-  const getIcon = (iconType) => {
-    if (iconType === 'server') return <Server size={14} className="text-blue-500" />;
-    if (iconType === 'ticket') return <Ticket size={14} className="text-rose-500" />;
-    if (iconType === 'globe') return <Globe size={14} className="text-emerald-500" />;
-    return <Bell size={14} className="text-slate-400" />;
-  };
-
-  const getBadge = (type) => {
-    if (type === 'hosting') return 'bg-blue-50 text-blue-700';
-    if (type === 'ticket') return 'bg-rose-50 text-rose-700';
-    if (type === 'domain') return 'bg-emerald-50 text-emerald-700';
-    return 'bg-slate-50 text-slate-600';
-  };
 
   return (
     <header className="h-[70px] bg-white border-b border-slate-200 flex items-center px-4 sticky top-0 z-50 shadow-sm">
@@ -223,7 +287,7 @@ export function TopNavbar({ state }) {
 
       {/* Right section — always visible, never shrinks */}
       <div className="flex items-center flex-shrink-0 h-full border-l border-slate-200 pl-4 ml-2 gap-1">
-                {/* Bell Notification Panel */}
+        {/* Bell Notification Panel */}
         <div className="relative flex items-center justify-center mr-2">
           <AdminNotifications setActiveTab={setActiveTab} />
         </div>
@@ -232,44 +296,197 @@ export function TopNavbar({ state }) {
         <div className="relative h-full flex items-center pl-3 border-l border-slate-200" ref={profileRef}>
           <button 
             onClick={() => setProfileOpen(v => !v)}
-            className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-3 rounded-xl transition-colors"
+            className="flex items-center gap-2.5 hover:bg-slate-50 p-1.5 pr-3 rounded-xl transition-colors cursor-pointer"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-white shadow-md">
-              <User size={15} className="text-white" />
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center border-2 border-white shadow-md text-white font-bold text-xs">
+              {displayAdminName.charAt(0).toUpperCase() || <User size={15} className="text-white" />}
             </div>
-            <span className="text-sm font-bold text-slate-700 hidden lg:block">Admin</span>
+            <div className="hidden lg:block text-left">
+              <span className="text-xs font-extrabold text-slate-800 block leading-tight max-w-[110px] truncate">
+                {displayAdminName}
+              </span>
+              <span className="text-[10px] font-semibold text-blue-600 block leading-tight">
+                {displayAdminRole}
+              </span>
+            </div>
             <ChevronDown size={14} className={`text-slate-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {profileOpen && (
-            <div className="absolute top-[60px] right-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-[100] w-52 py-2 overflow-hidden">
-              <div className="px-5 py-3 border-b border-slate-100 mb-1">
-                <p className="text-sm font-bold text-slate-800">Admin User</p>
-                <p className="text-xs text-slate-500 font-medium truncate">admin@system.local</p>
+            <div className="absolute top-[62px] right-2 bg-white border border-slate-200/90 rounded-2xl shadow-2xl z-[100] w-64 py-2 overflow-hidden animate-in fade-in duration-150">
+              <div className="px-4 py-3.5 bg-gradient-to-br from-slate-50 to-blue-50/40 border-b border-slate-100 mb-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-extrabold text-slate-900 truncate">{displayAdminName}</p>
+                  <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-blue-100 text-blue-700 shrink-0">
+                    {displayAdminRole}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-medium truncate mt-0.5">{displayAdminEmail}</p>
               </div>
               
-              <button onClick={() => { setProfileOpen(false); navigate('/admin/profile'); }} className="w-full text-left px-5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center gap-2">
-                <User size={15} /> My Profile
+              <button
+                onClick={openAdminProfileModal}
+                className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors flex items-center gap-2.5 cursor-pointer"
+              >
+                <User size={15} className="text-slate-400" /> Admin Profile &amp; Password
               </button>
-              <button onClick={() => { setProfileOpen(false); setSettingsOpen(true); }} className="w-full text-left px-5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center gap-2">
-                <Settings2 size={15} /> Preferences
+
+              <button
+                onClick={() => {
+                  setProfileOpen(false);
+                  setActiveTab('users');
+                }}
+                className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors flex items-center gap-2.5 cursor-pointer"
+              >
+                <Users size={15} className="text-slate-400" /> Manage Customers
+              </button>
+
+              <button
+                onClick={() => {
+                  setProfileOpen(false);
+                  setActiveTab('api-settings');
+                }}
+                className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors flex items-center gap-2.5 cursor-pointer"
+              >
+                <Settings2 size={15} className="text-slate-400" /> System &amp; API Preferences
+              </button>
+
+              <button
+                onClick={() => {
+                  setProfileOpen(false);
+                  navigate('/');
+                }}
+                className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors flex items-center gap-2.5 cursor-pointer"
+              >
+                <ExternalLink size={15} className="text-slate-400" /> Visit Live Website
               </button>
               
               <div className="h-px bg-slate-100 my-1"></div>
               
               <button
-                onClick={() => { 
-                  import('firebase/auth').then(({ signOut }) => signOut(auth)); 
-                  navigate('/'); 
+                onClick={async () => {
+                  setProfileOpen(false);
+                  await logout();
+                  navigate('/login');
                 }}
-                className="w-full text-left px-5 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2"
+                className="w-full text-left px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-2.5 cursor-pointer"
               >
-                <LogOut size={15} /> Logout
+                <LogOut size={15} /> Sign Out
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Admin Profile & Security Modal */}
+      {isAdminProfileModalOpen && createPortal(
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setIsAdminProfileModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white p-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center font-black text-base">
+                  {displayAdminName.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">Admin Profile &amp; Security</h3>
+                  <p className="text-xs text-blue-200">{displayAdminEmail}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdminProfileModalOpen(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAdminProfile} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Admin Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={adminName}
+                  onChange={e => setAdminName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Admin Email (Login ID)</label>
+                <input
+                  type="email"
+                  disabled
+                  value={displayAdminEmail}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-500 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  placeholder="+8801XXXXXXXXX"
+                  value={adminPhone}
+                  onChange={e => setAdminPhone(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Change Password <span className="text-slate-400 font-normal">(Leave blank to keep current)</span>
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Enter new password (min 6 characters)"
+                  value={adminNewPassword}
+                  onChange={e => setAdminNewPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminProfileModalOpen(false);
+                    navigate('/profile');
+                  }}
+                  className="text-xs font-bold text-blue-600 hover:underline"
+                >
+                  Open Client Area Profile &rarr;
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAdminProfileModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingAdminProfile}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save size={14} /> {savingAdminProfile ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
     </header>
   );
 }
