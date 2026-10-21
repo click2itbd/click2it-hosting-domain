@@ -37,7 +37,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem('cart');
-      return saved ? JSON.parse(saved).map(withoutTransferSecrets) : [];
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
@@ -87,16 +87,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [appliedDiscount]);
 
-  const addToCart = (product: Product) => {
-    const safeProduct = withoutTransferSecrets(product);
+  const addToCart = (product: Product | any) => {
     setItems(prev => {
-      const existing = prev.find(item => item.id === safeProduct.id);
+      const existing = prev.find(item => item.id === product.id);
       if (existing) {
+        const isSingleUnitItem = ['domain', 'domain_transfer', 'domain_renewal'].includes(product.itemType);
         return prev.map(item =>
-          item.id === safeProduct.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id
+            ? { ...item, ...product, quantity: isSingleUnitItem ? 1 : item.quantity + 1 }
+            : item
         );
       }
-      return [...prev, { ...safeProduct, quantity: 1 }];
+      return [...prev, { ...product, quantity: 1 }];
     });
   };
 
@@ -111,8 +113,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateCartItem = (productId: string, updates: Partial<CartItem>) => {
-    const safeUpdates = withoutTransferSecrets(updates);
-    setItems(prev => prev.map(item => item.id === productId ? { ...item, ...safeUpdates } : item));
+    setItems(prev => prev.map(item => item.id === productId ? { ...item, ...updates } : item));
   };
 
   const clearCart = () => {

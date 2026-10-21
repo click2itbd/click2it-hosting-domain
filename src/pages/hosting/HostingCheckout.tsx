@@ -224,18 +224,50 @@ export const HostingCheckout: React.FC = () => {
     toast.success("Strong root password generated & copied to clipboard!");
   };
 
-  const [transferAuthCodes, setTransferAuthCodes] = useState<Record<string, string>>({});
+  const [transferAuthCodes, setTransferAuthCodes] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('click2it_transfer_codes') || '{}');
+    } catch {
+      return {};
+    }
+  });
   const [bkashNumber, setBkashNumber] = useState('');
   const [copiedNumber, setCopiedNumber] = useState(false);
 
+  const getResolvedTransferCode = (item: any): string => {
+    const cleanDom = (item.domain || item.id?.replace(/^domain_transfer_/, '') || '').trim().toLowerCase();
+    let storedMap: Record<string, string> = {};
+    try {
+      storedMap = JSON.parse(localStorage.getItem('click2it_transfer_codes') || '{}');
+    } catch {
+      // ignore
+    }
+    return (
+      item.authCode ||
+      item.eppCode ||
+      transferAuthCodes[item.id] ||
+      (cleanDom ? transferAuthCodes[cleanDom] : '') ||
+      storedMap[item.id] ||
+      (cleanDom ? storedMap[cleanDom] : '') ||
+      ''
+    ).trim();
+  };
+
   useEffect(() => {
-    const initialCodes: Record<string, string> = {};
+    let storedMap: Record<string, string> = {};
+    try {
+      storedMap = JSON.parse(localStorage.getItem('click2it_transfer_codes') || '{}');
+    } catch {
+      // ignore
+    }
+    const initialCodes: Record<string, string> = { ...storedMap };
     items.forEach(i => {
       if (i.itemType === 'domain_transfer') {
-        const code = (i as any).authCode || (i as any).eppCode;
+        const cleanDom = (i.domain || i.id?.replace(/^domain_transfer_/, '') || '').trim().toLowerCase();
+        const code = (i as any).authCode || (i as any).eppCode || storedMap[i.id] || (cleanDom ? storedMap[cleanDom] : '');
         if (code) {
           initialCodes[i.id] = code;
-          if (i.domain) initialCodes[i.domain] = code;
+          if (cleanDom) initialCodes[cleanDom] = code;
         }
       }
     });
@@ -539,7 +571,7 @@ export const HostingCheckout: React.FC = () => {
 
     const transferItems = items.filter(i => i.itemType === 'domain_transfer');
     for (const item of transferItems) {
-      const code = (item.authCode || item.eppCode || transferAuthCodes[item.id] || transferAuthCodes[item.domain])?.trim();
+      const code = getResolvedTransferCode(item);
       if (!code) {
         toast.error(`Please enter the Auth/EPP Code for ${item.domain || item.id.replace('domain_transfer_', '')}`);
         return;
@@ -618,8 +650,9 @@ export const HostingCheckout: React.FC = () => {
       const orderData = {
         userId: targetUserId,
         platform: 'hosting',
-        items: items.map(({ eppCode: _eppCode, authCode: _authCode, ...item }) => {
-          const code = item.itemType === 'domain_transfer' ? (item.authCode || item.eppCode || transferAuthCodes[item.id]?.trim() || transferAuthCodes[item.domain]?.trim()) : undefined;
+        items: items.map((rawItem) => {
+          const { eppCode: _eppCode, authCode: _authCode, ...item } = rawItem as any;
+          const code = rawItem.itemType === 'domain_transfer' ? getResolvedTransferCode(rawItem) : undefined;
           return {
             ...item,
             isDigital: true,
@@ -738,8 +771,20 @@ export const HostingCheckout: React.FC = () => {
       
       for (const tItem of transferItems) {
         const dOrderRef = doc(collection(db, 'domainOrders'));
-        const code = (tItem.authCode || tItem.eppCode || transferAuthCodes[tItem.id] || transferAuthCodes[tItem.domain])?.trim() || '';
+        const code = getResolvedTransferCode(tItem);
         const domainClean = (tItem.domain || tItem.id.replace('domain_transfer_', '')).trim().toLowerCase();
+        const contactObj = {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim(),
+          phone: fullPhone.trim(),
+          companyName: formData.company?.trim() || '',
+          address: `${formData.address1.trim()}${formData.address2 ? ', ' + formData.address2.trim() : ''}`,
+          city: formData.city.trim(),
+          state: formData.state.trim() || formData.city.trim(),
+          zipcode: formData.postcode.trim(),
+          country: formData.country || 'BD',
+        };
         batch.set(dOrderRef, {
           userId: targetUserId,
           orderId: newOrderRef.id,
@@ -748,6 +793,10 @@ export const HostingCheckout: React.FC = () => {
           termYears: tItem.termYears || 1,
           years: tItem.termYears || 1,
           price: tItem.price,
+          nameservers: domainConfig.useCustomNs
+            ? [domainConfig.ns1.trim(), domainConfig.ns2.trim()].filter(Boolean)
+            : ['ns1.click2itbd.com', 'ns2.click2itbd.com'],
+          contact: contactObj,
           status: 'pending',
           type: 'transfer',
           ...(code ? { authCode: code, eppCode: code } : {}),
@@ -851,7 +900,7 @@ export const HostingCheckout: React.FC = () => {
         try {
           const authCodesPayload = transferItems
             .map(item => {
-              const code = (item.authCode || item.eppCode || transferAuthCodes[item.id] || transferAuthCodes[item.domain])?.trim() || '';
+              const code = getResolvedTransferCode(item);
               const cleanDomain = (item.domain || item.id.replace('domain_transfer_', '')).trim().toLowerCase();
               return {
                 orderId,
@@ -1813,6 +1862,8 @@ export const HostingCheckout: React.FC = () => {
                   <div className="space-y-4 mb-6 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                     {items.map((item) => {
                       const itemIsVps = isVpsItem(item);
+                      const itemIsTransfer = item.category === 'domain_transfer' || item.itemType === 'domain_transfer';
+                      const resolvedAuthCode = itemIsTransfer ? getResolvedTransferCode(item) : '';
                       return (
                         <div key={item.id} className="flex justify-between items-start text-sm pb-2.5 border-b border-gray-50 last:border-0">
                           <div className="flex-1 pr-4">
@@ -1820,7 +1871,7 @@ export const HostingCheckout: React.FC = () => {
                             <div className="text-gray-500 mt-0.5 text-xs flex flex-col gap-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className={`px-1.5 py-0.5 rounded font-semibold text-[10px] ${itemIsVps ? 'bg-indigo-50 text-indigo-700' : 'bg-blue-50 text-blue-700'}`}>
-                                  {item.itemType === 'domain' 
+                                  {item.itemType === 'domain' || itemIsTransfer
                                     ? `${item.termYears || 1} Year${(item.termYears || 1) > 1 ? 's' : ''}` 
                                     : (item.billingCycle === 'monthly' ? 'Monthly' : `${item.termYears || 1} Year${(item.termYears || 1) > 1 ? 's' : ''}`)}
                                 </span>
@@ -1829,8 +1880,36 @@ export const HostingCheckout: React.FC = () => {
                                     KVM VPS
                                   </span>
                                 )}
+                                {itemIsTransfer && resolvedAuthCode && (
+                                  <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold text-[10px]">
+                                    ✓ Auth/EPP Code Attached
+                                  </span>
+                                )}
                                 <span>{item.description || ''}</span>
                               </div>
+                              {itemIsTransfer && !resolvedAuthCode && (
+                                <div className="mt-1.5">
+                                  <input
+                                    type="text"
+                                    placeholder="Enter Auth/EPP Code"
+                                    value={transferAuthCodes[item.id] || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setTransferAuthCodes(prev => ({ ...prev, [item.id]: val }));
+                                      updateCartItem(item.id, { authCode: val.trim(), eppCode: val.trim() });
+                                      try {
+                                        const domainKey = (item.domainName || item.name.replace(/^Domain Transfer:\s*/i, '')).trim().toLowerCase();
+                                        const saved = JSON.parse(localStorage.getItem('click2it_transfer_codes') || '{}');
+                                        saved[domainKey] = val.trim();
+                                        localStorage.setItem('click2it_transfer_codes', JSON.stringify(saved));
+                                      } catch {
+                                        // ignore storage error
+                                      }
+                                    }}
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono border border-amber-300 bg-amber-50/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                  />
+                                </div>
+                              )}
                               {itemIsVps && (
                                 <p className="text-[11px] text-gray-600 font-mono">
                                   {vpsConfig.hostname ? `Host: ${vpsConfig.hostname}` : 'Host: [Pending]'} • {vpsConfig.os}

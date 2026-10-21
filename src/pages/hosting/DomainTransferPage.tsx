@@ -199,6 +199,14 @@ const DomainTransferPage = () => {
         termYears: 1,
       };
       
+      try {
+        const savedCodes = JSON.parse(localStorage.getItem('click2it_transfer_codes') || '{}');
+        savedCodes[normalized] = authCode.trim();
+        savedCodes[`domain_transfer_${normalized}`] = authCode.trim();
+        localStorage.setItem('click2it_transfer_codes', JSON.stringify(savedCodes));
+      } catch {
+        // ignore storage errors
+      }
       addToCart(transferProduct as any);
       toast.success(`${normalized} transfer added to cart!`);
       navigate('/hosting/checkout');
