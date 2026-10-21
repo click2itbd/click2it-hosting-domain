@@ -441,16 +441,76 @@ async function fulfillDomainOrder(domainOrderId, domainData, actorUid) {
     }
     const auditResult = isProviderPending ? 'fulfillment_pending' : isSuccess ? 'fulfilled' : 'fulfillment_failed';
     await writeAuditLog(db, domainOrderId, auditResult, actorUid, domainData.status, newStatus, result?.providerCode || null, providerMessage);
-    if (isSuccess && !isProviderPending && domainData.customerEmail) {
-        const subject = action === 'renew' ? `Domain Renewed - ${domainData.domain}` :
-            action === 'transfer' ? `Domain Transferred - ${domainData.domain}` :
-                `Domain Registered - ${domainData.domain}`;
+    const nsList = Array.isArray(domainData.nameServers) && domainData.nameServers.filter(Boolean).length > 0
+        ? domainData.nameServers.filter(Boolean)
+        : Array.isArray(domainData.nameservers) && domainData.nameservers.filter(Boolean).length > 0
+            ? domainData.nameservers.filter(Boolean)
+            : ['ns1.click2itbd.com', 'ns2.click2itbd.com'];
+    const ownerDisplay = domainData.customerName || domainData.contact?.firstName || 'Valued Customer';
+    const transferOrRegId = result?.transferId || result?.registrationId || domainOrderId.slice(0, 10);
+    const expiryDisplay = result?.expiresAt || result?.newExpiryDate
+        ? new Date(result.expiresAt || result.newExpiryDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        : `${domainData.years || domainData.termYears || 1} Year(s) (+1 Year Extended)`;
+    if (isSuccess && isProviderPending && action === 'transfer' && domainData.customerEmail) {
+        const subject = `🔄 Domain Transfer Initiated - ${domainData.domain} [Click2IT]`;
         const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-        <h2 style="color: #16a34a;">Domain ${action === 'renew' ? 'Renewed' : action === 'transfer' ? 'Transferred' : 'Registered'} Successfully!</h2>
-        <p>Your domain <strong>${domainData.domain}</strong> has been successfully ${action === 'renew' ? 'renewed' : action === 'transfer' ? 'transferred' : 'registered'}.</p>
-        ${result?.expiresAt ? `<p><strong>Expires At:</strong> ${new Date(result.expiresAt).toLocaleDateString()}</p>` : ''}
-        <p>Thank you for choosing Click2IT!</p>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+        <div style="background: linear-gradient(135deg, #0f172a 0%, #2563eb 100%); padding: 24px; border-radius: 12px; color: #ffffff; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800;">🔄 Domain Transfer Initiated</h2>
+          <p style="margin: 6px 0 0; color: #bfdbfe; font-size: 13px;">Your transfer request has been submitted to the global domain registry</p>
+        </div>
+        <p style="font-size: 15px; margin: 0 0 12px 0;">Dear <strong>${ownerDisplay}</strong>,</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+          Your domain transfer for <strong>${domainData.domain}</strong> has been verified and submitted to Openprovider. Below are your complete domain, ownership, and nameserver details:
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 13px;">
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; width: 42%; border-bottom: 1px solid #e2e8f0;">Domain Name</td><td style="padding: 10px 14px; color: #0f172a; font-weight: 800; border-bottom: 1px solid #e2e8f0;">${domainData.domain}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Transfer Status</td><td style="padding: 10px 14px; color: #d97706; font-weight: 800; border-bottom: 1px solid #e2e8f0;">Pending Registry Approval (REQ)</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Transfer Reference ID</td><td style="padding: 10px 14px; color: #0f172a; font-family: monospace; border-bottom: 1px solid #e2e8f0;">#${transferOrRegId}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Registered Owner</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${ownerDisplay} (${domainData.customerEmail})</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Primary Nameserver (NS1)</td><td style="padding: 10px 14px; color: #2563eb; font-family: monospace; font-weight: 700; border-bottom: 1px solid #e2e8f0;">${nsList[0] || 'ns1.click2itbd.com'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Secondary Nameserver (NS2)</td><td style="padding: 10px 14px; color: #2563eb; font-family: monospace; font-weight: 700; border-bottom: 1px solid #e2e8f0;">${nsList[1] || 'ns2.click2itbd.com'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569;">Validity Extension</td><td style="padding: 10px 14px; color: #16a34a; font-weight: 700;">+1 Year Free Renewal Included</td></tr>
+        </table>
+        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px; font-size: 13px; color: #92400e; margin-bottom: 18px;">
+          <strong>⏱ What Happens Next?</strong><br/>
+          Please check your email for any transfer confirmation link from your previous registrar to speed up the release. Otherwise, standard registry transfers complete automatically within 5–7 days.
+        </div>
+        <div style="text-align: center; margin: 22px 0 12px 0;">
+          <a href="https://click2it.com.bd/my-services" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Track Transfer &amp; Manage Nameservers</a>
+        </div>
+      </div>
+    `;
+        await sendEmail({ to: domainData.customerEmail, subject, html, orderId: domainData.orderId, customerEmail: domainData.customerEmail, category: 'domain' });
+    }
+    if (isSuccess && !isProviderPending && domainData.customerEmail) {
+        const actionLabel = action === 'renew' ? 'Renewed' : action === 'transfer' ? 'Transferred & Activated' : 'Registered & Activated';
+        const subject = `✅ Domain ${actionLabel} - ${domainData.domain} [Click2IT]`;
+        const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+        <div style="background: linear-gradient(135deg, #065f46 0%, #16a34a 100%); padding: 24px; border-radius: 12px; color: #ffffff; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800;">🎉 Domain ${actionLabel}!</h2>
+          <p style="margin: 6px 0 0; color: #bbf7d0; font-size: 13px;">Your domain is active and ready to manage in your Click2IT Client Portal</p>
+        </div>
+        <p style="font-size: 15px; margin: 0 0 12px 0;">Dear <strong>${ownerDisplay}</strong>,</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+          Great news! Your domain <strong>${domainData.domain}</strong> has been successfully ${action === 'renew' ? 'renewed' : action === 'transfer' ? 'transferred to Click2IT' : 'registered'}. Below are your active domain &amp; nameserver details:
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 13px;">
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; width: 42%; border-bottom: 1px solid #e2e8f0;">Domain Name</td><td style="padding: 10px 14px; color: #0f172a; font-weight: 800; border-bottom: 1px solid #e2e8f0;">${domainData.domain}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Status</td><td style="padding: 10px 14px; color: #16a34a; font-weight: 800; border-bottom: 1px solid #e2e8f0;">ACTIVE</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Reference ID</td><td style="padding: 10px 14px; color: #0f172a; font-family: monospace; border-bottom: 1px solid #e2e8f0;">#${transferOrRegId}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Registered Owner</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${ownerDisplay} (${domainData.customerEmail})</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Primary Nameserver (NS1)</td><td style="padding: 10px 14px; color: #2563eb; font-family: monospace; font-weight: 700; border-bottom: 1px solid #e2e8f0;">${nsList[0] || 'ns1.click2itbd.com'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Secondary Nameserver (NS2)</td><td style="padding: 10px 14px; color: #2563eb; font-family: monospace; font-weight: 700; border-bottom: 1px solid #e2e8f0;">${nsList[1] || 'ns2.click2itbd.com'}</td></tr>
+          <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569;">Validity / Expiry</td><td style="padding: 10px 14px; color: #0f172a; font-weight: 700;">${expiryDisplay}</td></tr>
+        </table>
+        <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+          You can update your Nameservers, manage DNS records (A, CNAME, MX, TXT), or configure Registrar Lock anytime from your Client Dashboard.
+        </p>
+        <div style="text-align: center; margin: 22px 0 12px 0;">
+          <a href="https://click2it.com.bd/my-services" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Manage Nameservers &amp; DNS</a>
+        </div>
       </div>
     `;
         await sendEmail({ to: domainData.customerEmail, subject, html, orderId: domainData.orderId, customerEmail: domainData.customerEmail, category: 'domain' });
