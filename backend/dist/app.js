@@ -185,6 +185,7 @@ export function createApp() {
     apiRouter.use("/webhook", webhookRouter);
     apiRouter.use("/customers", customersRouter);
     apiRouter.use("/email", emailRouter);
+    apiRouter.use("/send-email", emailRouter);
     apiRouter.use("/", emailRouter);
     apiRouter.use("/", campaignRouter);
     app.use("/api", apiRouter);

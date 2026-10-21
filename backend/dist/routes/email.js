@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sendEmail, EmailTemplates, verifySmtpConnection } from '../services/email.js';
+import { sendEmail, EmailTemplates, verifySmtpConnection, sendTestEmail, resetSmtpCache } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { getDynamicTemplate } from '../services/templateHelper.js';
 import { getAdminDb } from '../firebase/admin.js';
@@ -23,12 +23,154 @@ emailRouter.post('/send-email', requireFirebaseAuth, async (req, res) => {
 });
 emailRouter.post('/verify-smtp', requireFirebaseAuth, async (req, res) => {
     try {
-        const result = await verifySmtpConnection();
+        const customConfig = req.body.customConfig || req.body.smtpConfig || (req.body.host || req.body.mailHost ? {
+            host: req.body.mailHost || req.body.host,
+            port: req.body.mailPort || req.body.port,
+            user: req.body.mailUsername || req.body.user,
+            password: req.body.mailPassword || req.body.password,
+            secure: req.body.mailEncryption === 'ssl' || String(req.body.mailPort || req.body.port) === '465',
+            fromName: req.body.mailFromName || req.body.fromName,
+            fromEmail: req.body.mailFromAddress || req.body.fromEmail,
+        } : undefined);
+        const result = await verifySmtpConnection(customConfig);
         res.status(200).json(result);
     }
     catch (error) {
         console.error('SMTP verify error:', error);
         res.status(500).json({ success: false, message: error.message || 'Verification failed' });
+    }
+});
+emailRouter.post('/send-test-email', requireFirebaseAuth, async (req, res) => {
+    try {
+        const { to, subject, body, templateId } = req.body;
+        if (!to || typeof to !== 'string' || !to.includes('@')) {
+            return res.status(400).json({ success: false, error: 'A valid recipient email address is required.' });
+        }
+        const customConfig = req.body.customConfig || (req.body.mailHost ? {
+            host: req.body.mailHost,
+            port: req.body.mailPort,
+            user: req.body.mailUsername,
+            password: req.body.mailPassword,
+            secure: req.body.mailEncryption === 'ssl' || String(req.body.mailPort) === '465',
+            fromName: req.body.mailFromName,
+            fromEmail: req.body.mailFromAddress,
+        } : undefined);
+        let finalSubject = subject;
+        let finalBody = body;
+        // If templateId provided, load template with rich sample mock data
+        if (templateId) {
+            const sampleVars = {
+                customer_name: 'Tanvir Hossain',
+                customerName: 'Tanvir Hossain',
+                order_id: 'ORD-98214',
+                orderId: 'ORD-98214',
+                invoice_no: 'INV-2026-0042',
+                domain: 'example-company.com',
+                domain_name: 'example-company.com',
+                total_amount: '৳1,450',
+                total: '৳1,450',
+                amount: '৳1,450',
+                due_date: new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-GB'),
+                expiry_date: new Date(Date.now() + 365 * 86400000).toLocaleDateString('en-GB'),
+                payment_method: 'bKash Online',
+                nameservers: 'ns1.click2itbd.com, ns2.click2itbd.com',
+                ns1: 'ns1.click2itbd.com',
+                ns2: 'ns2.click2itbd.com',
+                transfer_id: '#OP-92841',
+                registration_id: '#REG-88219',
+                package_name: 'Turbo Cloud Hosting - 10GB SSD',
+                cpanel_url: 'https://cpanel.example-company.com:2083',
+                username: 'tanvir_host',
+                password: 'Click2IT#Secure2026!',
+                server_ip: '103.145.118.25',
+                client_portal_url: 'https://click2it.bd/account/services',
+                ticket_id: '#TCK-552',
+                ticket_subject: 'SSL Certificate Renewal Inquiry',
+                staff_name: 'Click2IT Technical Support',
+                reply_message: 'Your SSL certificate has been auto-renewed and installed successfully.',
+                company_name: 'Click2IT BD',
+            };
+            const defaultPreview = `<p>This is a live test preview for template: <strong>${templateId}</strong></p>`;
+            const rendered = await getDynamicTemplate(templateId, sampleVars, subject || `Preview: ${templateId}`, defaultPreview);
+            finalSubject = `[PREVIEW] ${rendered.subject}`;
+            finalBody = rendered.html;
+        }
+        const result = await sendTestEmail({
+            to,
+            customConfig,
+            subject: finalSubject,
+            body: finalBody,
+        });
+        if (!result.success) {
+            return res.status(400).json(result);
+        }
+        return res.status(200).json(result);
+    }
+    catch (error) {
+        console.error('Send test email error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to dispatch test email' });
+    }
+});
+emailRouter.get('/settings', requireFirebaseAuth, async (req, res) => {
+    try {
+        const db = getAdminDb();
+        const siteSnap = await db.collection('settings').doc('site').get();
+        const data = siteSnap.exists ? siteSnap.data() || {} : {};
+        return res.status(200).json({
+            success: true,
+            settings: {
+                mailDriver: data.mailDriver || 'smtp',
+                mailHost: data.mailHost || '',
+                mailPort: data.mailPort || '587',
+                mailUsername: data.mailUsername || '',
+                mailPassword: data.mailPassword || '',
+                mailEncryption: data.mailEncryption || 'tls',
+                mailFromName: data.mailFromName || 'Click2IT',
+                mailFromAddress: data.mailFromAddress || '',
+                resendApiKey: data.resendApiKey || '',
+            }
+        });
+    }
+    catch (error) {
+        console.error('Failed to get email settings:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+emailRouter.post('/settings', requireFirebaseAuth, async (req, res) => {
+    try {
+        const db = getAdminDb();
+        const { mailDriver, mailHost, mailPort, mailUsername, mailPassword, mailEncryption, mailFromName, mailFromAddress, resendApiKey, } = req.body;
+        const payload = {
+            updatedAt: new Date().toISOString(),
+        };
+        if (mailDriver !== undefined)
+            payload.mailDriver = String(mailDriver).trim();
+        if (mailHost !== undefined)
+            payload.mailHost = String(mailHost).trim();
+        if (mailPort !== undefined)
+            payload.mailPort = String(mailPort).trim();
+        if (mailUsername !== undefined)
+            payload.mailUsername = String(mailUsername).trim();
+        if (mailPassword !== undefined)
+            payload.mailPassword = String(mailPassword).trim();
+        if (mailEncryption !== undefined)
+            payload.mailEncryption = String(mailEncryption).trim();
+        if (mailFromName !== undefined)
+            payload.mailFromName = String(mailFromName).trim();
+        if (mailFromAddress !== undefined)
+            payload.mailFromAddress = String(mailFromAddress).trim();
+        if (resendApiKey !== undefined)
+            payload.resendApiKey = String(resendApiKey).trim();
+        await db.collection('settings').doc('site').set(payload, { merge: true });
+        resetSmtpCache();
+        return res.status(200).json({
+            success: true,
+            message: 'Email & SMTP settings saved successfully.',
+        });
+    }
+    catch (error) {
+        console.error('Failed to save email settings:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 // --- Customer E-Commerce Emails ---

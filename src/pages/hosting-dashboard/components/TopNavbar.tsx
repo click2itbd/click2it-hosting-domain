@@ -29,7 +29,7 @@ import { updateProfile, updatePassword, sendPasswordResetEmail } from 'firebase/
 import { toast } from 'react-hot-toast';
 
 const SETTINGS_MODULES = [
-  { label: '📧 Email Templates', id: 'email-templates' },
+  { label: '✉️ Email & SMTP Settings', id: 'email-templates' },
   { label: '💬 WhatsApp / SMS Alerts', id: 'whatsapp-sms' },
   { label: '📄 Pages Editor', id: 'pages-editor' },
   { label: '🗂️ Categories', id: 'categories' },

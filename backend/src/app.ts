@@ -206,6 +206,7 @@ export function createApp(): Express {
   apiRouter.use("/webhook", webhookRouter);
   apiRouter.use("/customers", customersRouter);
   apiRouter.use("/email", emailRouter);
+  apiRouter.use("/send-email", emailRouter);
   apiRouter.use("/", emailRouter);
   apiRouter.use("/", campaignRouter);
 

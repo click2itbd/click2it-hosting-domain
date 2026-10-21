@@ -1,5 +1,6 @@
 import { getAdminDb, getAdminDocument } from '../firebase/admin.js';
 import { sendEmail } from './email.js';
+import { getDynamicTemplate } from './templateHelper.js';
 import { getHostingProvider } from '../providers/providerFactory.js';
 import { resolveDomainProvider } from './btclConfig.js';
 import { ProviderError } from '../providers/domain/DomainProviderError.js';
@@ -177,7 +178,29 @@ export async function fulfillOrder(orderId, actorUid) {
         </div>
       </div>
     `;
-        await sendEmail({ to: orderData.customerEmail, subject, html, orderId, customerEmail: orderData.customerEmail, category: 'order' });
+        const dynamicTmpl = await getDynamicTemplate('order_completed', {
+            customer_name: orderData.customerName || 'Valued Customer',
+            customerName: orderData.customerName || 'Valued Customer',
+            order_id: orderId,
+            orderId: orderId,
+            invoice_no: orderData.documentNumber || ('INV-' + orderId.slice(0, 8)),
+            total_amount: '৳' + (orderData.total || 0),
+            total: '৳' + (orderData.total || 0),
+            payment_method: (orderData.paymentMethod || 'Online').toUpperCase(),
+            items_summary: itemsListHtml,
+            nameservers: 'ns1.click2itbd.com, ns2.click2itbd.com',
+            client_portal_url: 'https://click2it.bd/account/services',
+        }, subject, html);
+        if (dynamicTmpl.isActive !== false) {
+            await sendEmail({
+                to: orderData.customerEmail,
+                subject: dynamicTmpl.subject,
+                html: dynamicTmpl.html,
+                orderId,
+                customerEmail: orderData.customerEmail,
+                category: 'order'
+            });
+        }
     }
     if (finalStatus === 'manual_review' || finalStatus === 'failed') {
         let adminEmail = null;
@@ -538,7 +561,27 @@ async function fulfillDomainOrder(domainOrderId, domainData, actorUid) {
         </div>
       </div>
     `;
-        await sendEmail({ to: domainData.customerEmail, subject, html, orderId: domainData.orderId, customerEmail: domainData.customerEmail, category: 'domain' });
+        const dynamicTmpl = await getDynamicTemplate('domain_transfer', {
+            customer_name: ownerDisplay,
+            customerName: ownerDisplay,
+            domain: domainData.domain,
+            transfer_id: '#' + transferOrRegId,
+            nameservers: nsList.join(', '),
+            ns1: nsList[0] || 'ns1.click2itbd.com',
+            ns2: nsList[1] || 'ns2.click2itbd.com',
+            status: 'Pending Registry Approval (REQ)',
+            portal_url: 'https://click2it.com.bd/my-services',
+        }, subject, html);
+        if (dynamicTmpl.isActive !== false) {
+            await sendEmail({
+                to: domainData.customerEmail,
+                subject: dynamicTmpl.subject,
+                html: dynamicTmpl.html,
+                orderId: domainData.orderId,
+                customerEmail: domainData.customerEmail,
+                category: 'domain'
+            });
+        }
     }
     if (isSuccess && !isProviderPending && domainData.customerEmail) {
         const actionLabel = action === 'renew' ? 'Renewed' : action === 'transfer' ? 'Transferred & Activated' : 'Registered & Activated';
@@ -570,7 +613,28 @@ async function fulfillDomainOrder(domainOrderId, domainData, actorUid) {
         </div>
       </div>
     `;
-        await sendEmail({ to: domainData.customerEmail, subject, html, orderId: domainData.orderId, customerEmail: domainData.customerEmail, category: 'domain' });
+        const dynamicTmpl = await getDynamicTemplate('domain_registration', {
+            customer_name: ownerDisplay,
+            customerName: ownerDisplay,
+            domain: domainData.domain,
+            registration_id: '#' + transferOrRegId,
+            expiry_date: expiryDisplay,
+            nameservers: nsList.join(', '),
+            ns1: nsList[0] || 'ns1.click2itbd.com',
+            ns2: nsList[1] || 'ns2.click2itbd.com',
+            action_label: actionLabel,
+            portal_url: 'https://click2it.com.bd/my-services',
+        }, subject, html);
+        if (dynamicTmpl.isActive !== false) {
+            await sendEmail({
+                to: domainData.customerEmail,
+                subject: dynamicTmpl.subject,
+                html: dynamicTmpl.html,
+                orderId: domainData.orderId,
+                customerEmail: domainData.customerEmail,
+                category: 'domain'
+            });
+        }
     }
     return {
         itemId: domainOrderId,

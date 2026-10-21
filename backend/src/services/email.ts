@@ -310,9 +310,101 @@ export async function sendEmail(options: EmailOptions, retries: number = 2): Pro
   return { success: false, error: lastError };
 }
 
-export async function verifySmtpConnection(): Promise<{ success: boolean; code: string; message: string }> {
+export function resetSmtpCache() {
+  cachedSmtpProvider = null;
+  lastSmtpConfigHash = '';
+}
+
+export async function verifySmtpConnection(customConfig?: Partial<SmtpConfig>): Promise<{ success: boolean; code: string; message: string }> {
+  if (customConfig && customConfig.host && customConfig.user && customConfig.password) {
+    const config: SmtpConfig = {
+      host: customConfig.host.trim(),
+      port: Number(customConfig.port) || 587,
+      secure: customConfig.secure !== undefined ? customConfig.secure : (Number(customConfig.port) === 465),
+      user: customConfig.user.trim(),
+      password: customConfig.password.trim(),
+      fromName: customConfig.fromName || 'Click2IT',
+      fromEmail: customConfig.fromEmail || customConfig.user.trim(),
+    };
+    const tempProvider = new SmtpEmailProvider(config);
+    return tempProvider.verifyConnection();
+  }
   const provider = await getSmtpProvider(true);
   return provider.verifyConnection();
+}
+
+export async function sendTestEmail(options: {
+  to: string;
+  customConfig?: Partial<SmtpConfig>;
+  subject?: string;
+  body?: string;
+}): Promise<{ success: boolean; message: string; messageId?: string; error?: string }> {
+  const { to, customConfig } = options;
+  if (!to || !to.includes('@')) {
+    return { success: false, message: 'Valid recipient email address is required', error: 'INVALID_RECIPIENT' };
+  }
+
+  let provider: SmtpEmailProvider;
+  if (customConfig && customConfig.host && customConfig.user && customConfig.password) {
+    const config: SmtpConfig = {
+      host: customConfig.host.trim(),
+      port: Number(customConfig.port) || 587,
+      secure: customConfig.secure !== undefined ? customConfig.secure : (Number(customConfig.port) === 465),
+      user: customConfig.user.trim(),
+      password: customConfig.password.trim(),
+      fromName: customConfig.fromName || 'Click2IT Test',
+      fromEmail: customConfig.fromEmail || customConfig.user.trim(),
+    };
+    provider = new SmtpEmailProvider(config);
+  } else {
+    provider = await getSmtpProvider(true);
+  }
+
+  const hostDisplay = (provider as any).config?.host || 'Configured SMTP Host';
+  const portDisplay = (provider as any).config?.port || '587';
+  const userDisplay = (provider as any).config?.user || 'SMTP User';
+  const fromDisplay = (provider as any).config?.fromEmail || to;
+
+  const testSubject = options.subject || ('🚀 Click2IT SMTP Test Email (' + new Date().toLocaleTimeString('en-US') + ')');
+  const testHtml = options.body || `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+      <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+        <h1 style="color: #0f172a; font-size: 24px; margin: 0 0 6px 0; font-weight: 800;">Click2IT</h1>
+        <div style="display: inline-block; background-color: #10b981; color: #ffffff; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 5px 14px; border-radius: 20px; margin-top: 4px;">
+          ✓ SMTP Connection Verified
+        </div>
+      </div>
+      <div style="padding: 24px 0;">
+        <p style="font-size: 15px; margin: 0 0 12px 0;">Congratulations!</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+          This is a confirmation test email dispatched from your Click2IT billing and administration panel. Your mail server configuration is fully functional.
+        </p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 13px;">
+          <p style="margin: 0 0 6px 0; font-weight: 700; color: #0f172a;">Active Connection Details:</p>
+          <p style="margin: 0 0 4px 0; color: #475569;"><strong>SMTP Host:</strong> ${hostDisplay}</p>
+          <p style="margin: 0 0 4px 0; color: #475569;"><strong>Port:</strong> ${portDisplay}</p>
+          <p style="margin: 0 0 4px 0; color: #475569;"><strong>Authenticated User:</strong> ${userDisplay}</p>
+          <p style="margin: 0; color: #475569;"><strong>From Address:</strong> ${fromDisplay}</p>
+        </div>
+        <p style="font-size: 13px; color: #64748b;">
+          All automatic customer alerts, domain notifications, and order completion emails will now be delivered reliably through this server.
+        </p>
+      </div>
+      <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 12px; color: #94a3b8;">
+        <p style="margin: 0 0 4px 0;">Click2IT BD &bull; Premium Hosting &amp; Domain Automation</p>
+        <p style="margin: 0;">Dispatched on ${new Date().toUTCString()}</p>
+      </div>
+    </div>
+  `;
+
+  const sendResult = await provider.sendEmail(to, testSubject, testHtml);
+  if (sendResult.success) {
+    await logEmailToFirestore({ to, subject: testSubject, html: testHtml, category: 'system', type: 'smtp_test' }, 'sent');
+    return { success: true, message: 'Test email sent successfully to ' + to, messageId: sendResult.messageId };
+  } else {
+    await logEmailToFirestore({ to, subject: testSubject, html: testHtml, category: 'system', type: 'smtp_test' }, 'failed', sendResult.error);
+    return { success: false, message: sendResult.error || 'Failed to dispatch test email', error: sendResult.code || 'SMTP_ERROR' };
+  }
 }
 
 export const EmailTemplates = {

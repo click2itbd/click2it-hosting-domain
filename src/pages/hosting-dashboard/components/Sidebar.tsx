@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, FileEdit, Folder, Package, PlusSquare, Tag, Server, Settings, Globe, LogOut, Users, UserCheck, UserPlus, DollarSign, HardDrive, RefreshCw, HeadphonesIcon, LayoutDashboard, ShoppingCart, Shield, MessageSquare, Megaphone } from 'lucide-react';
+import { X, Mail, FileEdit, Folder, Package, PlusSquare, Tag, Server, Settings, Globe, LogOut, Users, UserCheck, UserPlus, DollarSign, HardDrive, RefreshCw, HeadphonesIcon, LayoutDashboard, ShoppingCart, Shield, MessageSquare, Megaphone } from 'lucide-react';
 import { auth } from '../../../firebase';
 import { cn } from '../../../lib/utils';
 import { useAuth } from '../../../context/AuthContext';
@@ -98,6 +98,7 @@ export function Sidebar({ state }) {
             { icon: Server, label: 'Servers', id: 'servers' },
             { icon: Settings, label: 'Domain Registrars', id: 'domain-registrars' },
             { icon: Globe, label: 'Hosting & Domain Settings', id: 'api-settings' },
+            { icon: Mail, label: 'Email & SMTP Settings', id: 'email-templates' },
           ].map((item, idx) => {
             const isActive = activeTab === item.id;
             return (
