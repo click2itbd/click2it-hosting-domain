@@ -29,7 +29,7 @@ export const HostingNavbar: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileDropdown, setExpandedMobileDropdown] = useState<string | null>(null);
 
-  const { user, isAdmin } = useAuth();
+  const { user, canAccessAdmin } = useAuth();
   const { items } = useCart();
   const cartCount = items.filter(
     (i) => i.category === "Hosting & Domains",
@@ -37,6 +37,9 @@ export const HostingNavbar: React.FC = () => {
   const { settings } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
+  const loginHref = location.pathname !== '/login' && location.pathname !== '/'
+    ? `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`
+    : '/login';
 
   useEffect(() => {
     // Mark that the user is in the hosting context
@@ -150,7 +153,7 @@ export const HostingNavbar: React.FC = () => {
                   <User size={12} />
                   <span>My Account</span>
                 </Link>
-                {isAdmin && (
+                {canAccessAdmin && (
                   <Link
                     to="/admin"
                     className="flex items-center space-x-1 hover:text-white transition-colors text-amber-400"
@@ -169,7 +172,7 @@ export const HostingNavbar: React.FC = () => {
               </>
             ) : (
               <Link
-                to="/login"
+                to={loginHref}
                 className="flex items-center space-x-1 hover:text-white transition-colors"
               >
                 <User size={12} />
@@ -285,7 +288,7 @@ export const HostingNavbar: React.FC = () => {
               </Link>
               {user ? (
                 <>
-                  {isAdmin && (
+                  {canAccessAdmin && (
                     <Link
                       to="/admin"
                       className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5"
@@ -303,7 +306,7 @@ export const HostingNavbar: React.FC = () => {
                 </>
               ) : (
                 <Link
-                  to="/login"
+                  to={loginHref}
                   className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5"
                 >
                   <User size={14} /> Client Login
@@ -425,7 +428,7 @@ export const HostingNavbar: React.FC = () => {
                     <span>My Profile & Services</span>
                   </Link>
 
-                  {isAdmin && (
+                  {canAccessAdmin && (
                     <Link
                       to="/admin"
                       onClick={() => setIsMobileMenuOpen(false)}
@@ -451,7 +454,7 @@ export const HostingNavbar: React.FC = () => {
               ) : (
                 <div className="pt-2">
                   <Link
-                    to="/login"
+                    to={loginHref}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="block w-full text-center bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-2.5 px-4 rounded-lg text-sm shadow-md"
                   >

@@ -37,6 +37,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../utils/errorUtils';
 import { useSettings } from '../context/SettingsContext';
+import { isBootstrapAdminEmail } from '../context/AuthContext';
 import { useSiteContext } from '../hooks/useSiteContext';
 
 interface PasswordEvaluation {
@@ -222,6 +223,18 @@ export const Login: React.FC = () => {
   };
 
   const contextData = getContextContent();
+  const redirectParam = new URLSearchParams(location.search).get('redirect');
+  const safeRedirect = redirectParam && redirectParam.startsWith('/') ? redirectParam : null;
+
+  const resolvePostLoginDestination = (role?: string, userEmail?: string | null) => {
+    if (safeRedirect) return safeRedirect;
+    const isAdminOrStaff =
+      isBootstrapAdminEmail(userEmail) ||
+      role === 'admin' ||
+      role === 'staff' ||
+      role === 'manager';
+    return isAdminOrStaff ? '/admin' : '/profile';
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -232,7 +245,7 @@ export const Login: React.FC = () => {
       const userDoc = await getDoc(doc(db, 'users', userCred.user.uid)).catch(() => null);
       const role = userDoc?.exists() ? userDoc.data()?.role : 'user';
       toast.success('Successfully signed in with Google!');
-      navigate(role === 'admin' || role === 'staff' || role === 'manager' ? '/admin' : '/profile');
+      navigate(resolvePostLoginDestination(role, userCred.user.email));
     } catch (error: any) {
       if (error?.code === 'auth/unauthorized-domain') {
         const hostname = window.location.hostname;
@@ -266,26 +279,27 @@ export const Login: React.FC = () => {
         if (displayName) {
           await updateProfile(userCredential.user, { displayName: displayName.trim() }).catch(() => null);
         }
+        const isBootstrap = isBootstrapAdminEmail(email);
         await setDoc(
           doc(db, 'users', userCredential.user.uid),
           {
             uid: userCredential.user.uid,
             email: email.trim(),
             displayName: displayName.trim() || email.split('@')[0],
-            role: 'user',
-            permissions: [],
+            role: isBootstrap ? 'admin' : 'user',
+            permissions: isBootstrap ? ['all'] : [],
             createdAt: new Date().toISOString(),
           },
           { merge: true }
         ).catch(() => null);
         toast.success('Account created successfully!');
-        navigate('/profile');
+        navigate(resolvePostLoginDestination(isBootstrap ? 'admin' : 'user', email));
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
         const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid)).catch(() => null);
         const role = userDoc?.exists() ? userDoc.data()?.role : 'user';
         toast.success('Successfully signed in!');
-        navigate(role === 'admin' || role === 'staff' || role === 'manager' ? '/admin' : '/profile');
+        navigate(resolvePostLoginDestination(role, userCredential.user.email || email));
       }
     } catch (error: any) {
       if (

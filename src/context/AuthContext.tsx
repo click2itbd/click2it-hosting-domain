@@ -33,6 +33,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const BOOTSTRAP_ADMIN_EMAILS = ['click2itbd@gmail.com', 'clcik2itbd@gmail.com', 'admin@click2it.bd'];
+
+export function isBootstrapAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return BOOTSTRAP_ADMIN_EMAILS.includes(clean) || clean.endsWith('@click2it.bd');
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -111,16 +119,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           if (firebaseUser) {
             setUser(firebaseUser);
+            const isBootstrap = isBootstrapAdminEmail(firebaseUser.email);
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid)).catch(() => null);
             if (userDoc && userDoc.exists()) {
-              setProfile(userDoc.data() as UserProfile);
+              const existingData = userDoc.data() as UserProfile;
+              if (isBootstrap && existingData.role !== 'admin') {
+                const upgradedProfile: UserProfile = {
+                  ...existingData,
+                  role: 'admin',
+                  permissions: ['all'],
+                };
+                await setDoc(doc(db, 'users', firebaseUser.uid), { role: 'admin', isAdmin: true, permissions: ['all'] }, { merge: true }).catch(() => null);
+                setProfile(upgradedProfile);
+              } else {
+                setProfile(existingData);
+              }
             } else {
               const newProfile: UserProfile = {
                 uid: firebaseUser.uid,
                 email: firebaseUser.email || '',
-                displayName: firebaseUser.displayName || 'User',
-                role: 'user',
-                permissions: [],
+                displayName: firebaseUser.displayName || (isBootstrap ? 'Admin' : 'User'),
+                role: isBootstrap ? 'admin' : 'user',
+                permissions: isBootstrap ? ['all'] : [],
                 createdAt: new Date().toISOString(),
               };
               await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => null);
@@ -152,7 +172,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const isAdmin = profile?.role === 'admin';
+  const isBootstrap = isBootstrapAdminEmail(user?.email || profile?.email);
+  const isAdmin = isBootstrap || profile?.role === 'admin' || (profile as any)?.isAdmin === true;
   const isManager = profile?.role === 'manager';
   const isStaff = profile?.role === 'staff' || isAdmin;
   const canAccessAdmin = isAdmin || isManager || isStaff;

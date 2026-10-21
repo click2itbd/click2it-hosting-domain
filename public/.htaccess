@@ -21,11 +21,11 @@ Options -Indexes
   # Map any legacy hashed entry or chunk bundle (e.g. /assets/index-OkU3895N.js) to /assets/<name>.js
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{DOCUMENT_ROOT}/assets/$1.js -f
-  RewriteRule ^assets/([A-Za-z0-9_]+)-[A-Za-z0-9_-]+\.js$ /assets/$1.js [L,E=Cache-Control:no-cache]
+  RewriteRule ^assets/([A-Za-z0-9_.-]+)-[A-Za-z0-9_-]{8}\.js$ /assets/$1.js [L,E=Cache-Control:no-cache]
 
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{DOCUMENT_ROOT}/assets/index.css -f
-  RewriteRule ^assets/index-[A-Za-z0-9_-]+\.css$ /assets/index.css [L,E=Cache-Control:no-cache]
+  RewriteRule ^assets/index-[A-Za-z0-9_-]{8}\.css$ /assets/index.css [L,E=Cache-Control:no-cache]
 
   # Do not rewrite missing /assets/*.js or /assets/*.css to index.html (prevents text/html MIME error)
   RewriteCond %{REQUEST_FILENAME} !-f

@@ -449,12 +449,34 @@ export const HostingCheckout: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Authentication Required</h2>
             <p className="text-gray-500 mb-8">Please login or create an account to securely complete your hosting and domain purchase.</p>
             <div className="space-y-3">
-              <button
-                onClick={() => navigate('/login?redirect=/hosting/checkout')}
-                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-all shadow-md shadow-blue-200"
+              <Link
+                to="/login?redirect=/hosting/checkout"
+                onClick={(e) => {
+                  e.preventDefault();
+                  try {
+                    navigate('/login?redirect=/hosting/checkout');
+                  } catch {
+                    window.location.href = '/login?redirect=/hosting/checkout';
+                  }
+                }}
+                className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-all shadow-md shadow-blue-200 cursor-pointer"
               >
                 Login or Create Account
-              </button>
+              </Link>
+              <Link
+                to="/register?redirect=/hosting/checkout"
+                onClick={(e) => {
+                  e.preventDefault();
+                  try {
+                    navigate('/register?redirect=/hosting/checkout');
+                  } catch {
+                    window.location.href = '/register?redirect=/hosting/checkout';
+                  }
+                }}
+                className="block w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-xl transition-all text-sm cursor-pointer"
+              >
+                Create a New Account
+              </Link>
             </div>
           </div>
         </div>

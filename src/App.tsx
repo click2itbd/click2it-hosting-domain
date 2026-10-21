@@ -10,6 +10,8 @@ import { WebsitePopup } from './components/WebsitePopup';
 import { ChatWidget } from './components/ChatWidget';
 import { TrackingScripts } from './components/TrackingScripts';
 import { ReferralTracker } from './components/ReferralTracker';
+import { Login } from './pages/Login';
+import { ResetPassword } from './pages/ResetPassword';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
@@ -37,8 +39,6 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 }
 
 const Hosting = lazyWithRetry(() => import('./pages/Hosting'));
-const Login = lazyWithRetry(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const HostingDetails = lazyWithRetry(() => import('./pages/HostingDetails').then(m => ({ default: m.HostingDetails })));
 const HostingBillingDashboard = lazyWithRetry(() => import('./pages/hosting-dashboard/HostingBillingDashboard').then(m => ({ default: m.HostingBillingDashboard })));
 const MyServices = lazyWithRetry(() => import('./pages/MyServices').then(m => ({ default: m.MyServices })));
