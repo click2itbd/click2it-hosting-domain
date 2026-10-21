@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc, query, orderBy, where, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { toast } from 'react-hot-toast';
-import { RefreshCw, CheckCircle, RotateCcw, Search, Filter, AlertTriangle, Key, Copy } from 'lucide-react';
+import { RefreshCw, CheckCircle, RotateCcw, Search, Filter, AlertTriangle, Key, Copy, Send } from 'lucide-react';
 import { apiPost } from '../../../services/apiClient';
 
 interface DomainOrder {
@@ -74,6 +74,29 @@ export const DomainOrdersManager: React.FC = () => {
       return { label: 'Expiring Soon', className: 'bg-yellow-100 text-yellow-700' };
     }
     return null;
+  };
+
+  const handleSubmitTransfer = async (order: DomainOrder) => {
+    setActionLoading(order.id);
+    const toastId = toast.loading(`Submitting transfer for ${order.domain} to Openprovider...`);
+    try {
+      const res = await apiPost<{ success: boolean; message?: string; error?: string; transferId?: string }>('/api/domains/admin/execute-transfer', {
+        domainOrderId: order.id,
+        orderId: order.orderId,
+        domain: order.domain,
+        authCode: order.authCode || order.eppCode,
+      });
+
+      if (res.success) {
+        toast.success(res.message || 'Domain transfer successfully submitted to Openprovider!', { id: toastId, duration: 6000 });
+      } else {
+        toast.error(res.error || res.message || 'Transfer failed', { id: toastId, duration: 8000 });
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Transfer failed', { id: toastId });
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleRetryRegistration = async (order: DomainOrder) => {
@@ -307,7 +330,18 @@ export const DomainOrdersManager: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
-                        {order.status === 'failed' && (
+                        {order.type === 'transfer' && (
+                          <button
+                            onClick={() => handleSubmitTransfer(order)}
+                            disabled={actionLoading === order.id}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                            title="Submit Domain Transfer to Openprovider"
+                          >
+                            <Send size={13} className={actionLoading === order.id ? "animate-spin" : ""} />
+                            {order.registrationId ? 'Resubmit Transfer' : 'Transfer'}
+                          </button>
+                        )}
+                        {order.status === 'failed' && order.type !== 'transfer' && (
                           <button
                             onClick={() => handleRetryRegistration(order)}
                             disabled={actionLoading === order.id}

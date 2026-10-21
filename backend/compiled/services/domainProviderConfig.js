@@ -45,6 +45,9 @@ export async function getDomainProviderConfig() {
         || registrarConfig.defaultHandle
         || storedConfig.openproviderDefaultHandle
         || '';
+    if (!domainApiKey || !openproviderPassword) {
+        console.warn('[DomainProviderConfig] Openprovider username or password missing from both environment variables and database config.');
+    }
     return {
         domainApiType: 'openprovider',
         driver: 'openprovider',

@@ -3,7 +3,7 @@ import { db, auth } from '../../../firebase';
 import { collection, query, orderBy, getDocs, doc, updateDoc, where, limit, deleteDoc, addDoc } from 'firebase/firestore';
 import { formatCurrency, cn } from '../../../lib/utils';
 import { toast } from 'react-hot-toast';
-import { Server, Search, Eye, EyeOff, X, Globe, Download, Loader2, FileText, CheckCircle, Wallet, AlertTriangle, Clock, Terminal, Copy, Key, Edit3, Check, RefreshCw, Trash2 } from 'lucide-react';
+import { Server, Search, Eye, EyeOff, X, Globe, Download, Loader2, FileText, CheckCircle, Wallet, AlertTriangle, Clock, Terminal, Copy, Key, Edit3, Check, RefreshCw, Trash2, Send } from 'lucide-react';
 import { HostingOrder, DomainOrder, HostingAccount } from '../../../types';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -471,6 +471,52 @@ export default function HostingOrders() {
   };
 
   const [syncingTransferId, setSyncingTransferId] = useState<string | null>(null);
+  const [submittingTransferId, setSubmittingTransferId] = useState<string | null>(null);
+
+  const handleSubmitTransferToOpenprovider = async (domainOrder: DomainOrder) => {
+    setSubmittingTransferId(domainOrder.id);
+    const toastId = toast.loading(`Submitting transfer for ${domainOrder.domain} to Openprovider...`);
+    try {
+      const token = await (await import('firebase/auth')).getAuth().currentUser?.getIdToken();
+      const res = await fetch(getApiUrl('/api/domains/admin/execute-transfer'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          domainOrderId: domainOrder.id,
+          orderId: domainOrder.orderId || selectedOrder?.id,
+          domain: domainOrder.domain,
+          authCode: domainOrder.authCode || domainOrder.eppCode,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Transfer submitted to Openprovider!', { id: toastId, duration: 6000 });
+        setDomainOrders(prev => prev.map(d => d.id === domainOrder.id ? {
+          ...d,
+          status: 'pending_transfer',
+          providerStatus: 'REQ',
+          transferId: data.transferId,
+          fulfillmentError: undefined,
+        } : d));
+        if (selectedOrder) {
+          fetchOrderDetails(selectedOrder.id);
+        }
+      } else {
+        toast.error(data.error || 'Failed to submit transfer to Openprovider', { id: toastId, duration: 8000 });
+        if (selectedOrder) {
+          fetchOrderDetails(selectedOrder.id);
+        }
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Error communicating with server', { id: toastId });
+    } finally {
+      setSubmittingTransferId(null);
+    }
+  };
 
   const handleSyncTransferStatus = async (domainOrder: DomainOrder) => {
     setSyncingTransferId(domainOrder.id);
@@ -643,12 +689,12 @@ export default function HostingOrders() {
         if (response.ok && data.success) {
           toast.success(data.message || 'Payment accepted & provisioning started!', { id: toastId });
           if (data.fulfillmentError) {
-            toast('Provisioning note: ' + data.fulfillmentError, { icon: 'ℹ️', duration: 6000 });
+            toast.error('Registrar/Provisioning: ' + data.fulfillmentError, { duration: 9000 });
           }
         } else {
           toast.success('Payment accepted and recorded in database!', { id: toastId });
-          if (data.error || data.message) {
-            toast('Provisioning notice: ' + (data.error || data.message), { icon: 'ℹ️', duration: 6000 });
+          if (data.error || data.message || data.fulfillmentError) {
+            toast.error('Registrar/Provisioning: ' + (data.fulfillmentError || data.error || data.message), { duration: 9000 });
           }
         }
       } catch (apiErr: any) {
@@ -1177,8 +1223,9 @@ export default function HostingOrders() {
                             acceptLabel = 'Accept & Provision Order (Domain + WHM)';
                             retryLabel = 'Retry Provisioning (Domain + WHM)';
                           } else if (hasDomain) {
-                            acceptLabel = 'Accept & Provision Domain';
-                            retryLabel = 'Retry Domain Registration';
+                            const isTransfer = selectedOrder.items?.some((i: any) => i.itemType === 'domain_transfer') || domainOrders.some(d => d.type === 'transfer');
+                            acceptLabel = isTransfer ? 'Accept & Submit Transfer to Openprovider' : 'Accept & Provision Domain';
+                            retryLabel = isTransfer ? 'Retry Domain Transfer' : 'Retry Domain Registration';
                             ActionIcon = Globe;
                           } else if (hasHosting) {
                             acceptLabel = 'Accept & Provision WHM Account';
@@ -1189,11 +1236,11 @@ export default function HostingOrders() {
                         return (
                           <>
                             {selectedOrder.status === 'pending' && (
-                                                              <button
-                                  onClick={() => hasCloudLinux ? handleProvisionCloudLinux(selectedOrder) : handleAcceptOrder(selectedOrder)}
-                                  disabled={statusUpdating}
-                                  className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
-                                >
+                              <button
+                                onClick={() => hasCloudLinux ? handleProvisionCloudLinux(selectedOrder) : handleAcceptOrder(selectedOrder)}
+                                disabled={statusUpdating}
+                                className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
+                              >
                                 <ActionIcon className="w-4 h-4" />
                                 {acceptLabel}
                               </button>
@@ -1201,6 +1248,19 @@ export default function HostingOrders() {
 
                             {(selectedOrder.status === 'provisioning' || selectedOrder.status === 'processing' || selectedOrder.status === 'fulfillment_pending') && (
                               <div className="space-y-2">
+                                {domainOrders.some(d => d.type === 'transfer' && (!d.transferId || d.status !== 'active')) && (
+                                  <button
+                                    onClick={() => {
+                                      const trDomain = domainOrders.find(d => d.type === 'transfer');
+                                      if (trDomain) handleSubmitTransferToOpenprovider(trDomain);
+                                    }}
+                                    disabled={statusUpdating || Boolean(submittingTransferId)}
+                                    className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                                  >
+                                    <Send className="w-4 h-4" />
+                                    Submit Domain Transfer to Openprovider
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleMarkCompletedOrder(selectedOrder)}
                                   disabled={statusUpdating}
@@ -1480,6 +1540,16 @@ export default function HostingOrders() {
                                       >
                                         <RefreshCw size={11} className={syncingTransferId === domain.id ? "animate-spin" : ""} />
                                         Sync Status
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={submittingTransferId === domain.id}
+                                        onClick={() => handleSubmitTransferToOpenprovider(domain)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors ml-1 disabled:opacity-50 shadow-sm cursor-pointer"
+                                        title="Submit domain transfer to Openprovider API now"
+                                      >
+                                        <Send size={12} className={submittingTransferId === domain.id ? "animate-spin" : ""} />
+                                        {domain.transferId ? 'Resubmit Transfer' : 'Transfer to Openprovider'}
                                       </button>
                                     </div>
                                   )}

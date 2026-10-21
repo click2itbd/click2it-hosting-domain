@@ -1749,6 +1749,162 @@ domainRouter.post('/update-transfer-auth-code', requireFirebaseAuth, async (req,
         return res.status(500).json({ success: false, error: 'Failed to update transfer auth code' });
     }
 });
+// Admin endpoint to explicitly execute/submit a domain transfer to Openprovider
+domainRouter.post('/admin/execute-transfer', requireFirebaseAuth, async (req, res) => {
+    try {
+        const adminUid = req.user?.uid || req.user?.user_id || req.user?.sub;
+        const isAdmin = await isUserAdmin(adminUid, req.user?.email, req.user).catch(() => false);
+        if (!isAdmin) {
+            return res.status(403).json({ success: false, error: 'Admin access required to execute domain transfer.' });
+        }
+        const { domainOrderId, orderId, domain, authCode: inputAuthCode } = req.body;
+        if (!domainOrderId && (!orderId || !domain)) {
+            return res.status(400).json({ success: false, error: 'domainOrderId or (orderId and domain) is required.' });
+        }
+        const db = getAdminDb();
+        let dDoc = null;
+        if (domainOrderId) {
+            const snap = await db.collection('domainOrders').doc(domainOrderId).get();
+            if (snap.exists) {
+                dDoc = snap;
+            }
+        }
+        if (!dDoc && orderId && domain) {
+            const clean = String(domain).trim().toLowerCase();
+            const q = await db.collection('domainOrders')
+                .where('orderId', '==', orderId)
+                .where('domain', '==', clean)
+                .limit(1)
+                .get();
+            if (!q.empty) {
+                dDoc = q.docs[0];
+            }
+        }
+        if (!dDoc) {
+            return res.status(404).json({ success: false, error: 'Domain transfer order not found in database.' });
+        }
+        const dData = dDoc.data();
+        const cleanDomain = String(dData.domain || domain || '').trim().toLowerCase();
+        const effectiveOrderId = dData.orderId || orderId;
+        // Resolve Auth Code with fallbacks
+        let authCode = (inputAuthCode || dData.authCode || dData.eppCode || '').trim();
+        if (!authCode && effectiveOrderId) {
+            try {
+                const authSnap = await db.collection('transferAuthCodes').doc(`${effectiveOrderId}_${cleanDomain}`).get();
+                if (authSnap.exists) {
+                    authCode = (authSnap.data()?.authCode || '').trim();
+                }
+            }
+            catch { }
+        }
+        if (!authCode && effectiveOrderId) {
+            try {
+                const ordSnap = await db.collection('orders').doc(effectiveOrderId).get();
+                if (ordSnap.exists) {
+                    const ordData = ordSnap.data();
+                    const matchItem = (ordData?.items || []).find((i) => (i.domain && i.domain.toLowerCase() === cleanDomain) ||
+                        (i.id && i.id.toLowerCase().includes(cleanDomain)) ||
+                        i.itemType === 'domain_transfer');
+                    if (matchItem?.authCode || matchItem?.eppCode) {
+                        authCode = String(matchItem.authCode || matchItem.eppCode).trim();
+                    }
+                }
+            }
+            catch { }
+        }
+        if (!authCode || authCode.length < 3) {
+            return res.status(400).json({
+                success: false,
+                error: "Auth/EPP Code is missing or too short. Please click 'Edit Code' to enter the customer's Auth/EPP Code, then submit transfer.",
+            });
+        }
+        const config = await getDomainConfig();
+        const { provider } = await resolveDomainProvider(cleanDomain, config);
+        if (!provider || typeof provider.transferDomain !== 'function') {
+            return res.status(500).json({ success: false, error: 'Configured registrar does not support domain transfers.' });
+        }
+        const nameParts = (dData.contact?.firstName ? `${dData.contact.firstName} ${dData.contact.lastName || ''}` : dData.customerName || '').trim().split(/\s+/);
+        const transferContact = dData.contact || {
+            firstName: nameParts[0] || 'Customer',
+            lastName: nameParts.slice(1).join(' ') || (nameParts[0] ? nameParts[0] : 'User'),
+            email: dData.customerEmail,
+            phone: dData.customerPhone,
+            companyName: dData.company || '',
+            address: dData.shippingAddress || 'Dhaka',
+            city: 'Dhaka',
+            state: 'Dhaka',
+            zipcode: '1200',
+            country: 'BD',
+        };
+        const now = new Date().toISOString();
+        const result = await provider.transferDomain(cleanDomain, authCode, dData.years || dData.termYears || 1, transferContact, dData.contactId);
+        if (result.success) {
+            const transferId = String(result.transferId || '');
+            await dDoc.ref.update({
+                status: 'pending_transfer',
+                transferStatus: 'pending_transfer',
+                providerStatus: 'REQ',
+                transferId: transferId,
+                registrationId: transferId,
+                transferSubmittedAt: now,
+                fulfillmentError: null,
+                errorCode: null,
+                authCode,
+                eppCode: authCode,
+                updatedAt: now,
+            });
+            // Update parent order status if needed
+            if (effectiveOrderId) {
+                try {
+                    await db.collection('orders').doc(effectiveOrderId).update({
+                        status: 'processing',
+                        providerStatus: 'pending',
+                        updatedAt: now,
+                    });
+                }
+                catch { }
+            }
+            // Log audit
+            try {
+                await db.collection('domainAuditLog').add({
+                    orderId: effectiveOrderId,
+                    domainOrderId: dDoc.id,
+                    domain: cleanDomain,
+                    action: 'transfer_submitted_openprovider',
+                    transferId,
+                    adminUid,
+                    timestamp: now,
+                });
+            }
+            catch { }
+            return res.json({
+                success: true,
+                message: `Domain transfer for ${cleanDomain} successfully submitted to Openprovider! (Transfer ID: #${transferId})`,
+                transferId,
+                status: 'pending_transfer',
+            });
+        }
+        else {
+            const errMsg = result.error || 'Openprovider rejected the transfer request.';
+            await dDoc.ref.update({
+                fulfillmentError: errMsg,
+                lastRetryAt: now,
+                updatedAt: now,
+            });
+            return res.status(400).json({
+                success: false,
+                error: errMsg,
+            });
+        }
+    }
+    catch (err) {
+        console.error('[Domain Admin] Execute transfer error:', err);
+        return res.status(500).json({
+            success: false,
+            error: err.message || 'Failed to execute transfer with Openprovider.',
+        });
+    }
+});
 domainRouter.post('/manage', requireFirebaseAuth, async (req, res) => {
     try {
         const { command, domain, extraParams } = req.body;

@@ -292,7 +292,22 @@ async function fulfillDomainOrder(domainOrderId, domainData, actorUid) {
                 ? authCodeData.expiresAt.toDate()
                 : authCodeData?.expiresAt ? new Date(authCodeData.expiresAt) : null;
             const storedAuthCode = expiresAt && expiresAt.getTime() <= Date.now() ? null : authCodeData?.authCode;
-            const authCode = (storedAuthCode || domainData.authCode || domainData.eppCode || '').trim();
+            let authCode = (storedAuthCode || domainData.authCode || domainData.eppCode || '').trim();
+            if (!authCode && domainData.orderId) {
+                try {
+                    const ordSnap = await db.collection('orders').doc(domainData.orderId).get();
+                    if (ordSnap.exists) {
+                        const ordData = ordSnap.data();
+                        const matchItem = (ordData?.items || []).find((i) => (i.domain && i.domain.toLowerCase() === cleanDomain) ||
+                            (i.id && i.id.toLowerCase().includes(cleanDomain)) ||
+                            i.itemType === 'domain_transfer');
+                        if (matchItem?.authCode || matchItem?.eppCode) {
+                            authCode = String(matchItem.authCode || matchItem.eppCode).trim();
+                        }
+                    }
+                }
+                catch { }
+            }
             if (!authCode) {
                 const message = (expiresAt && !domainData.authCode && !domainData.eppCode)
                     ? 'The transfer authorization code has expired. Please submit a fresh EPP/Auth code.'
