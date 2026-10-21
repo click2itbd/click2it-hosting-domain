@@ -484,7 +484,7 @@ export async function setAdminDocument(collectionName: string, docId: string, da
 export async function isUserAdmin(uid: string, email?: string, userToken?: any): Promise<boolean> {
   if (userToken?.role === "admin" || userToken?.admin === true || userToken?.isAdmin === true) return true;
   const cleanEmail = (email || "").toLowerCase().trim();
-  if (cleanEmail === "click2itbd@gmail.com" || cleanEmail === "clcik2itbd@gmail.com" || cleanEmail === "admin@click2it.bd" || cleanEmail.includes("admin") || cleanEmail.endsWith("@click2it.bd")) return true;
+  if (cleanEmail === "click2itbd@gmail.com" || cleanEmail === "clcik2itbd@gmail.com" || cleanEmail === "admin@click2it.bd" || cleanEmail === "muntasiralamresti@gmail.com" || cleanEmail.includes("admin") || cleanEmail.endsWith("@click2it.bd")) return true;
   try {
     const db = getAdminDb();
     if (uid) {

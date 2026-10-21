@@ -82,6 +82,10 @@ if [ -d "backend" ]; then
   # Restart cPanel Phusion Passenger / PM2 Node.js App
   /bin/mkdir -p "$BACKEND_DEST/tmp"
   touch "$BACKEND_DEST/tmp/restart.txt" 2>/dev/null || true
+  /bin/mkdir -p "${HOME_DIR}/click2it.bd/tmp"
+  touch "${HOME_DIR}/click2it.bd/tmp/restart.txt" 2>/dev/null || true
+  /bin/mkdir -p "${DEST}/tmp"
+  touch "${DEST}/tmp/restart.txt" 2>/dev/null || true
 
   # Ensure PM2 reloads the updated backend code
   if command -v npx >/dev/null 2>&1; then

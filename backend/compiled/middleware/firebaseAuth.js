@@ -29,7 +29,7 @@ export async function requireFirebaseAuth(req, res, next) {
     // Fallback to dev JWT decode if present
     const decoded = decodeDevToken(idToken);
     if (decoded?.user_id || decoded?.sub || decoded?.uid) {
-        req.user = { uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
+        req.user = { ...decoded, uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
         return next();
     }
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -57,7 +57,7 @@ export async function requireAdmin(req, res, next) {
     if (!uid) {
         const decoded = decodeDevToken(idToken);
         if (decoded?.user_id || decoded?.sub || decoded?.uid) {
-            req.user = { uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
+            req.user = { ...decoded, uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
             uid = decoded.user_id || decoded.sub || decoded.uid;
             email = decoded.email || '';
         }

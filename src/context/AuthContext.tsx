@@ -33,7 +33,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const BOOTSTRAP_ADMIN_EMAILS = ['click2itbd@gmail.com', 'clcik2itbd@gmail.com', 'admin@click2it.bd'];
+const BOOTSTRAP_ADMIN_EMAILS = ['click2itbd@gmail.com', 'clcik2itbd@gmail.com', 'admin@click2it.bd', 'muntasiralamresti@gmail.com'];
 
 export function isBootstrapAdminEmail(email?: string | null): boolean {
   if (!email) return false;

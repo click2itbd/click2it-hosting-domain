@@ -33,7 +33,7 @@ export async function requireFirebaseAuth(req: Request, res: Response, next: Nex
   // Fallback to dev JWT decode if present
   const decoded = decodeDevToken(idToken);
   if (decoded?.user_id || decoded?.sub || decoded?.uid) {
-    (req as any).user = { uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
+    (req as any).user = { ...decoded, uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
     return next();
   }
 
@@ -65,7 +65,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
   if (!uid) {
     const decoded = decodeDevToken(idToken);
     if (decoded?.user_id || decoded?.sub || decoded?.uid) {
-      (req as any).user = { uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
+      (req as any).user = { ...decoded, uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
       uid = decoded.user_id || decoded.sub || decoded.uid;
       email = decoded.email || '';
     }
