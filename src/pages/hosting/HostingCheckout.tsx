@@ -7,15 +7,16 @@ import { useSettings } from '../../context/SettingsContext';
 import { Layout } from '../../components/Layout';
 import { formatCurrency } from '../../lib/utils';
 import { toast } from 'react-hot-toast';
-import { Lock, ShieldCheck, Terminal, CheckCircle, CreditCard, Landmark, Wallet, ArrowRight, Loader2, Server, Key, Copy, Check, Eye, EyeOff, Sparkles, RefreshCw, Globe, Cpu, Layers, AlertCircle, PlusCircle } from 'lucide-react';
+import { Lock, ShieldCheck, Terminal, CheckCircle, CreditCard, Landmark, Wallet, ArrowRight, Loader2, Server, Key, Copy, Check, Eye, EyeOff, Sparkles, RefreshCw, Globe, Cpu, Layers, AlertCircle, PlusCircle, Users, UserPlus, Search, X } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc, updateDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { generateDocumentNumber } from '../../lib/numbering';
 import { initiateBkashPayment, initiateSSLCommerzPayment, initiateNagadPayment } from '../../services/paymentApi';
 import { apiPost, getApiUrl, apiClient } from '../../services/apiClient';
+import { createCustomerAccountByAdmin, generateCustomerPassword } from '../../utils/customerAdminUtils';
 
 export const HostingCheckout: React.FC = () => {
-  const { user } = useAuth();
+  const { user, effectiveUser, canAccessAdmin, isImpersonating, impersonatedCustomer } = useAuth();
   const { items: allItems, total, clearCart } = useCart();
   const { settings } = useSettings();
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export const HostingCheckout: React.FC = () => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    email: user?.email || '',
+    email: effectiveUser?.email || user?.email || '',
     phone: '',
     company: '',
     address1: '',
@@ -47,6 +48,100 @@ export const HostingCheckout: React.FC = () => {
     transactionId: '',
     termsAccepted: false
   });
+
+  // Admin: Order on behalf of an existing or newly created customer
+  const [adminCustomerMode, setAdminCustomerMode] = useState<'self_or_impersonated' | 'existing' | 'create_new'>('self_or_impersonated');
+  const [allCustomers, setAllCustomers] = useState<any[]>([]);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [selectedTargetCustomer, setSelectedTargetCustomer] = useState<any>(null);
+  const [newCustomerPassword, setNewCustomerPassword] = useState(() => generateCustomerPassword(10));
+  const [showNewCustomerPassword, setShowNewCustomerPassword] = useState(true);
+  const [sendNewCustomerEmail, setSendNewCustomerEmail] = useState(true);
+  const [creatingCustomerInline, setCreatingCustomerInline] = useState(false);
+
+  const applyCustomerProfileToForm = (custData: any) => {
+    if (!custData) return;
+    const fullName = String(custData.displayName || custData.name || '').trim();
+    const parts = fullName.split(/\s+/);
+    const fName = custData.firstName || parts[0] || '';
+    const lName = custData.lastName || parts.slice(1).join(' ') || '';
+    const rawPhone = String(custData.phone || custData.phoneNumber || custData.mobile || '')
+      .replace(/\D/g, '')
+      .replace(/^(?:880|88)?0?/, '')
+      .slice(0, 10);
+
+    setFormData(prev => ({
+      ...prev,
+      firstName: fName || prev.firstName,
+      lastName: lName || prev.lastName,
+      email: custData.email || prev.email,
+      phone: rawPhone || prev.phone,
+      company: custData.company || '',
+      address1: custData.address1 || custData.address || '',
+      address2: custData.address2 || '',
+      city: custData.city || 'Dhaka',
+      state: custData.state || custData.city || 'Dhaka',
+      postcode: custData.postcode || custData.zip || '1000',
+      country: custData.country || 'Bangladesh',
+    }));
+
+    if (typeof custData.balance === 'number') {
+      setUserWalletBalance(custData.balance);
+    }
+  };
+
+  // Auto-load profile details for logged-in / impersonated customer
+  useEffect(() => {
+    const activeUid = impersonatedCustomer?.uid || user?.uid;
+    if (!activeUid) return;
+    getDoc(doc(db, 'users', activeUid))
+      .then(snap => {
+        if (snap.exists()) {
+          applyCustomerProfileToForm({ uid: snap.id, ...snap.data() });
+        }
+      })
+      .catch(() => {});
+  }, [user?.uid, impersonatedCustomer?.uid]);
+
+  // Load customer list for Admin selector
+  useEffect(() => {
+    if (!canAccessAdmin) return;
+    getDocs(collection(db, 'users'))
+      .then(snap => {
+        const list = snap.docs.map(d => ({ uid: d.id, id: d.id, ...d.data() }));
+        setAllCustomers(list);
+      })
+      .catch(() => {});
+  }, [canAccessAdmin]);
+
+  const handleCreateCustomerFromCheckout = async () => {
+    setCreatingCustomerInline(true);
+    try {
+      const created = await createCustomerAccountByAdmin({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        password: newCustomerPassword,
+        phone: formData.phone,
+        company: formData.company,
+        address1: formData.address1,
+        address2: formData.address2,
+        city: formData.city || 'Dhaka',
+        state: formData.state || formData.city || 'Dhaka',
+        postcode: formData.postcode || '1000',
+        country: formData.country || 'Bangladesh',
+        sendWelcomeEmail: sendNewCustomerEmail,
+      });
+      setAllCustomers(prev => [created, ...prev.filter(u => u.uid !== created.uid)]);
+      setSelectedTargetCustomer({ ...created, plainPassword: newCustomerPassword });
+      setAdminCustomerMode('existing');
+      toast.success(`Customer account created for ${created.email}! This order will be placed under their account.`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create customer account');
+    } finally {
+      setCreatingCustomerInline(false);
+    }
+  };
 
   const [domainConfig, setDomainConfig] = useState({
     ns1: 'ns1.click2itbd.com',
@@ -458,6 +553,62 @@ export const HostingCheckout: React.FC = () => {
     setIsProcessing(true);
 
     try {
+      let targetUserId =
+        selectedTargetCustomer?.uid ||
+        selectedTargetCustomer?.id ||
+        (isImpersonating && impersonatedCustomer?.uid) ||
+        user?.uid ||
+        'guest';
+
+      // If Admin chose "Create New Customer" mode and hasn't clicked "Create Customer Now" yet, create the customer account right now!
+      if (canAccessAdmin && adminCustomerMode === 'create_new' && !selectedTargetCustomer) {
+        const createdCustomer = await createCustomerAccountByAdmin({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: newCustomerPassword,
+          phone: formData.phone,
+          company: formData.company,
+          address1: formData.address1,
+          address2: formData.address2,
+          city: formData.city || 'Dhaka',
+          state: formData.state || formData.city || 'Dhaka',
+          postcode: formData.postcode || '1000',
+          country: formData.country || 'Bangladesh',
+          sendWelcomeEmail: sendNewCustomerEmail,
+        });
+        targetUserId = createdCustomer.uid || createdCustomer.id;
+        setSelectedTargetCustomer({ ...createdCustomer, plainPassword: newCustomerPassword });
+        toast.success(`New customer account created (${createdCustomer.email})!`);
+      }
+
+      // Persist billing details on the target customer's profile document
+      if (targetUserId && targetUserId !== 'guest') {
+        const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+        await setDoc(
+          doc(db, 'users', targetUserId),
+          {
+            displayName: fullName.slice(0, 100),
+            name: fullName.slice(0, 100),
+            firstName: formData.firstName.trim().slice(0, 50),
+            lastName: formData.lastName.trim().slice(0, 50),
+            phone: fullPhone,
+            mobile: fullPhone,
+            company: (formData.company || '').trim().slice(0, 100),
+            address: formData.address1.trim().slice(0, 300),
+            address1: formData.address1.trim().slice(0, 200),
+            address2: (formData.address2 || '').trim().slice(0, 100),
+            city: formData.city.trim().slice(0, 100),
+            state: (formData.state || formData.city).trim().slice(0, 100),
+            zip: formData.postcode.trim().slice(0, 20),
+            postcode: formData.postcode.trim().slice(0, 20),
+            country: (formData.country || 'Bangladesh').trim().slice(0, 60),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ).catch(() => null);
+      }
+
       let orderId = existingOrderId;
 
       if (!orderId) {
@@ -465,7 +616,7 @@ export const HostingCheckout: React.FC = () => {
       const docNumber = await generateDocumentNumber(docType);
 
       const orderData = {
-        userId: user?.uid || 'guest',
+        userId: targetUserId,
         platform: 'hosting',
         items: items.map(({ eppCode: _eppCode, authCode: _authCode, ...item }) => {
           const code = item.itemType === 'domain_transfer' ? (item.authCode || item.eppCode || transferAuthCodes[item.id]?.trim() || transferAuthCodes[item.domain]?.trim()) : undefined;
@@ -513,7 +664,7 @@ export const HostingCheckout: React.FC = () => {
       for (const sslItem of sslItems) {
         const sOrderRef = doc(collection(db, 'sslOrders'));
         batch.set(sOrderRef, {
-          userId: user?.uid || 'guest',
+          userId: targetUserId,
           orderId: newOrderRef.id,
           productId: sslItem.id.split('_')[0] + '_' + sslItem.id.split('_')[1], // e.g. ssl_positive
           name: sslItem.name,
@@ -551,7 +702,7 @@ export const HostingCheckout: React.FC = () => {
         };
 
         batch.set(dOrderRef, {
-          userId: user?.uid || 'guest',
+          userId: targetUserId,
           orderId: newOrderRef.id,
           domain: domainClean,
           tld: tld,
@@ -571,7 +722,7 @@ export const HostingCheckout: React.FC = () => {
       for (const rItem of renewalItems) {
         const dOrderRef = doc(collection(db, 'domainOrders'));
         batch.set(dOrderRef, {
-          userId: user?.uid || 'guest',
+          userId: targetUserId,
           orderId: newOrderRef.id,
           domain: rItem.domain,
           tld: rItem.domain.split('.').pop() || '',
@@ -590,7 +741,7 @@ export const HostingCheckout: React.FC = () => {
         const code = (tItem.authCode || tItem.eppCode || transferAuthCodes[tItem.id] || transferAuthCodes[tItem.domain])?.trim() || '';
         const domainClean = (tItem.domain || tItem.id.replace('domain_transfer_', '')).trim().toLowerCase();
         batch.set(dOrderRef, {
-          userId: user?.uid || 'guest',
+          userId: targetUserId,
           orderId: newOrderRef.id,
           domain: domainClean,
           tld: domainClean.split('.').pop() || '',
@@ -611,7 +762,7 @@ export const HostingCheckout: React.FC = () => {
         const packageSlug = hostingItem.planSlug || hostingItem.planId || hostingItem.id.replace('hosting_', '').replace('dynamic-hosting-', '').split('-')[0] || (isItemVps ? 'vps_starter' : 'starter');
         
         batch.set(hAccountRef, {
-          userId: user?.uid || 'guest',
+          userId: targetUserId,
           orderId: newOrderRef.id,
           planId: packageSlug,
           domain: isItemVps ? vpsConfig.hostname.trim() : (hostingConfig.domain || null),
@@ -746,12 +897,13 @@ export const HostingCheckout: React.FC = () => {
         // Direct fallback if API was unreachable
         if (!walletPaid) {
           try {
-            const userDocSnap = await getDoc(doc(db, 'users', user.uid));
+            const walletUid = targetUserId !== 'guest' ? targetUserId : user.uid;
+            const userDocSnap = await getDoc(doc(db, 'users', walletUid));
             const currentBal = typeof userDocSnap.data()?.balance === 'number' ? userDocSnap.data()?.balance : 0;
             if (currentBal >= grandTotal) {
               const newBal = currentBal - grandTotal;
               const now = new Date().toISOString();
-              await updateDoc(doc(db, 'users', user.uid), { balance: newBal, updatedAt: now });
+              await updateDoc(doc(db, 'users', walletUid), { balance: newBal, updatedAt: now });
               await updateDoc(doc(db, 'orders', orderId), {
                 paymentStatus: 'verified',
                 paymentMethod: 'wallet_balance',
@@ -762,8 +914,8 @@ export const HostingCheckout: React.FC = () => {
               const txDoc = doc(collection(db, 'wallet_transactions'));
               await setDoc(txDoc, {
                 id: txDoc.id,
-                userId: user.uid,
-                customerEmail: user.email || formData.email,
+                userId: walletUid,
+                customerEmail: formData.email || user.email,
                 type: 'debit',
                 amount: grandTotal,
                 balanceBefore: currentBal,
@@ -849,6 +1001,218 @@ export const HostingCheckout: React.FC = () => {
             
             {/* Left Column (Forms) */}
             <div className="lg:col-span-2 space-y-6">
+
+              {/* Admin Only: Order on Behalf of Customer / Create New Customer */}
+              {canAccessAdmin && (
+                <div className="bg-white rounded-2xl shadow-sm border-2 border-blue-200 overflow-hidden">
+                  <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-white/15 rounded-xl">
+                        <Users className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-extrabold text-white">
+                          Admin Order Mode — Assign Order to Customer
+                        </h2>
+                        <p className="text-xs text-blue-100">
+                          Select an existing customer or create a new customer account with password so they see this order in their dashboard
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-white/15 p-1 rounded-xl text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminCustomerMode('existing');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          adminCustomerMode === 'existing'
+                            ? 'bg-white text-blue-700 shadow-sm'
+                            : 'text-white hover:bg-white/10'
+                        }`}
+                      >
+                        Select Existing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTargetCustomer(null);
+                          setAdminCustomerMode('create_new');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                          adminCustomerMode === 'create_new'
+                            ? 'bg-white text-blue-700 shadow-sm'
+                            : 'text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <UserPlus size={13} /> + New Customer
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    {selectedTargetCustomer && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <CheckCircle className="text-emerald-600 shrink-0 mt-0.5" size={20} />
+                          <div>
+                            <p className="text-sm font-extrabold text-emerald-950">
+                              Ordering for: {selectedTargetCustomer.displayName || selectedTargetCustomer.name || 'Customer'} ({selectedTargetCustomer.email})
+                            </p>
+                            <p className="text-xs text-emerald-800 mt-0.5">
+                              Customer ID: #{selectedTargetCustomer.customerId || selectedTargetCustomer.uid?.slice(0, 8)}
+                              {selectedTargetCustomer.plainPassword && (
+                                <span className="ml-2 font-mono font-bold bg-white px-2 py-0.5 rounded border border-emerald-200">
+                                  Password: {selectedTargetCustomer.plainPassword}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTargetCustomer(null)}
+                          className="text-xs font-bold text-slate-600 hover:text-rose-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shrink-0"
+                        >
+                          Change Customer
+                        </button>
+                      </div>
+                    )}
+
+                    {adminCustomerMode === 'existing' && !selectedTargetCustomer && (
+                      <div className="space-y-3">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Search &amp; Select Customer Account
+                        </label>
+                        <div className="relative">
+                          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                          <input
+                            type="text"
+                            placeholder="Search by customer name, email, or phone..."
+                            value={customerSearchQuery}
+                            onChange={e => setCustomerSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
+                          {allCustomers
+                            .filter(c => {
+                              if (!customerSearchQuery.trim()) return true;
+                              const q = customerSearchQuery.toLowerCase();
+                              return (
+                                (c.displayName || c.name || '').toLowerCase().includes(q) ||
+                                (c.email || '').toLowerCase().includes(q) ||
+                                (c.phone || '').toLowerCase().includes(q)
+                              );
+                            })
+                            .slice(0, 25)
+                            .map(cust => (
+                              <button
+                                type="button"
+                                key={cust.uid || cust.id}
+                                onClick={() => {
+                                  setSelectedTargetCustomer(cust);
+                                  applyCustomerProfileToForm(cust);
+                                  toast.success(`Selected customer: ${cust.displayName || cust.email}`);
+                                }}
+                                className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors flex items-center justify-between gap-2 cursor-pointer"
+                              >
+                                <div>
+                                  <p className="text-sm font-bold text-slate-800">
+                                    {cust.displayName || cust.name || 'Customer'}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    {cust.email} {cust.phone ? `• ${cust.phone}` : ''}
+                                  </p>
+                                </div>
+                                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                                  Select
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {adminCustomerMode === 'create_new' && !selectedTargetCustomer && (
+                      <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                              <UserPlus size={16} className="text-blue-600" /> Create New Customer Login &amp; Set Password
+                            </h4>
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              Fill out the <strong>Billing Details</strong> below for the customer, and set their login password here:
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewCustomerPassword(generateCustomerPassword(10));
+                                setShowNewCustomerPassword(true);
+                              }}
+                              className="text-xs font-bold px-2.5 py-1 bg-white text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100"
+                            >
+                              Generate Password
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(newCustomerPassword);
+                                toast.success('Password copied!');
+                              }}
+                              className="text-xs font-bold px-2.5 py-1 bg-white text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="relative">
+                          <input
+                            type={showNewCustomerPassword ? 'text' : 'password'}
+                            value={newCustomerPassword}
+                            onChange={e => setNewCustomerPassword(e.target.value)}
+                            placeholder="Set customer login password (min 6 chars)"
+                            className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl font-mono text-sm font-bold text-slate-900 outline-none focus:border-blue-600"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewCustomerPassword(!showNewCustomerPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            {showNewCustomerPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={sendNewCustomerEmail}
+                              onChange={e => setSendNewCustomerEmail(e.target.checked)}
+                              className="w-4 h-4 text-blue-600 rounded border-slate-300"
+                            />
+                            <span>Email login credentials (Email &amp; Password) to customer</span>
+                          </label>
+
+                          <button
+                            type="button"
+                            disabled={creatingCustomerInline}
+                            onClick={handleCreateCustomerFromCheckout}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                          >
+                            {creatingCustomerInline ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                            Create Customer Now (Or Auto-Create on Submit)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               
               {/* Cloud VPS Server Configuration */}
               {hasVps && (

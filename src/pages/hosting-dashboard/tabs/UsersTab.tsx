@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, Search, Shield, ShieldOff, CheckCircle2, User as UserIcon, Wallet, PlusCircle, MinusCircle, 
-  History, ArrowUpRight, ArrowDownLeft, DollarSign, Clock, AlertCircle, Check, X, Eye, LogIn, ExternalLink, RefreshCw,
-  Edit3, Key, Mail, Trash2, Globe, Server, FileText, Lock, Settings, Send, Tag, ChevronRight, Copy, Building, MapPin, Phone
+  History, ArrowUpRight, ArrowDownLeft, DollarSign, Clock, AlertCircle, Check, X, Eye, EyeOff, LogIn, ExternalLink, RefreshCw,
+  Edit3, Key, Mail, Trash2, Globe, Server, FileText, Lock, Settings, Send, Tag, ChevronRight, Copy, Building, MapPin, Phone, UserPlus, Sparkles
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Spinner } from '../components/SharedUI';
@@ -13,6 +13,7 @@ import { apiClient } from '../../../services/apiClient';
 import { db } from '../../../firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { createCustomerAccountByAdmin, generateCustomerPassword } from '../../../utils/customerAdminUtils';
 
 export function UsersTab({ state }: { state: any }) {
   const navigate = useNavigate();
@@ -62,6 +63,65 @@ export function UsersTab({ state }: { state: any }) {
   const [depositRequests, setDepositRequests] = useState<any[]>([]);
   const [loadingDeposits, setLoadingDeposits] = useState<boolean>(false);
   const [verifyingDepositId, setVerifyingDepositId] = useState<string | null>(null);
+
+  // Add New Customer Modal State
+  const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState<boolean>(false);
+  const [creatingCustomer, setCreatingCustomer] = useState<boolean>(false);
+  const [showCreateCustomerPassword, setShowCreateCustomerPassword] = useState<boolean>(true);
+  const [createdCustomerResult, setCreatedCustomerResult] = useState<any>(null);
+  const [newCustomerForm, setNewCustomerForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    phone: '',
+    company: '',
+    address1: '',
+    address2: '',
+    city: 'Dhaka',
+    state: 'Dhaka',
+    postcode: '1000',
+    country: 'Bangladesh',
+    sendWelcomeEmail: true,
+  });
+
+  const handleOpenAddCustomerModal = () => {
+    setCreatedCustomerResult(null);
+    setNewCustomerForm({
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: generateCustomerPassword(10),
+      phone: '',
+      company: '',
+      address1: '',
+      address2: '',
+      city: 'Dhaka',
+      state: 'Dhaka',
+      postcode: '1000',
+      country: 'Bangladesh',
+      sendWelcomeEmail: true,
+    });
+    setIsAddCustomerModalOpen(true);
+  };
+
+  const handleCreateNewCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingCustomer(true);
+    try {
+      const created = await createCustomerAccountByAdmin(newCustomerForm);
+      setUsers((prev: any[]) => [created, ...prev.filter(u => u.id !== created.id && u.uid !== created.uid)]);
+      setCreatedCustomerResult({
+        ...created,
+        plainPassword: newCustomerForm.password,
+      });
+      toast.success(`Customer account created for ${created.displayName || created.email}!`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create customer account');
+    } finally {
+      setCreatingCustomer(false);
+    }
+  };
 
   // Fetch pending deposits on tab load
   const fetchDepositRequests = async () => {
@@ -677,13 +737,20 @@ export function UsersTab({ state }: { state: any }) {
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleOpenAddCustomerModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-2xl text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105 cursor-pointer"
+          >
+            <UserPlus size={16} /> + Add New Customer
+          </button>
+
           <button
             onClick={() => {
               setSelectedUserForBalance(users[0] || null);
               setIsBalanceModalOpen(true);
             }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-2xl text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-2xl text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105 cursor-pointer"
           >
             <PlusCircle size={16} /> Add Funds to User
           </button>
@@ -2237,6 +2304,362 @@ export function UsersTab({ state }: { state: any }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ADD NEW CUSTOMER MODAL */}
+      {isAddCustomerModalOpen && createPortal(
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setIsAddCustomerModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-8 flex flex-col max-h-[92vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/15 rounded-2xl">
+                  <UserPlus size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">Create New Customer Account</h3>
+                  <p className="text-xs text-blue-100 mt-0.5">
+                    Add customer billing details and set a login password so they can access their dashboard
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddCustomerModalOpen(false)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {createdCustomerResult ? (
+              <div className="p-6 sm:p-8 space-y-6 overflow-y-auto">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-extrabold text-emerald-950">
+                      Customer Account Created Successfully!
+                    </h4>
+                    <p className="text-xs text-emerald-800 mt-1">
+                      The customer can now log in at <strong>/login</strong> using the credentials below. Any domain, transfer, or hosting order placed for this customer will appear in their Profile &amp; My Services dashboard.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Customer Login Credentials</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const text = `Click2IT Login Details\nLogin URL: ${window.location.origin}/login\nName: ${createdCustomerResult.displayName}\nEmail: ${createdCustomerResult.email}\nPassword: ${createdCustomerResult.plainPassword}\nCustomer ID: #${createdCustomerResult.customerId}`;
+                        navigator.clipboard?.writeText(text);
+                        toast.success('Customer login credentials copied!');
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg"
+                    >
+                      <Copy size={13} /> Copy All Details
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-slate-400 block">Full Name</span>
+                      <span className="font-bold text-slate-800 text-sm">{createdCustomerResult.displayName}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Customer ID</span>
+                      <span className="font-mono font-bold text-slate-800 text-sm">#{createdCustomerResult.customerId}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Login Email</span>
+                      <span className="font-mono font-bold text-blue-700 text-sm">{createdCustomerResult.email}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Login Password</span>
+                      <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-sm">
+                        {createdCustomerResult.plainPassword}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={handleOpenAddCustomerModal}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                  >
+                    + Create Another Customer
+                  </button>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddCustomerModalOpen(false);
+                        handleLaunchCustomerPortal(createdCustomerResult);
+                      }}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1.5"
+                    >
+                      <LogIn size={15} /> Open Customer Portal / Order as Customer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddCustomerModalOpen(false)}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateNewCustomer} autoComplete="off" className="p-6 space-y-5 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      First Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Rahim"
+                      value={newCustomerForm.firstName}
+                      onChange={e => setNewCustomerForm(prev => ({ ...prev, firstName: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Last Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Uddin"
+                      value={newCustomerForm.lastName}
+                      onChange={e => setNewCustomerForm(prev => ({ ...prev, lastName: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email Address (Login ID) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="off"
+                      placeholder="customer@example.com"
+                      value={newCustomerForm.email}
+                      onChange={e => setNewCustomerForm(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Phone Number <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 py-2.5 rounded-l-xl border border-r-0 border-slate-200 bg-slate-50 text-slate-500 font-bold text-xs select-none">
+                        +880
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="17XXXXXXXX"
+                        value={newCustomerForm.phone}
+                        onChange={e => {
+                          let val = e.target.value.replace(/\D/g, '');
+                          if (val.startsWith('880')) val = val.slice(3);
+                          else if (val.startsWith('88')) val = val.slice(2);
+                          val = val.replace(/^0+/, '').slice(0, 10);
+                          setNewCustomerForm(prev => ({ ...prev, phone: val }));
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-r-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Login Password Section */}
+                <div className="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-4 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Key size={14} className="text-blue-600" /> Customer Login Password <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const pwd = generateCustomerPassword(10);
+                          setNewCustomerForm(prev => ({ ...prev, password: pwd }));
+                          setShowCreateCustomerPassword(true);
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 bg-white text-blue-700 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors"
+                      >
+                        <Sparkles size={12} /> Generate Password
+                      </button>
+                      {newCustomerForm.password && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(newCustomerForm.password);
+                            toast.success('Password copied!');
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 bg-white text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
+                        >
+                          <Copy size={12} /> Copy
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showCreateCustomerPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                      placeholder="Set login password (min 6 characters)"
+                      value={newCustomerForm.password}
+                      onChange={e => setNewCustomerForm(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateCustomerPassword(!showCreateCustomerPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showCreateCustomerPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    The customer will use their Email and this Password to sign in at <strong>/login</strong> and manage their domains &amp; hosting.
+                  </p>
+                </div>
+
+                {/* Billing & Domain Registrant Address */}
+                <div className="space-y-4 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                    Billing &amp; Domain Registrant Address (Checkout Details)
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Company (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="Company or Organization"
+                        value={newCustomerForm.company}
+                        onChange={e => setNewCustomerForm(prev => ({ ...prev, company: e.target.value }))}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Street Address <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="House, Road, Area"
+                        value={newCustomerForm.address1}
+                        onChange={e => setNewCustomerForm(prev => ({ ...prev, address1: e.target.value }))}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">City *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCustomerForm.city}
+                        onChange={e => setNewCustomerForm(prev => ({ ...prev, city: e.target.value }))}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">State / Division *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCustomerForm.state}
+                        onChange={e => setNewCustomerForm(prev => ({ ...prev, state: e.target.value }))}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Post Code *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCustomerForm.postcode}
+                        onChange={e => setNewCustomerForm(prev => ({ ...prev, postcode: e.target.value }))}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Country *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newCustomerForm.country}
+                        onChange={e => setNewCustomerForm(prev => ({ ...prev, country: e.target.value }))}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2.5 pt-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newCustomerForm.sendWelcomeEmail}
+                    onChange={e => setNewCustomerForm(prev => ({ ...prev, sendWelcomeEmail: e.target.checked }))}
+                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                  />
+                  <span className="text-xs font-semibold text-slate-700">
+                    Send Welcome Email with login URL, Email &amp; Password to the customer
+                  </span>
+                </label>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddCustomerModalOpen(false)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creatingCustomer}
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {creatingCustomer ? <Spinner /> : <UserPlus size={16} />}
+                    Create Customer Account
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>,
         document.body

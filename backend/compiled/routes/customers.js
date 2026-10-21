@@ -1017,4 +1017,168 @@ customersRouter.post('/admin/deposits/:depositId/verify', requireFirebaseAuth, a
         return res.status(500).json({ error: error.message || 'Failed to process deposit verification.' });
     }
 });
+/**
+ * POST /api/customers/admin/create
+ * Admin Create New Customer Account (Firebase Auth + Firestore Profile + Optional Welcome Email)
+ */
+customersRouter.post('/admin/create', requireFirebaseAuth, async (req, res) => {
+    const adminUid = req.user?.uid;
+    const isAdmin = await isUserAdmin(adminUid, req.user?.email).catch(() => false);
+    if (!isAdmin) {
+        return res.status(403).json({ error: 'Admin authorization required.' });
+    }
+    const { firstName, lastName, name, email, password, phone, company, address1, address2, city, state, zip, postcode, country, sendWelcomeEmail = true } = req.body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const fullName = String(name || `${firstName || ''} ${lastName || ''}`.trim() || 'Customer').trim();
+    const nameParts = fullName.split(/\s+/);
+    const resolvedFirstName = String(firstName || nameParts[0] || 'Customer').trim();
+    const resolvedLastName = String(lastName || nameParts.slice(1).join(' ') || '').trim();
+    const rawPassword = String(password || '').trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ error: 'Please provide a valid customer email address.' });
+    }
+    if (!rawPassword || rawPassword.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+    let formattedPhone = String(phone || '').trim();
+    if (formattedPhone) {
+        const digits = formattedPhone.replace(/\D/g, '').replace(/^(?:880|88)?0?/, '');
+        if (digits.length >= 10) {
+            formattedPhone = `+880${digits.slice(0, 10)}`;
+        }
+    }
+    try {
+        const db = getAdminDb();
+        // Check if a Firestore user with this email already exists
+        const existingSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get().catch(() => ({ empty: true, docs: [] }));
+        let uid = '';
+        // 1. Try Firebase Admin Auth SDK first
+        const authSdk = getAdminAuth();
+        if (authSdk) {
+            try {
+                const createdUser = await authSdk.createUser({
+                    email: cleanEmail,
+                    password: rawPassword,
+                    displayName: fullName,
+                });
+                uid = createdUser.uid;
+            }
+            catch (adminAuthErr) {
+                if (adminAuthErr?.code === 'auth/email-already-exists') {
+                    return res.status(400).json({ error: 'A customer account with this email address already exists.' });
+                }
+                console.warn('[Admin Create Customer] Admin Auth SDK fallback to Identity Toolkit REST:', adminAuthErr?.message);
+            }
+        }
+        // 2. Fallback to Firebase Identity Toolkit REST API (works without service account private key)
+        if (!uid) {
+            const apiKey = process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || 'AIzaSyB_STUjdz0fPcYAk0JWz59SiMyJ-WKwCuw';
+            const signUpRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: cleanEmail,
+                    password: rawPassword,
+                    returnSecureToken: true
+                })
+            });
+            const signUpJson = await signUpRes.json();
+            if (!signUpRes.ok || signUpJson?.error) {
+                const errMsg = signUpJson?.error?.message || 'Failed to create authentication account';
+                if (errMsg.includes('EMAIL_EXISTS')) {
+                    return res.status(400).json({ error: 'A customer account with this email address already exists.' });
+                }
+                return res.status(400).json({ error: `Could not create customer login: ${errMsg}` });
+            }
+            uid = signUpJson.localId;
+            if (signUpJson.idToken && fullName) {
+                await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        idToken: signUpJson.idToken,
+                        displayName: fullName,
+                        returnSecureToken: false
+                    })
+                }).catch(() => null);
+            }
+        }
+        if (!uid && !existingSnap.empty) {
+            uid = existingSnap.docs[0].id;
+        }
+        const now = new Date().toISOString();
+        const numericId = Math.abs(uid.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 90000000 + 10000000;
+        const pin = String(Math.floor(1000 + Math.random() * 9000));
+        const customerProfile = {
+            uid,
+            id: uid,
+            customerId: String(numericId),
+            email: cleanEmail,
+            name: fullName,
+            displayName: fullName,
+            firstName: resolvedFirstName,
+            lastName: resolvedLastName,
+            phone: formattedPhone,
+            mobile: formattedPhone,
+            company: String(company || '').trim(),
+            address: String(address1 || '').trim(),
+            address1: String(address1 || '').trim(),
+            address2: String(address2 || '').trim(),
+            city: String(city || 'Dhaka').trim(),
+            state: String(state || city || 'Dhaka').trim(),
+            zip: String(zip || postcode || '1000').trim(),
+            postcode: String(postcode || zip || '1000').trim(),
+            country: String(country || 'Bangladesh').trim(),
+            role: 'user',
+            permissions: [],
+            isAdmin: false,
+            status: 'active',
+            statusDescription: 'Active Account',
+            pin,
+            language: 'English',
+            balance: 0,
+            createdByAdmin: req.user?.email || 'Admin',
+            createdAt: now,
+            updatedAt: now
+        };
+        await db.collection('users').doc(uid).set(customerProfile, { merge: true });
+        if (sendWelcomeEmail) {
+            await sendEmail({
+                to: cleanEmail,
+                subject: 'Welcome to Click2IT — Your Account Login Details',
+                html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px;">
+            <h2 style="color: #2563eb; margin-top: 0;">Welcome to Click2IT!</h2>
+            <p>Dear <strong>${fullName}</strong>,</p>
+            <p>Your customer account has been created at Click2IT. You can log in anytime to view and manage your domains, hosting services, and invoices.</p>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 10px; margin: 18px 0;">
+              <p style="margin: 6px 0;"><strong>Portal Login URL:</strong> <a href="https://click2it.bd/login">https://click2it.bd/login</a></p>
+              <p style="margin: 6px 0;"><strong>Email Address:</strong> ${cleanEmail}</p>
+              <p style="margin: 6px 0;"><strong>Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${rawPassword}</code></p>
+              <p style="margin: 6px 0;"><strong>Customer ID:</strong> #${numericId}</p>
+            </div>
+            <p style="color: #64748b; font-size: 12px;">For your security, you may change your password anytime from your Profile Settings after logging in.</p>
+          </div>
+        `,
+                customerEmail: cleanEmail,
+                category: 'system'
+            }).catch(e => console.warn('Welcome email send failed:', e));
+        }
+        return res.json({
+            success: true,
+            message: `Customer account created successfully for ${fullName} (${cleanEmail}).`,
+            customer: {
+                ...customerProfile,
+                domainsCount: 0,
+                hostingCount: 0,
+                ordersCount: 0,
+                totalSpent: 0
+            }
+        });
+    }
+    catch (error) {
+        console.error('Failed to create customer account:', error);
+        return res.status(500).json({ error: error.message || 'Failed to create customer account.' });
+    }
+});
 export default customersRouter;
