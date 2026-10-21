@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import { config } from "./config/index.js";
 import { requestId } from "./middleware/requestId.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { runWithRequestToken } from "./firebase/admin.js";
 import domainRouter from "./routes/domain.js";
 import sslRouter from "./routes/ssl.js";
 import dnsRouter from "./routes/dns.js";
@@ -104,6 +105,7 @@ export function createApp(): Express {
     allowedHeaders: [
       "Content-Type",
       "Authorization",
+      "X-Authorization",
       "X-API-Key",
       "X-Idempotency-Key",
       "X-Request-ID",
@@ -123,6 +125,17 @@ export function createApp(): Express {
   });
   app.use(express.json({ limit: config.bodyLimit }));
   app.set("trust proxy", 1);
+
+  // Propagate incoming Bearer token to the Firestore REST adapter context
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    const rawHeader =
+      req.headers.authorization ||
+      (req.headers['x-authorization'] as string) ||
+      (req.headers['http_authorization'] as string) ||
+      '';
+    const token = rawHeader.startsWith('Bearer ') ? rawHeader.slice(7).trim() : undefined;
+    runWithRequestToken(token, () => next());
+  });
 
   const isDev = process.env.NODE_ENV !== "production";
 
@@ -209,4 +222,3 @@ export function createApp(): Express {
 
   return app;
 }
-

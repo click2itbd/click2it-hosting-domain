@@ -1,6 +1,7 @@
 import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 import { getAuth as getAdminAuthSdk } from 'firebase-admin/auth';
+import { AsyncLocalStorage } from 'async_hooks';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +9,16 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const requestTokenStorage = new AsyncLocalStorage<{ token?: string }>();
+
+export function runWithRequestToken<T>(token: string | undefined, fn: () => T): T {
+  return requestTokenStorage.run({ token }, fn);
+}
+
+export function getCurrentRequestToken(): string | undefined {
+  return requestTokenStorage.getStore()?.token;
+}
 
 let adminDb: any = null;
 let adminAuth: any = null;
@@ -125,6 +136,29 @@ function createRestFirestoreAdapter() {
   const dbId = cfg.firestoreDatabaseId || 'ai-studio-422fbad2-d827-4e69-8599-aed85390d277';
   const baseUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/${encodeURIComponent(dbId)}/documents`;
 
+  const getAuthHeaders = (extraHeaders: Record<string, string> = {}): Record<string, string> => {
+    const token = getCurrentRequestToken();
+    return {
+      ...extraHeaders,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
+
+  const fetchWithOptionalAuth = async (url: string, init: RequestInit = {}) => {
+    const token = getCurrentRequestToken();
+    const headers = getAuthHeaders((init.headers as Record<string, string>) || {});
+    const res = await fetch(url, { ...init, headers });
+    if ((res.status === 401 || res.status === 403) && token) {
+      // Retry without Bearer token in case a public collection was queried with an expired client token
+      const fallbackHeaders = { ...((init.headers as Record<string, string>) || {}) };
+      const retryRes = await fetch(url, { ...init, headers: fallbackHeaders });
+      if (retryRes.ok || retryRes.status === 404) {
+        return retryRes;
+      }
+    }
+    return res;
+  };
+
   const makeDocRef = (colName: string, docId?: string) => {
     const id = docId || crypto.randomBytes(10).toString('hex');
     const docPath = `${colName}/${id}`;
@@ -134,7 +168,7 @@ function createRestFirestoreAdapter() {
       id,
       path: docPath,
       async get() {
-        const res = await fetch(docUrl);
+        const res = await fetchWithOptionalAuth(docUrl);
         if (res.status === 404) {
           return {
             id,
@@ -169,7 +203,7 @@ function createRestFirestoreAdapter() {
           const maskParams = keys.map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
           url = `${docUrl}?${maskParams}`;
         }
-        const res = await fetch(url, {
+        const res = await fetchWithOptionalAuth(url, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields }),
@@ -183,7 +217,7 @@ function createRestFirestoreAdapter() {
         return refObj.set(data, { merge: true });
       },
       async delete() {
-        const res = await fetch(docUrl, { method: 'DELETE' });
+        const res = await fetchWithOptionalAuth(docUrl, { method: 'DELETE' });
         if (!res.ok && res.status !== 404) {
           const errText = await res.text().catch(() => '');
           throw new Error(`Firestore DELETE failed (${res.status}): ${errText}`);
@@ -274,7 +308,7 @@ function createRestFirestoreAdapter() {
         structuredQuery.limit = this.limitCount;
       }
 
-      const res = await fetch(`${baseUrl}:runQuery`, {
+      const res = await fetchWithOptionalAuth(`${baseUrl}:runQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ structuredQuery }),

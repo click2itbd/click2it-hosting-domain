@@ -42,7 +42,7 @@ export function isBootstrapAdminEmail(email?: string | null): boolean {
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [impersonatedCustomer, setImpersonatedCustomer] = useState<ImpersonatedCustomer | null>(() => {
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 1500);
+    }, 6000);
 
     let unsubscribe = () => {};
     try {
@@ -120,6 +120,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (firebaseUser) {
             setUser(firebaseUser);
             const isBootstrap = isBootstrapAdminEmail(firebaseUser.email);
+            const fallbackProfile: UserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || (isBootstrap ? 'Admin' : 'User'),
+              role: isBootstrap ? 'admin' : 'user',
+              permissions: isBootstrap ? ['all'] : [],
+              createdAt: new Date().toISOString(),
+            };
+            setProfile((prev) => prev || fallbackProfile);
+
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid)).catch(() => null);
             if (userDoc && userDoc.exists()) {
               const existingData = userDoc.data() as UserProfile;
@@ -129,22 +139,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   role: 'admin',
                   permissions: ['all'],
                 };
-                await setDoc(doc(db, 'users', firebaseUser.uid), { role: 'admin', isAdmin: true, permissions: ['all'] }, { merge: true }).catch(() => null);
+                await setDoc(
+                  doc(db, 'users', firebaseUser.uid),
+                  { role: 'admin', isAdmin: true, permissions: ['all'] },
+                  { merge: true }
+                ).catch(() => null);
                 setProfile(upgradedProfile);
               } else {
                 setProfile(existingData);
               }
             } else {
-              const newProfile: UserProfile = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                displayName: firebaseUser.displayName || (isBootstrap ? 'Admin' : 'User'),
-                role: isBootstrap ? 'admin' : 'user',
-                permissions: isBootstrap ? ['all'] : [],
-                createdAt: new Date().toISOString(),
-              };
-              await setDoc(doc(db, 'users', firebaseUser.uid), newProfile).catch(() => null);
-              setProfile(newProfile);
+              await setDoc(doc(db, 'users', firebaseUser.uid), fallbackProfile, { merge: true }).catch(() => null);
+              setProfile(fallbackProfile);
             }
           } else {
             setUser(null);

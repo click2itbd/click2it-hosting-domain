@@ -16,7 +16,7 @@ import { apiPost, getApiUrl, apiClient } from '../../services/apiClient';
 import { createCustomerAccountByAdmin, generateCustomerPassword } from '../../utils/customerAdminUtils';
 
 export const HostingCheckout: React.FC = () => {
-  const { user, effectiveUser, canAccessAdmin, isImpersonating, impersonatedCustomer } = useAuth();
+  const { user, effectiveUser, canAccessAdmin, isImpersonating, impersonatedCustomer, loading: authLoading } = useAuth();
   const { items: allItems, total, clearCart } = useCart();
   const { settings } = useSettings();
   const navigate = useNavigate();
@@ -438,6 +438,19 @@ export const HostingCheckout: React.FC = () => {
   }
 
   // Auth Enforcement
+  if (authLoading && !user) {
+    return (
+      <Layout fullWidth>
+        <div className="min-h-[60vh] flex items-center justify-center bg-gray-50 px-4 py-12">
+          <div className="flex flex-col items-center gap-3 text-gray-600">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <p className="text-sm font-medium">Verifying your account session...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   if (!user) {
     return (
       <Layout fullWidth>
@@ -607,6 +620,10 @@ export const HostingCheckout: React.FC = () => {
     setIsProcessing(true);
 
     try {
+      if (user) {
+        await user.getIdToken().catch(() => null);
+      }
+
       let targetUserId =
         selectedTargetCustomer?.uid ||
         selectedTargetCustomer?.id ||
@@ -827,7 +844,8 @@ export const HostingCheckout: React.FC = () => {
         });
       }
 
-      for (const hostingItem of hostingItems) {
+      for (let hIdx = 0; hIdx < hostingItems.length; hIdx++) {
+        const hostingItem = hostingItems[hIdx];
         const hAccountRef = doc(collection(db, 'hostingAccounts'));
         const isItemVps = isVpsItem(hostingItem);
         const packageSlug = hostingItem.planSlug || hostingItem.planId || hostingItem.id.replace('hosting_', '').replace('dynamic-hosting-', '').split('-')[0] || (isItemVps ? 'vps_starter' : 'starter');
@@ -869,12 +887,12 @@ export const HostingCheckout: React.FC = () => {
         });
 
         // Also write to hostingOrders collection with explicit fields
-        const hostingOrderDocRef = doc(collection(db, 'hostingOrders'), newOrderRef.id);
+        const hostingOrderDocRef = hIdx === 0 ? doc(collection(db, 'hostingOrders'), newOrderRef.id) : doc(collection(db, 'hostingOrders'));
         batch.set(hostingOrderDocRef, {
           ...orderData,
-          id: newOrderRef.id,
+          id: hostingOrderDocRef.id,
           orderId: newOrderRef.id,
-          packageSlug: packageSlug,
+          packageSlug: packageSlug || 'starter',
           billingCycle: hostingItem.billingCycle || 'monthly',
           price: grandTotal,
           isCustomPackage: Boolean((hostingItem as any).isCustomPackage),
