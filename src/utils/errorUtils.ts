@@ -50,6 +50,16 @@ export function getFriendlyErrorMessage(
     return 'We encountered a momentary glitch processing your request. Please refresh the page or contact our support team.';
   }
 
+  // Permissions / Auth session expiration
+  if (
+    lower.includes('missing or insufficient permissions') ||
+    lower.includes('insufficient permissions') ||
+    lower.includes('permission-denied') ||
+    lower.includes('permission denied')
+  ) {
+    return 'Your session has expired or requires sign-in. Please log in again to complete your request.';
+  }
+
   // Raw API / DB credentials or Whitelist exposure
   if (
     lower.includes('whitelist') ||

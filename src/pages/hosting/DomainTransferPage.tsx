@@ -261,9 +261,7 @@ const DomainTransferPage = () => {
               <div className="md:w-7/12 p-6 sm:p-8 md:p-10">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Transfer Your Domain</h3>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200">
-                    Live API Verified
-                  </span>
+                  
                 </div>
                 <p className="text-gray-500 mb-6 text-sm sm:text-base">
                   Enter your domain name to verify transfer eligibility and view the live fee before ordering.
@@ -623,3 +621,5 @@ const DomainTransferPage = () => {
 };
 
 export default DomainTransferPage;
+
+
