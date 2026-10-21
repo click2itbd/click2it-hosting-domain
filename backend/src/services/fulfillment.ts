@@ -398,12 +398,15 @@ async function fulfillDomainOrder(domainOrderId: string, domainData: any, actorU
         zipcode: '1200',
         country: 'BD'
       };
+      const rawDomainNs = domainData.nameServers || domainData.nameservers || [];
+      const transferNs = Array.isArray(rawDomainNs) && rawDomainNs.length > 0 ? rawDomainNs : ['ns1.click2itbd.com', 'ns2.click2itbd.com'];
       result = await provider.transferDomain(
         cleanDomain,
         authCode,
         domainData.years || domainData.termYears || 1,
         transferContact,
-        domainData.contactId
+        domainData.contactId,
+        transferNs
       );
     } else if (domainData.type === 'renewal' || domainData.action === 'renewal') {
       action = 'renew';

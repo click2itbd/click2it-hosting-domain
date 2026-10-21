@@ -1999,12 +1999,15 @@ domainRouter.post('/admin/execute-transfer', requireFirebaseAuth, async (req: an
     };
 
     const now = new Date().toISOString();
+    const rawNs = dData.nameServers || dData.nameservers || [];
+    const nameServers = Array.isArray(rawNs) && rawNs.length > 0 ? rawNs : ['ns1.click2itbd.com', 'ns2.click2itbd.com'];
     const result = await (provider as any).transferDomain(
       cleanDomain,
       authCode,
       dData.years || dData.termYears || 1,
       transferContact,
-      dData.contactId
+      dData.contactId,
+      nameServers
     );
 
     if (result.success) {

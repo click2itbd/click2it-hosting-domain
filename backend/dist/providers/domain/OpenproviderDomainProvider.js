@@ -445,7 +445,7 @@ export class OpenproviderDomainProvider {
             };
         }
     }
-    async transferDomain(domain, authCode, years, contact, contactId) {
+    async transferDomain(domain, authCode, years, contact, contactId, nameServers) {
         const cleanDomain = domain.trim().toLowerCase();
         const domainObj = this.splitDomain(cleanDomain);
         const cleanAuthCode = (authCode || '').trim();
@@ -487,6 +487,7 @@ export class OpenproviderDomainProvider {
                 throw new Error('Openprovider requires a Customer Handle (e.g. JD000000-EA). Please set Default Handle in Domain Registrars settings or create a customer profile in https://cp.openprovider.eu/.');
             }
             const techBillingHandle = this.defaultHandle || ownerHandle;
+            const cleanNsList = (Array.isArray(nameServers) && nameServers.length > 0 ? nameServers : ['ns1.click2itbd.com', 'ns2.click2itbd.com']).map((ns) => typeof ns === 'string' ? ns.trim() : (ns?.name || '')).filter(Boolean);
             requestStartedAt = new Date().toISOString();
             console.info('[Openprovider] Domain transfer request started', {
                 domain: cleanDomain,
@@ -503,7 +504,8 @@ export class OpenproviderDomainProvider {
                     owner_handle: ownerHandle, // <--- Customer Name & Contact!
                     admin_handle: ownerHandle, // <--- Customer Name & Contact!
                     tech_handle: techBillingHandle, // <--- Click2IT BD (technical reseller)
-                    billing_handle: techBillingHandle // <--- Click2IT BD (billing reseller)
+                    billing_handle: techBillingHandle, // <--- Click2IT BD (billing reseller)
+                    ...(cleanNsList.length > 0 ? { name_servers: cleanNsList.map((name) => ({ name })) } : { ns_group: 'dns-openprovider' })
                 })
             });
             providerHttpStatus = response._providerHttpStatus;

@@ -1837,7 +1837,9 @@ domainRouter.post('/admin/execute-transfer', requireFirebaseAuth, async (req, re
             country: 'BD',
         };
         const now = new Date().toISOString();
-        const result = await provider.transferDomain(cleanDomain, authCode, dData.years || dData.termYears || 1, transferContact, dData.contactId);
+        const rawNs = dData.nameServers || dData.nameservers || [];
+        const nameServers = Array.isArray(rawNs) && rawNs.length > 0 ? rawNs : ['ns1.click2itbd.com', 'ns2.click2itbd.com'];
+        const result = await provider.transferDomain(cleanDomain, authCode, dData.years || dData.termYears || 1, transferContact, dData.contactId, nameServers);
         if (result.success) {
             const transferId = String(result.transferId || '');
             await dDoc.ref.update({
