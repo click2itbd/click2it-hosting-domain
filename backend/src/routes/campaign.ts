@@ -83,7 +83,7 @@ interface WhatsAppConversation {
   messages: WhatsAppMessage[];
 }
 
-let metaCampaigns: MetaCampaign[] = [
+const DEFAULT_META_CAMPAIGNS: MetaCampaign[] = [
   {
     id: 'camp_meta_1',
     name: '🔥 High-Speed NVMe VPS 40% OFF - WhatsApp Lead Ad',
@@ -185,7 +185,7 @@ let metaCampaigns: MetaCampaign[] = [
   }
 ];
 
-let whatsAppConversations: WhatsAppConversation[] = [
+const DEFAULT_WHATSAPP_CONVERSATIONS: WhatsAppConversation[] = [
   {
     id: 'conv_wa_1',
     contactName: 'Tanvir Ahmed',
@@ -373,17 +373,94 @@ const availableAgents = [
   { id: 'agent_4', name: 'Kamal R.', role: 'Billing Specialist', status: 'busy', avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80' }
 ];
 
+// Persistent Firestore Access Helpers
+async function getMetaCampaigns(): Promise<MetaCampaign[]> {
+  try {
+    const db = getAdminDb();
+    if (db && typeof db.collection === 'function') {
+      const snap = await db.collection('meta_campaigns').orderBy('createdAt', 'desc').get();
+      if (!snap.empty) {
+        return snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as MetaCampaign[];
+      }
+      const batch = db.batch();
+      for (const camp of DEFAULT_META_CAMPAIGNS) {
+        batch.set(db.collection('meta_campaigns').doc(camp.id), camp);
+      }
+      await batch.commit().catch(() => {});
+      return DEFAULT_META_CAMPAIGNS;
+    }
+  } catch (err) {
+    console.warn('[Campaign] Firestore error fetching meta_campaigns:', err);
+  }
+  return DEFAULT_META_CAMPAIGNS;
+}
+
+async function saveMetaCampaign(camp: MetaCampaign): Promise<void> {
+  try {
+    const db = getAdminDb();
+    if (db && typeof db.collection === 'function') {
+      await db.collection('meta_campaigns').doc(camp.id).set(camp, { merge: true });
+    }
+  } catch (err) {
+    console.error('[Campaign] Firestore error saving meta campaign:', err);
+  }
+}
+
+async function deleteMetaCampaign(id: string): Promise<void> {
+  try {
+    const db = getAdminDb();
+    if (db && typeof db.collection === 'function') {
+      await db.collection('meta_campaigns').doc(id).delete();
+    }
+  } catch (err) {
+    console.error('[Campaign] Firestore error deleting meta campaign:', err);
+  }
+}
+
+async function getWhatsAppConversations(): Promise<WhatsAppConversation[]> {
+  try {
+    const db = getAdminDb();
+    if (db && typeof db.collection === 'function') {
+      const snap = await db.collection('whatsapp_conversations').limit(200).get();
+      if (!snap.empty) {
+        return snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as WhatsAppConversation[];
+      }
+      const batch = db.batch();
+      for (const conv of DEFAULT_WHATSAPP_CONVERSATIONS) {
+        batch.set(db.collection('whatsapp_conversations').doc(conv.id), conv);
+      }
+      await batch.commit().catch(() => {});
+      return DEFAULT_WHATSAPP_CONVERSATIONS;
+    }
+  } catch (err) {
+    console.warn('[Campaign] Firestore error fetching whatsapp_conversations:', err);
+  }
+  return DEFAULT_WHATSAPP_CONVERSATIONS;
+}
+
+async function saveWhatsAppConversation(conv: WhatsAppConversation): Promise<void> {
+  try {
+    const db = getAdminDb();
+    if (db && typeof db.collection === 'function') {
+      await db.collection('whatsapp_conversations').doc(conv.id).set(conv, { merge: true });
+    }
+  } catch (err) {
+    console.error('[Campaign] Firestore error saving whatsapp conversation:', err);
+  }
+}
+
 // --- META CAMPAIGNS ENDPOINTS ---
 campaignRouter.get('/campaigns/meta', async (req: any, res: Response) => {
   try {
+    const campaigns = await getMetaCampaigns();
     res.json({
       success: true,
-      campaigns: metaCampaigns,
+      campaigns,
       summary: {
-        totalSpend: metaCampaigns.reduce((acc, c) => acc + c.metrics.spend, 0),
-        totalImpressions: metaCampaigns.reduce((acc, c) => acc + c.metrics.impressions, 0),
-        totalClicks: metaCampaigns.reduce((acc, c) => acc + c.metrics.clicks, 0),
-        totalLeads: metaCampaigns.reduce((acc, c) => acc + c.metrics.leads, 0),
+        totalSpend: campaigns.reduce((acc, c) => acc + (c.metrics?.spend || 0), 0),
+        totalImpressions: campaigns.reduce((acc, c) => acc + (c.metrics?.impressions || 0), 0),
+        totalClicks: campaigns.reduce((acc, c) => acc + (c.metrics?.clicks || 0), 0),
+        totalLeads: campaigns.reduce((acc, c) => acc + (c.metrics?.leads || 0), 0),
         avgCpl: 1.39,
         avgRoas: 4.8
       }
@@ -431,13 +508,7 @@ campaignRouter.post('/campaigns/meta', async (req: any, res: Response) => {
       updatedAt: new Date().toISOString()
     };
 
-    const existingIndex = metaCampaigns.findIndex(c => c.id === newId);
-    if (existingIndex >= 0) {
-      metaCampaigns[existingIndex] = { ...metaCampaigns[existingIndex], ...newCampaign };
-    } else {
-      metaCampaigns.unshift(newCampaign);
-    }
-
+    await saveMetaCampaign(newCampaign);
     res.json({ success: true, campaign: newCampaign });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -447,7 +518,7 @@ campaignRouter.post('/campaigns/meta', async (req: any, res: Response) => {
 campaignRouter.delete('/campaigns/meta/:id', async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    metaCampaigns = metaCampaigns.filter(c => c.id !== id);
+    await deleteMetaCampaign(id);
     res.json({ success: true, message: 'Campaign removed' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -457,9 +528,10 @@ campaignRouter.delete('/campaigns/meta/:id', async (req: any, res: Response) => 
 // --- WHATSAPP CRM MULTI-AGENT ENDPOINTS ---
 campaignRouter.get('/whatsapp/conversations', async (req: any, res: Response) => {
   try {
+    const convs = await getWhatsAppConversations();
     res.json({
       success: true,
-      conversations: whatsAppConversations,
+      conversations: convs,
       agents: staffHostsList
     });
   } catch (err: any) {
@@ -470,8 +542,9 @@ campaignRouter.get('/whatsapp/conversations', async (req: any, res: Response) =>
 campaignRouter.post('/whatsapp/messages', async (req: any, res: Response) => {
   try {
     const { conversationId, text, agentId, agentName, isInternalNote, isCustomerSimulation } = req.body;
+    const convs = await getWhatsAppConversations();
     
-    let conv = whatsAppConversations.find(c => c.id === conversationId);
+    let conv = convs.find(c => c.id === conversationId);
     if (!conv) {
       // Create new conversation on the fly
       conv = {
@@ -489,7 +562,6 @@ campaignRouter.post('/whatsapp/messages', async (req: any, res: Response) => {
         notes: [],
         messages: []
       };
-      whatsAppConversations.unshift(conv);
     }
 
     const newMessage: WhatsAppMessage = {
@@ -503,15 +575,17 @@ campaignRouter.post('/whatsapp/messages', async (req: any, res: Response) => {
       isInternalNote: !!isInternalNote
     };
 
+    conv.messages = conv.messages || [];
     conv.messages.push(newMessage);
     if (!isInternalNote) {
       conv.lastMessageSnippet = text;
       conv.lastMessageTime = 'Just now';
       if (isCustomerSimulation) {
-        conv.unreadCount += 1;
+        conv.unreadCount = (conv.unreadCount || 0) + 1;
       }
     }
 
+    await saveWhatsAppConversation(conv);
     res.json({ success: true, message: newMessage, conversation: conv });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -522,7 +596,8 @@ campaignRouter.post('/whatsapp/messages', async (req: any, res: Response) => {
 campaignRouter.post('/whatsapp/assign', async (req: any, res: Response) => {
   try {
     const { conversationId, agentId } = req.body;
-    const conv = whatsAppConversations.find(c => c.id === conversationId);
+    const convs = await getWhatsAppConversations();
+    const conv = convs.find(c => c.id === conversationId);
     if (!conv) {
       return res.status(404).json({ success: false, error: 'Conversation not found' });
     }
@@ -536,6 +611,7 @@ campaignRouter.post('/whatsapp/assign', async (req: any, res: Response) => {
       }
     }
 
+    await saveWhatsAppConversation(conv);
     res.json({ success: true, conversation: conv });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -569,9 +645,11 @@ campaignRouter.post('/whatsapp/instant-chat', async (req: any, res: Response) =>
       }
     }
 
+    const convs = await getWhatsAppConversations();
+
     // Check if this conversation already exists in chat history
-    let existing = whatsAppConversations.find(c => {
-      const existingDigits = c.phone.replace(/\D/g, '');
+    let existing = convs.find(c => {
+      const existingDigits = (c.phone || '').replace(/\D/g, '');
       return existingDigits === cleanDigits || existingDigits.endsWith(cleanDigits) || cleanDigits.endsWith(existingDigits);
     });
 
@@ -604,14 +682,18 @@ campaignRouter.post('/whatsapp/instant-chat', async (req: any, res: Response) =>
           timestamp: nowTime,
           status: 'delivered'
         };
+        existing.messages = existing.messages || [];
         existing.messages.push(newMsg);
         existing.lastMessageSnippet = msgText;
         existing.lastMessageTime = 'Just now';
       }
 
+      existing.notes = existing.notes || [];
       if (!existing.notes.some(n => n.includes('Instant chat session'))) {
         existing.notes.push(`Instant chat accessed by ${assignedAgentObj.name} on ${new Date().toLocaleString()}`);
       }
+
+      await saveWhatsAppConversation(existing);
 
       return res.json({
         success: true,
@@ -673,7 +755,7 @@ campaignRouter.post('/whatsapp/instant-chat', async (req: any, res: Response) =>
       messages: messagesList
     };
 
-    whatsAppConversations.unshift(newConversation);
+    await saveWhatsAppConversation(newConversation);
 
     res.json({
       success: true,
@@ -694,10 +776,12 @@ campaignRouter.post('/whatsapp/sync', async (req: any, res: Response) => {
       return res.status(400).json({ success: false, error: 'Invalid contact payload' });
     }
 
-    let existing = whatsAppConversations.find(c => c.phone.replace(/\D/g, '') === contact.phone.replace(/\D/g, ''));
+    const convs = await getWhatsAppConversations();
+    let existing = convs.find(c => (c.phone || '').replace(/\D/g, '') === contact.phone.replace(/\D/g, ''));
     if (existing) {
       existing.contactName = contact.name || existing.contactName;
       if (contact.email) existing.email = contact.email;
+      existing.notes = existing.notes || [];
       if (contact.notes && !existing.notes.includes(contact.notes)) {
         existing.notes.push(contact.notes);
       }
@@ -726,9 +810,9 @@ campaignRouter.post('/whatsapp/sync', async (req: any, res: Response) => {
           }
         ]
       };
-      whatsAppConversations.unshift(existing);
     }
 
+    await saveWhatsAppConversation(existing);
     res.json({ success: true, conversation: existing });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -739,7 +823,8 @@ campaignRouter.post('/whatsapp/sync', async (req: any, res: Response) => {
 campaignRouter.put('/whatsapp/conversations/:id', async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    const conv = whatsAppConversations.find(c => c.id === id);
+    const convs = await getWhatsAppConversations();
+    const conv = convs.find(c => c.id === id);
     if (!conv) {
       return res.status(404).json({ success: false, error: 'Conversation not found' });
     }
@@ -752,6 +837,7 @@ campaignRouter.put('/whatsapp/conversations/:id', async (req: any, res: Response
     if (notes !== undefined) conv.notes = notes;
     if (statusLabel !== undefined) conv.statusLabel = statusLabel;
 
+    await saveWhatsAppConversation(conv);
     res.json({ success: true, conversation: conv });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

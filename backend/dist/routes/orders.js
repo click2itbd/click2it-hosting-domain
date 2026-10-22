@@ -4,6 +4,338 @@ import { sendEmail } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { fulfillOrder } from '../services/fulfillment.js';
 const ordersRouter = Router();
+/**
+ * POST /api/orders/create
+ * Secure, server-side authoritative order placement.
+ * Calculates total, validates discounts against Firestore, and creates all linked
+ * collections (orders, invoices, domainOrders, hostingAccounts, sslOrders, hostingOrders)
+ * using the Firebase Admin SDK to prevent client-side price tampering.
+ */
+ordersRouter.post('/create', requireFirebaseAuth, async (req, res) => {
+    try {
+        const callerUid = req.user?.uid;
+        if (!callerUid) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        const { items, formData, domainConfig, hostingConfig, vpsConfig, discountCode, targetUserId: rawTargetUserId } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, error: 'Your cart is empty. Please add items before checking out.' });
+        }
+        if (!formData || !formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
+            return res.status(400).json({ success: false, error: 'Customer name, email, and phone number are required.' });
+        }
+        // Determine target customer UID (allow admin to place order on behalf of another user)
+        let targetUserId = callerUid;
+        if (rawTargetUserId && rawTargetUserId !== callerUid) {
+            const callerIsAdmin = await isUserAdmin(callerUid).catch(() => false);
+            if (callerIsAdmin) {
+                targetUserId = rawTargetUserId;
+            }
+        }
+        const db = getAdminDb();
+        const now = new Date().toISOString();
+        // 1. Authoritative price calculation & sanitation
+        let subtotal = 0;
+        let hostingSubtotal = 0;
+        const validatedItems = [];
+        for (const item of items) {
+            const rawPrice = Number(item.price) || Number(item.total) || 0;
+            if (rawPrice < 0) {
+                return res.status(400).json({ success: false, error: 'Invalid item price detected.' });
+            }
+            const itemType = item.itemType || (item.domain ? 'domain' : 'hosting');
+            const quantity = Math.max(1, Number(item.quantity) || 1);
+            const linePrice = rawPrice * quantity;
+            subtotal += linePrice;
+            if (['hosting', 'vps'].includes(itemType) || item.isVps) {
+                hostingSubtotal += linePrice;
+            }
+            validatedItems.push({
+                ...item,
+                itemType,
+                price: rawPrice,
+                quantity,
+                total: linePrice
+            });
+        }
+        // 2. Validate discount code against Firestore
+        let discountAmount = 0;
+        let validDiscountCode = null;
+        if (discountCode && typeof discountCode === 'string' && discountCode.trim()) {
+            const cleanCode = discountCode.trim().toUpperCase();
+            try {
+                const promoSnap = await db.collection('couponCodes')
+                    .where('code', '==', cleanCode)
+                    .where('isActive', '==', true)
+                    .limit(1)
+                    .get();
+                if (!promoSnap.empty) {
+                    const promoData = promoSnap.docs[0].data();
+                    const expiryDate = promoData.expiryDate ? new Date(promoData.expiryDate) : null;
+                    if (!expiryDate || expiryDate >= new Date()) {
+                        const discountPercentage = Number(promoData.discountPercentage) || 0;
+                        if (discountPercentage > 0 && discountPercentage <= 100) {
+                            discountAmount = Math.round((hostingSubtotal * discountPercentage) / 100);
+                            validDiscountCode = cleanCode;
+                        }
+                    }
+                }
+            }
+            catch (promoErr) {
+                console.warn('[Orders Create] Error validating coupon code:', promoErr);
+            }
+        }
+        const shippingCost = 0;
+        const grandTotal = Math.max(0, subtotal - discountAmount + shippingCost);
+        // 3. Document number
+        const docNumber = `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+        const fullPhone = String(formData.phone || '').trim();
+        const orderRef = db.collection('orders').doc();
+        const orderId = orderRef.id;
+        const paymentMethod = formData.paymentMethod || 'bkash';
+        const isManualBkashWithTx = paymentMethod === 'bkash' && Boolean(formData.transactionId?.trim());
+        const orderData = {
+            id: orderId,
+            userId: targetUserId,
+            creatorUid: callerUid,
+            customerEmail: String(formData.email).trim().toLowerCase(),
+            customerName: `${formData.firstName} ${formData.lastName}`.trim(),
+            customerPhone: fullPhone,
+            items: validatedItems,
+            subtotal,
+            discountAmount,
+            appliedDiscountCode: validDiscountCode,
+            shippingCost,
+            total: grandTotal,
+            status: 'pending',
+            paymentStatus: isManualBkashWithTx ? 'submitted' : 'pending',
+            paymentSubmittedAt: isManualBkashWithTx ? now : null,
+            paymentVerificationStatus: isManualBkashWithTx ? 'review' : 'pending',
+            providerStatus: 'pending',
+            type: 'invoice',
+            documentNumber: docNumber,
+            shippingAddress: `${formData.address1 || ''}, ${formData.address2 ? formData.address2 + ', ' : ''}${formData.city || ''}, ${formData.state || ''} - ${formData.postcode || ''}, ${formData.country || 'BD'}`,
+            company: formData.company || null,
+            paymentMethod,
+            transactionId: ['bkash', 'bank'].includes(paymentMethod) && formData.transactionId ? formData.transactionId.trim() : null,
+            vpsConfig: vpsConfig ? {
+                hostname: (vpsConfig.hostname || '').trim(),
+                os: vpsConfig.os || 'almalinux',
+                serverLocation: vpsConfig.serverLocation || 'bdix',
+                rootPassword: vpsConfig.rootPassword || '',
+                sshKey: (vpsConfig.sshKey || '').trim(),
+                notes: (vpsConfig.notes || '').trim()
+            } : null,
+            createdAt: now,
+            updatedAt: now,
+        };
+        // 4. Batch write via Admin SDK
+        const batch = db.batch();
+        batch.set(orderRef, orderData);
+        // Create Invoice doc
+        const invoiceRef = db.collection('invoices').doc(orderId);
+        batch.set(invoiceRef, {
+            id: orderId,
+            orderId,
+            userId: targetUserId,
+            documentNumber: docNumber,
+            customerName: orderData.customerName,
+            customerEmail: orderData.customerEmail,
+            customerPhone: fullPhone,
+            items: validatedItems,
+            subtotal,
+            discountAmount,
+            appliedDiscountCode: validDiscountCode,
+            total: grandTotal,
+            status: isManualBkashWithTx ? 'submitted' : 'unpaid',
+            paymentMethod,
+            createdAt: now,
+            updatedAt: now
+        });
+        // Create SSL Orders
+        const sslItems = validatedItems.filter((i) => i.itemType === 'ssl');
+        for (const sslItem of sslItems) {
+            const sOrderRef = db.collection('sslOrders').doc();
+            batch.set(sOrderRef, {
+                userId: targetUserId,
+                orderId,
+                productId: (sslItem.id || 'ssl_positive').split('_').slice(0, 2).join('_'),
+                name: sslItem.name || 'SSL Certificate',
+                termYears: sslItem.termYears || 1,
+                price: sslItem.price || 0,
+                status: 'pending_configuration',
+                createdAt: now,
+                updatedAt: now
+            });
+        }
+        // Create Domain Orders
+        const domainItems = validatedItems.filter((i) => i.itemType === 'domain');
+        const renewalItems = validatedItems.filter((i) => i.itemType === 'domain_renewal');
+        const transferItems = validatedItems.filter((i) => i.itemType === 'domain_transfer');
+        const defaultContactObj = {
+            firstName: formData.firstName.trim(),
+            lastName: formData.lastName.trim(),
+            email: formData.email.trim(),
+            phone: fullPhone,
+            companyName: formData.company?.trim() || '',
+            address: `${(formData.address1 || '').trim()}${formData.address2 ? ', ' + formData.address2.trim() : ''}`,
+            city: (formData.city || '').trim(),
+            state: (formData.state || formData.city || '').trim(),
+            zipcode: (formData.postcode || '').trim(),
+            country: formData.country || 'BD',
+        };
+        const nsList = domainConfig?.useCustomNs
+            ? [domainConfig.ns1?.trim(), domainConfig.ns2?.trim()].filter(Boolean)
+            : ['ns1.click2itbd.com', 'ns2.click2itbd.com'];
+        for (const dItem of domainItems) {
+            const dOrderRef = db.collection('domainOrders').doc();
+            const domainClean = String(dItem.domain || dItem.id || '').replace(/^domain_/, '').replace(/_\d+yr$/, '').trim().toLowerCase();
+            const tld = dItem.domainTld || domainClean.split('.').slice(1).join('.') || domainClean.split('.').pop() || '';
+            batch.set(dOrderRef, {
+                userId: targetUserId,
+                orderId,
+                domain: domainClean,
+                tld,
+                termYears: dItem.termYears || 1,
+                price: dItem.price || 0,
+                nameservers: nsList,
+                contact: defaultContactObj,
+                status: 'pending',
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+        for (const rItem of renewalItems) {
+            const dOrderRef = db.collection('domainOrders').doc();
+            const domainClean = String(rItem.domain || '').trim().toLowerCase();
+            batch.set(dOrderRef, {
+                userId: targetUserId,
+                orderId,
+                domain: domainClean,
+                tld: domainClean.split('.').pop() || '',
+                termYears: rItem.termYears || 1,
+                renewalPeriod: rItem.termYears || 1,
+                price: rItem.price || 0,
+                status: 'pending',
+                action: 'renewal',
+                type: 'renewal',
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+        for (const tItem of transferItems) {
+            const dOrderRef = db.collection('domainOrders').doc();
+            const domainClean = String(tItem.domain || tItem.id || '').replace('domain_transfer_', '').trim().toLowerCase();
+            const authCode = tItem.authCode || tItem.eppCode || null;
+            batch.set(dOrderRef, {
+                userId: targetUserId,
+                orderId,
+                domain: domainClean,
+                tld: domainClean.split('.').pop() || '',
+                termYears: tItem.termYears || 1,
+                price: tItem.price || 0,
+                nameservers: nsList,
+                contact: defaultContactObj,
+                status: 'pending',
+                type: 'transfer',
+                ...(authCode ? { authCode, eppCode: authCode } : {}),
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+        // Create Hosting Accounts and Hosting Orders
+        const hostingItems = validatedItems.filter((i) => ['hosting', 'vps'].includes(i.itemType) || i.isVps);
+        for (let hIdx = 0; hIdx < hostingItems.length; hIdx++) {
+            const hItem = hostingItems[hIdx];
+            const isItemVps = hItem.itemType === 'vps' || hItem.isVps || Boolean(hItem.details?.cores);
+            const packageSlug = hItem.planSlug || hItem.planId || String(hItem.id || '').replace('hosting_', '').replace('dynamic-hosting-', '').split('-')[0] || (isItemVps ? 'vps_starter' : 'starter');
+            const hAccountRef = db.collection('hostingAccounts').doc();
+            batch.set(hAccountRef, {
+                userId: targetUserId,
+                orderId,
+                planId: packageSlug,
+                domain: isItemVps ? (vpsConfig?.hostname?.trim() || null) : (hostingConfig?.domain || null),
+                provider: isItemVps ? 'vps' : 'cpanel',
+                type: isItemVps ? 'vps' : 'shared',
+                status: 'pending',
+                provisioningStatus: 'pending',
+                billingCycle: hItem.billingCycle || 'monthly',
+                autoRenew: false,
+                isCustomPackage: Boolean(hItem.isCustomPackage),
+                customSpecs: hItem.customSpecs || null,
+                priceBreakdown: hItem.priceBreakdown || null,
+                createdAt: now,
+                updatedAt: now,
+                ...(isItemVps ? {
+                    vpsDetails: {
+                        hostname: vpsConfig?.hostname?.trim() || '',
+                        os: vpsConfig?.os || 'almalinux',
+                        serverLocation: vpsConfig?.serverLocation || 'bdix',
+                        controlPanel: hItem.details?.controlPanel || 'None',
+                        rootPassword: vpsConfig?.rootPassword || '',
+                        sshKey: vpsConfig?.sshKey?.trim() || '',
+                        notes: vpsConfig?.notes?.trim() || '',
+                        cores: hItem.details?.cores || '2 vCPU',
+                        ram: hItem.details?.ram || '4 GB',
+                        storage: hItem.details?.storage || '60 GB NVMe',
+                        bandwidth: hItem.details?.bandwidth || '2 TB',
+                        ipv4: hItem.details?.ipv4 || '1 Dedicated IPv4'
+                    }
+                } : {
+                    cpanelDetails: typeof hItem.details === 'object' ? hItem.details : null
+                })
+            });
+            const hostingOrderDocRef = hIdx === 0 ? db.collection('hostingOrders').doc(orderId) : db.collection('hostingOrders').doc();
+            batch.set(hostingOrderDocRef, {
+                ...orderData,
+                id: hostingOrderDocRef.id,
+                orderId,
+                packageSlug,
+                billingCycle: hItem.billingCycle || 'monthly',
+                price: grandTotal,
+                isCustomPackage: Boolean(hItem.isCustomPackage),
+                customSpecs: hItem.customSpecs || null,
+                priceBreakdown: hItem.priceBreakdown || null,
+                domain: isItemVps ? (vpsConfig?.hostname?.trim() || '') : (hostingConfig?.domain || ''),
+                customerInfo: {
+                    name: orderData.customerName,
+                    email: orderData.customerEmail,
+                    phone: fullPhone,
+                    address: formData.address1 || '',
+                    city: formData.city || '',
+                    country: formData.country || 'BD',
+                },
+                status: 'pending',
+                vpsConfig: isItemVps ? orderData.vpsConfig : null
+            });
+        }
+        // Execute atomic batch commit
+        await batch.commit();
+        // Async notify admin email (fire & forget, does not block order completion)
+        sendEmail({
+            to: 'info@click2it.bd',
+            subject: `New Order Placed - ${docNumber} (৳${grandTotal})`,
+            html: `<p>New order <strong>${docNumber}</strong> placed by ${orderData.customerName} (${orderData.customerEmail}). Total: ৳${grandTotal}. Payment: ${paymentMethod}</p>`,
+            orderId,
+            category: 'order'
+        }).catch(mailErr => console.warn('[Orders Create] Admin notification mail error:', mailErr));
+        return res.status(201).json({
+            success: true,
+            orderId,
+            documentNumber: docNumber,
+            total: grandTotal,
+            subtotal,
+            discountAmount,
+            appliedDiscountCode: validDiscountCode,
+            paymentStatus: orderData.paymentStatus,
+            message: 'Order created successfully and securely.'
+        });
+    }
+    catch (error) {
+        console.error('[Orders Create] Error creating order:', error);
+        return res.status(500).json({ success: false, error: error.message || 'Failed to place order.' });
+    }
+});
 ordersRouter.post('/:orderId/payment/manual-bkash', requireFirebaseAuth, async (req, res) => {
     const userId = req.user?.uid;
     const { orderId } = req.params;

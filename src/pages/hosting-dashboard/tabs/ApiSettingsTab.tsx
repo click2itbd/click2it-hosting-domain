@@ -7,7 +7,7 @@ export function ApiSettingsTab({ state }) {
   
   return (
     <div className="w-full space-y-6">
-      <SystemConnectionStatus onNavigateTab={state.setActiveTab} />
+      <SystemConnectionStatus onNavigateTab={state.setActiveTab} currentTab={state.activeTab} />
       <HostingApiSettings />
     </div>
   );
