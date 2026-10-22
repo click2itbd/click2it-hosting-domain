@@ -338,4 +338,66 @@ hostingRouter.post('/sso', requireFirebaseAuth, async (req: any, res: Response) 
   }
 });
 
+hostingRouter.post('/cancellation-request', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const { accountId, reason, cancellationType } = req.body;
+    if (!accountId) {
+      return res.status(400).json({ success: false, error: 'accountId is required' });
+    }
+
+    const db = getAdminDb();
+    const accRef = db.collection('hostingAccounts').doc(accountId);
+    const accSnap = await accRef.get();
+
+    if (!accSnap.exists) {
+      return res.status(404).json({ success: false, error: 'Hosting account not found' });
+    }
+
+    const accData = accSnap.data() || {};
+    if (accData.userId !== req.user.uid) {
+      const { isUserAdmin } = await import('../firebase/admin.js');
+      const isAdmin = await isUserAdmin(req.user.uid, req.user.email);
+      if (!isAdmin) {
+        return res.status(403).json({ success: false, error: 'Unauthorized to cancel this account' });
+      }
+    }
+
+    const now = new Date().toISOString();
+    await accRef.update({
+      cancellationRequested: true,
+      cancellationReason: reason || 'Customer requested cancellation',
+      cancellationType: cancellationType || 'end_of_cycle',
+      cancellationRequestedAt: now,
+      updatedAt: now
+    });
+
+    // Create a support ticket record for administrative tracking
+    try {
+      const ticketRef = db.collection('tickets').doc();
+      await ticketRef.set({
+        id: ticketRef.id,
+        userId: req.user.uid,
+        customerEmail: req.user.email || accData.customerEmail || '',
+        subject: `[Cancellation Request] Hosting for ${accData.domain || accountId}`,
+        category: 'cancellation',
+        priority: 'medium',
+        status: 'open',
+        message: `Customer requested cancellation for hosting account ${accData.domain || accountId}.\nType: ${cancellationType || 'End of billing cycle'}\nReason: ${reason || 'Not specified'}`,
+        createdAt: now,
+        updatedAt: now
+      });
+    } catch (tErr) {
+      console.warn('Could not record cancellation ticket:', tErr);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Cancellation request submitted successfully. Our billing department has been notified.'
+    });
+  } catch (error: any) {
+    console.error('Cancellation request error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Failed to submit cancellation request' });
+  }
+});
+
 export default hostingRouter;

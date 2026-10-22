@@ -43,6 +43,7 @@ export interface ExpiryReminderResult {
   domainRemindersSent: number;
   hostingChecked: number;
   hostingRemindersSent: number;
+  hostingSuspended: number;
   errors: number;
 }
 
@@ -55,6 +56,7 @@ export async function processExpiryReminders(): Promise<ExpiryReminderResult> {
     domainRemindersSent: 0,
     hostingChecked: 0,
     hostingRemindersSent: 0,
+    hostingSuspended: 0,
     errors: 0
   };
 
@@ -103,7 +105,7 @@ export async function processExpiryReminders(): Promise<ExpiryReminderResult> {
     stats.errors++;
   }
 
-  // 2. Process Hosting Expiry Reminders
+  // 2. Process Hosting Expiry Reminders & 3. Automated Suspension for Overdue Accounts
   try {
     const hostingRef = db.collection('hostingAccounts');
     const activeHostingSnap = await hostingRef.where('status', '==', 'active').get();
@@ -118,6 +120,7 @@ export async function processExpiryReminders(): Promise<ExpiryReminderResult> {
         const expiryIsoPrefix = expiryDate.toISOString().split('T')[0];
         const daysDiff = Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         
+        // 2a. Pre-expiry reminders (30d, 7d, 1d)
         for (const target of targetDates) {
           const reminderField = `reminderSent_${target.days}d`;
           const isTargetMatch = expiryIsoPrefix === target.dateStringPrefix || daysDiff === target.days;
@@ -128,8 +131,64 @@ export async function processExpiryReminders(): Promise<ExpiryReminderResult> {
             stats.hostingRemindersSent++;
           }
         }
+
+        // 3. Automated Hosting Suspension Engine (3+ Days Past Expiration Grace Period)
+        const overdueDays = Math.floor((now.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (overdueDays >= 3 && !data.suspensionExempt) {
+          console.log(`[CRON] Hosting account ${doc.id} (${data.domain}) is ${overdueDays} days overdue. Executing auto-suspension...`);
+          
+          let whmSuspended = false;
+          const targetUsername = data.providerAccountId || data.username || data.cpanelUsername;
+          if (targetUsername) {
+            try {
+              const { suspendHostingAccount } = await import('../services/hosting.js');
+              await suspendHostingAccount(targetUsername);
+              whmSuspended = true;
+            } catch (whmErr: any) {
+              console.warn(`[CRON] WHM suspend call warning for ${data.domain}:`, whmErr?.message);
+            }
+          }
+
+          const nowIso = now.toISOString();
+          await doc.ref.update({
+            status: 'suspended',
+            suspendedAt: nowIso,
+            suspensionReason: `Automated suspension: Renewal overdue by ${overdueDays} days (grace period expired).`,
+            whmSuspended,
+            updatedAt: nowIso
+          });
+          stats.hostingSuspended++;
+
+          // Send automated suspension notice email
+          const email = data.customerEmail || data.email || data.contactEmail;
+          if (email) {
+            const domainName = data.domain || 'Hosting Plan';
+            await sendEmail({
+              to: email,
+              subject: `⚠️ Service Suspended: Hosting for ${domainName}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #fee2e2; border-radius: 12px; background: #fffaf0;">
+                  <h2 style="color: #dc2626; margin-top: 0;">Hosting Service Suspended</h2>
+                  <p>Dear Customer,</p>
+                  <p>Your cloud hosting account for <strong>${domainName}</strong> has been suspended due to an overdue renewal invoice (3+ days past expiry).</p>
+                  <div style="background: #ffffff; border: 1px solid #fed7aa; padding: 16px; border-radius: 8px; margin: 16px 0;">
+                    <p style="margin: 0 0 6px 0;"><strong>Domain:</strong> ${domainName}</p>
+                    <p style="margin: 0 0 6px 0;"><strong>Expired On:</strong> ${expiryDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p style="margin: 0; color: #c2410c;"><strong>Status:</strong> Suspended (Data preserved)</p>
+                  </div>
+                  <p><strong>Instant Automatic Restoration:</strong></p>
+                  <p>To restore your website immediately, please log in and pay the renewal invoice. Your hosting will be <strong>automatically un-suspended in real time</strong> upon payment without needing admin approval.</p>
+                  <div style="text-align: center; margin: 24px 0;">
+                    <a href="https://click2itbd.com/account/services" style="display: inline-block; padding: 12px 28px; background: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold;">Renew & Restore Service</a>
+                  </div>
+                  <p style="font-size: 13px; color: #78716c;">Thank you for your prompt attention.<br><strong>Click2IT Automated Billing Engine</strong></p>
+                </div>
+              `
+            }).catch(e => console.warn('[CRON] Suspension email error:', e));
+          }
+        }
       } catch (docErr) {
-        console.error(`[CRON] Error processing hosting expiry for doc ${doc.id}:`, docErr);
+        console.error(`[CRON] Error processing hosting account for doc ${doc.id}:`, docErr);
         stats.errors++;
       }
     }

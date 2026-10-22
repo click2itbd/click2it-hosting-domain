@@ -44,7 +44,7 @@ export const DomainPricingManager: React.FC<DomainPricingManagerProps> = ({ setA
   // Live order stats for Hub widget
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'orders'), (snap) => {
+    const unsub = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(100)), (snap) => {
       const allOrders: DomainHubOrder[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const hostingAndDomainOrders = allOrders.filter(order => 
         order.items && order.items.some((item: any) => 

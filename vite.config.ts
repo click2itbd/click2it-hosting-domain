@@ -32,6 +32,12 @@ export default defineConfig(({ mode }) => {
           assetFileNames: "assets/[name]-[hash].[ext]",
           manualChunks(id) {
             if (!id.includes("node_modules")) return undefined;
+            if (id.includes("jspdf") || id.includes("html2canvas")) {
+              return "pdf-vendor";
+            }
+            if (id.includes("recharts") || id.includes("d3-") || id.includes("victory-vendor")) {
+              return "recharts-vendor";
+            }
             if (id.includes("firebase/auth") || id.includes("@firebase/auth")) {
               return "firebase-auth";
             }

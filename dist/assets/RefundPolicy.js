@@ -1,4 +1,4 @@
-import{j as e}from"./react-vendor-dgZEv-OP.js";import{D as t}from"./DynamicPolicyPage-CTAH2J83.js";import"./Layout-Db0FpG--.js";import"./index-DcA-yt9v.js";import"./firebase-auth-Dnk_YjNZ.js";import"./firebase-app-BNSQpfg_.js";import"./firebase-firestore-B2zgnHWy.js";import"./firebase-storage-D4bmr71_.js";import"./lucide-CTWFEy_0.js";import"./react-router-l5_dQzmb.js";import"./framer-motion-CnJqpTqg.js";import"./SEO-D_EW32NH.js";import"./purify.es-DiIPND8F.js";const h=()=>e.jsx(t,{pageId:"refund-policy",defaultTitle:"Refund & Return Policy",defaultContent:`{isHosting ? (
+import{j as e}from"./react-vendor-Cng6SX1J.js";import{D as t}from"./DynamicPolicyPage-wBp9_J_J.js";import"./Layout-D7fb7a_K.js";import"./index-HiLfSxr3.js";import"./pdf-vendor-NPDNq7Yg.js";import"./firebase-auth-Dnk_YjNZ.js";import"./firebase-app-BNSQpfg_.js";import"./firebase-firestore-B2zgnHWy.js";import"./firebase-storage-D4bmr71_.js";import"./lucide-D0hpRdbw.js";import"./react-router-50nwX4I3.js";import"./framer-motion-jLegE0I7.js";import"./recharts-vendor-DPbu2651.js";import"./SEO-D0Q-PZxH.js";import"./purify.es-DiIPND8F.js";const y=()=>e.jsx(t,{pageId:"refund-policy",defaultTitle:"Refund & Return Policy",defaultContent:`{isHosting ? (
                 // --- HOSTING REFUND POLICY ---
                 <>
                   <section>
@@ -88,4 +88,4 @@ import{j as e}from"./react-vendor-dgZEv-OP.js";import{D as t}from"./DynamicPolic
                 <p className="text-blue-800 text-sm">
                   To initiate a {isHosting ? 'refund' : 'return'}, please contact our billing and support team at <strong>{settings.contactEmail}</strong> or call us at <strong>{settings.contactPhone}</strong> with your Order/Invoice ID.
                 </p>
-              </section>`});export{h as default};
+              </section>`});export{y as default};

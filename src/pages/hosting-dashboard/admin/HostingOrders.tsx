@@ -5,8 +5,6 @@ import { formatCurrency, cn } from '../../../lib/utils';
 import { toast } from 'react-hot-toast';
 import { Server, Search, Eye, EyeOff, X, Globe, Download, Loader2, FileText, CheckCircle, Wallet, AlertTriangle, Clock, Terminal, Copy, Key, Edit3, Check, RefreshCw, Trash2, Send } from 'lucide-react';
 import { HostingOrder, DomainOrder, HostingAccount } from '../../../types';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { useSettings } from '../../../context/SettingsContext';
 import { sendServiceActivationEmail, getEmailLogsForOrder, EmailLog } from '../../../services/emailService';
 import { getApiUrl } from '../../../services/apiClient';
@@ -811,7 +809,9 @@ export default function HostingOrders() {
     }
   };
 
-  const generateInvoice = (order: HostingOrder) => {
+  const generateInvoice = async (order: HostingOrder) => {
+    const { jsPDF } = await import('jspdf');
+    const autoTable = (await import('jspdf-autotable')).default;
     const doc = new jsPDF('p', 'mm', 'a4');
     let currentY = 15;
     const pageWidth = doc.internal.pageSize.getWidth();

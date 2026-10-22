@@ -5,7 +5,7 @@ import { getDomainProvider, getHostingProvider } from '../providers/providerFact
 import { getDomainPricingSettings } from './domainPricing.js';
 import { resolveDomainProvider } from './btclConfig.js';
 import { ProviderError } from '../providers/domain/DomainProviderError.js';
-import { classifyHostingError } from './hosting.js';
+import { classifyHostingError, changeHostingPlan, unsuspendHostingAccount } from './hosting.js';
 import { config } from '../config/index.js';
 import { getDomainProviderConfig } from './domainProviderConfig.js';
 
@@ -21,7 +21,7 @@ export interface FulfillmentResult {
 export interface FulfillmentItemResult {
   itemId: string;
   type: 'domain' | 'hosting';
-  action: 'register' | 'renew' | 'transfer' | 'provision';
+  action: 'register' | 'renew' | 'transfer' | 'provision' | 'upgrade' | 'unsuspend';
   success: boolean;
   status: string;
   error?: string;
@@ -126,6 +126,97 @@ export async function fulfillOrder(orderId: string, actorUid: string): Promise<F
         hasPending = true;
       } else {
         hasFailure = true;
+      }
+    }
+  }
+
+  // Process hosting upgrade or renewal items in order
+  const orderItems = Array.isArray(orderData.items) ? orderData.items : [];
+  for (const item of orderItems) {
+    if (item.itemType === 'hosting_upgrade') {
+      const hAccountId = item.hostingAccountId;
+      const targetPlanId = item.targetPlanId || item.newPlanId || item.planId;
+      if (hAccountId && targetPlanId) {
+        try {
+          const hDocRef = db.collection('hostingAccounts').doc(hAccountId);
+          const hSnap = await hDocRef.get();
+          if (hSnap.exists) {
+            const hData = hSnap.data() || {};
+            const providerAccountId = hData.providerAccountId || hData.username;
+            if (providerAccountId) {
+              await changeHostingPlan(providerAccountId, targetPlanId);
+            }
+            if (hData.status === 'suspended' && providerAccountId) {
+              try {
+                await unsuspendHostingAccount(providerAccountId);
+              } catch (unsuspendErr) {
+                console.warn('[Fulfillment] Error unsuspending hosting account during upgrade:', unsuspendErr);
+              }
+            }
+            await hDocRef.update({
+              planId: targetPlanId,
+              status: 'active',
+              suspendedAt: null,
+              suspensionReason: null,
+              updatedAt: now,
+            });
+            await writeAuditLog(db, hAccountId, 'hosting_upgraded', actorUid, hData.planId, targetPlanId, null, 'Hosting plan upgraded to ' + targetPlanId);
+            hostingResults.push({
+              itemId: hAccountId,
+              type: 'hosting',
+              action: 'upgrade',
+              success: true,
+              status: 'completed',
+            });
+          }
+        } catch (upgradeErr: any) {
+          console.error('[Fulfillment] Failed to apply hosting upgrade:', upgradeErr);
+          hasFailure = true;
+          hostingResults.push({
+            itemId: hAccountId || orderId,
+            type: 'hosting',
+            action: 'upgrade',
+            success: false,
+            status: 'failed',
+            error: upgradeErr?.message || 'Failed to apply hosting upgrade',
+          });
+        }
+      }
+    }
+
+    if (item.itemType === 'hosting_renewal' && item.hostingAccountId) {
+      try {
+        const hDocRef = db.collection('hostingAccounts').doc(item.hostingAccountId);
+        const hSnap = await hDocRef.get();
+        if (hSnap.exists) {
+          const hData = hSnap.data() || {};
+          if (hData.status === 'suspended') {
+            const providerAccountId = hData.providerAccountId || hData.username;
+            if (providerAccountId) {
+              try {
+                await unsuspendHostingAccount(providerAccountId);
+              } catch (unsuspendErr) {
+                console.warn('[Fulfillment] Error unsuspending hosting account:', unsuspendErr);
+              }
+            }
+            await hDocRef.update({
+              status: 'active',
+              suspendedAt: null,
+              suspensionReason: null,
+              updatedAt: now,
+            });
+            await writeAuditLog(db, item.hostingAccountId, 'hosting_auto_unsuspended', actorUid, 'suspended', 'active', null, 'Auto-unsuspended upon renewal payment');
+            hostingResults.push({
+              itemId: item.hostingAccountId,
+              type: 'hosting',
+              action: 'unsuspend',
+              success: true,
+              status: 'completed',
+            });
+          }
+        }
+      } catch (renewErr: any) {
+        console.warn('[Fulfillment] Error processing hosting renewal/unsuspend:', renewErr);
       }
     }
   }
@@ -758,6 +849,31 @@ async function fulfillDomainOrder(domainOrderId: string, domainData: any, actorU
 async function fulfillHostingAccount(hostingAccountId: string, hostingData: any, actorUid: string): Promise<FulfillmentItemResult> {
   const db = getAdminDb();
   const now = new Date().toISOString();
+
+  if (hostingData.status === 'suspended') {
+    const providerAccountId = hostingData.providerAccountId || hostingData.username;
+    if (providerAccountId) {
+      try {
+        await unsuspendHostingAccount(providerAccountId);
+      } catch (err: any) {
+        console.warn('[Fulfillment] Could not unsuspend cPanel account ' + providerAccountId + ':', err.message);
+      }
+    }
+    await db.collection('hostingAccounts').doc(hostingAccountId).update({
+      status: 'active',
+      suspendedAt: null,
+      suspensionReason: null,
+      updatedAt: now,
+    });
+    await writeAuditLog(db, hostingAccountId, 'hosting_auto_unsuspended', actorUid, 'suspended', 'active', null, 'Auto-unsuspended upon order fulfillment');
+    return {
+      itemId: hostingAccountId,
+      type: 'hosting',
+      action: 'unsuspend',
+      success: true,
+      status: 'active',
+    };
+  }
 
   if (hostingData.status === 'active' || hostingData.provisioningStatus === 'completed') {
     return {
