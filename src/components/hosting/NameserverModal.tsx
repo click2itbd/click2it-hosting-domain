@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, collection, addDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
 import { X, Server, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { apiPost } from '../../services/apiClient';
+import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 interface DomainOrder {
   id: string;
@@ -16,9 +16,6 @@ interface NameserverModalProps {
   onClose: () => void;
   onUpdate: () => void;
 }
-
-import { apiPost } from '../../services/apiClient';
-import { getFriendlyErrorMessage } from '../../utils/errorUtils';
 
 export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClose, onUpdate }) => {
   const [ns, setNs] = useState<string[]>(['', '', '', '']);
@@ -38,7 +35,7 @@ export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClos
 
   const handleSave = async () => {
     // Filter out empty ones
-    const activeNs = ns.filter(n => n.trim() !== '');
+    const activeNs = ns.map(n => n.trim()).filter(Boolean);
     if (activeNs.length < 2) {
       toast.error('You must provide at least two nameservers (NS1 and NS2)');
       return;
@@ -46,77 +43,30 @@ export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClos
 
     setSaving(true);
     try {
-      if (domain.domain.endsWith('.bd')) {
-        // Try the BTCL API first (backend decides if it's enabled)
-        let apiHandled = false;
-        try {
-          const btclRes: any = await apiPost('/api/domains/manage', {
-            command: 'set_ns',
-            domain: domain.domain,
-            extraParams: { 
-              ns0: activeNs[0], 
-              ns1: activeNs[1],
-              ns2: activeNs[2] || '',
-              ns3: activeNs[3] || ''
-            }
-          });
-          if (btclRes?.success) {
-            apiHandled = true;
-          }
-        } catch (apiErr) {
-          console.warn('BTCL API nameserver update unavailable, falling back to manual queue:', apiErr);
-        }
-
-        if (apiHandled) {
-          await updateDoc(doc(db, 'domainOrders', domain.id), {
-            nameServers: activeNs,
-            nameservers: activeNs,
-            nsUpdatePending: false
-          });
-          toast.success('Nameservers updated successfully!');
-          onUpdate();
-          onClose();
-          return;
-        }
-
-        await addDoc(collection(db, 'nameserver_requests'), {
-          domainId: domain.id,
-          domainName: domain.domain,
-          requestedNs: activeNs,
-          status: 'pending',
-          createdAt: new Date().toISOString()
-        });
-        await updateDoc(doc(db, 'domainOrders', domain.id), {
-          nsUpdatePending: true,
-          requestedNs: activeNs
-        });
-        toast.success('Nameserver update request submitted! Our domain team will activate it shortly.');
-        onUpdate();
-        onClose();
-        return;
-      }
-
-      // 1. Call Backend to update registrar
+      // All nameserver updates (registrar API or BTCL manual request queue) are securely handled by backend API
       const res: any = await apiPost('/api/domains/manage', {
         command: 'set_ns',
         domain: domain.domain,
-        extraParams: {
-          ns0: activeNs[0],
+        extraParams: { 
+          ns0: activeNs[0], 
           ns1: activeNs[1],
           ns2: activeNs[2] || '',
-          ns3: activeNs[3] || ''
+          ns3: activeNs[3] || '',
+          nameservers: activeNs
         }
       });
 
       if (!res.success) {
-        throw new Error(res.error || 'Failed to update nameservers at registrar');
+        throw new Error(res.error || 'Failed to update nameservers');
       }
 
-      // 2. The backend already updates Firestore on success, but we can do a local sync just in case
-      // (The onSnapshot listener in MyServices should pick it up automatically from backend update)
-      
-      toast.success('Nameservers updated successfully!');
-      onUpdate(); 
+      if (res.manualQueued) {
+        toast.success(res.message || 'Nameserver update request submitted! Our domain team will activate it shortly.');
+      } else {
+        toast.success('Nameservers updated successfully! Changes may take 24-48 hours to propagate.');
+      }
+
+      onUpdate();
       onClose();
     } catch (error: any) {
       console.error('Error updating nameservers:', error);
@@ -182,4 +132,3 @@ export const NameserverModal: React.FC<NameserverModalProps> = ({ domain, onClos
     </div>
   );
 };
-

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Globe, Server, Save, Loader2, CalendarClock, Settings, Lock, Unlock, Key, Shield, UserCheck, RefreshCw } from 'lucide-react';
@@ -145,9 +145,6 @@ export const MyDomainsTab = ({ currentUser }: { currentUser: any }) => {
 
       if (response.success) {
         toast.success('NameServers updated successfully! It may take 24-48 hours to propagate.');
-        await updateDoc(doc(db, 'domainOrders', managingDomain.id), {
-          nameservers: nsValues
-        });
         fetchDomains();
         setManagingDomain(null);
       } else {

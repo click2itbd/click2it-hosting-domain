@@ -2172,6 +2172,38 @@ domainRouter.post('/manage', requireFirebaseAuth, async (req: any, res: Response
     const { provider, viaBtcl } = await resolveDomainProvider(domain, config);
 
     if (isBdDomain(domain) && !viaBtcl) {
+      if (command === 'set_ns') {
+        const nsList = [
+          extraParams?.ns0,
+          extraParams?.ns1,
+          extraParams?.ns2,
+          extraParams?.ns3,
+          ...(Array.isArray(extraParams?.nameservers) ? extraParams.nameservers : [])
+        ].filter((n): n is string => typeof n === 'string' && n.trim().length > 0);
+        const uniqueNs = Array.from(new Set(nsList));
+
+        const reqRef = db.collection('nameserver_requests').doc();
+        await reqRef.set({
+          id: reqRef.id,
+          userId: req.user.uid,
+          customerEmail: req.user.email || domainDoc.customerEmail || '',
+          domainId: snap.docs[0].id,
+          domainName: domain,
+          requestedNs: uniqueNs,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        });
+        await snap.docs[0].ref.update({
+          nsUpdatePending: true,
+          requestedNs: uniqueNs,
+          updatedAt: new Date().toISOString()
+        });
+        return res.json({
+          success: true,
+          manualQueued: true,
+          message: 'Nameserver update request submitted! Our domain team will activate it shortly.'
+        });
+      }
       // No BTCL API configured -> client should fall back to the manual admin approval queue
       return res.json({ success: false, manualRequired: true, error: 'BTCL API is not enabled. Request queued for manual update.' });
     }
@@ -2179,15 +2211,29 @@ domainRouter.post('/manage', requireFirebaseAuth, async (req: any, res: Response
     
     let result: any;
     if (command === 'set_ns') {
-      result = await (provider as any).setNameservers(domain, extraParams?.ns0, extraParams?.ns1, extraParams?.ns2, extraParams?.ns3);
+      const nsList = [
+        extraParams?.ns0,
+        extraParams?.ns1,
+        extraParams?.ns2,
+        extraParams?.ns3,
+        ...(Array.isArray(extraParams?.nameservers) ? extraParams.nameservers : [])
+      ].filter((n): n is string => typeof n === 'string' && n.trim().length > 0);
+      const uniqueNs = Array.from(new Set(nsList));
+      const ns0 = uniqueNs[0] || extraParams?.ns0;
+      const ns1 = uniqueNs[1] || extraParams?.ns1;
+      const ns2 = uniqueNs[2] || extraParams?.ns2 || '';
+      const ns3 = uniqueNs[3] || extraParams?.ns3 || '';
+
+      result = await (provider as any).setNameservers(domain, ns0, ns1, ns2, ns3);
       if (result.success) {
         try {
-          const db = getAdminDb();
-          const snap = await db.collection('domainOrders').where('domain', '==', domain).where('status', '==', 'active').get();
-          if (!snap.empty) {
-            await snap.docs[0].ref.update({ nameservers: { ns0: extraParams?.ns0, ns1: extraParams?.ns1, ns2: extraParams?.ns2, ns3: extraParams?.ns3 } });
-          }
-        } catch (e) { console.error(e); }
+          await snap.docs[0].ref.update({
+            nameservers: uniqueNs,
+            nameServers: uniqueNs,
+            nsUpdatePending: false,
+            updatedAt: new Date().toISOString()
+          });
+        } catch (e) { console.error('[set_ns] Firestore update error:', e); }
       }
       return res.json({ success: result.success, data: result, error: result.error });
     }
