@@ -1,7 +1,15 @@
 import { getAdminAuth, isUserAdmin } from '../firebase/admin.js';
 function decodeDevToken(idToken) {
+    // CRITICAL SECURITY ENFORCEMENT:
+    // Never decode unverified tokens in production or standard environments.
+    // Requires explicit opt-in in local non-production environment.
+    if (process.env.NODE_ENV === 'production' || process.env.ALLOW_INSECURE_DEV_TOKEN !== 'true') {
+        return null;
+    }
     try {
         const payload = idToken.split('.')[1];
+        if (!payload)
+            return null;
         const decoded = Buffer.from(payload, 'base64').toString('utf8');
         return JSON.parse(decoded);
     }
@@ -15,6 +23,9 @@ export async function requireFirebaseAuth(req, res, next) {
         return res.status(401).json({ error: 'Missing or invalid authorization token' });
     }
     const idToken = authHeader.split('Bearer ')[1]?.trim();
+    if (!idToken) {
+        return res.status(401).json({ error: 'Missing authorization token' });
+    }
     try {
         const adminAuth = getAdminAuth();
         if (adminAuth) {
@@ -22,13 +33,20 @@ export async function requireFirebaseAuth(req, res, next) {
             req.user = decodedToken;
             return next();
         }
+        else {
+            console.error('[requireFirebaseAuth] Firebase Admin Auth SDK not initialized.');
+        }
     }
     catch (error) {
-        console.warn('[requireFirebaseAuth] token verification error:', error?.message || error);
+        console.warn('[requireFirebaseAuth] token verification failed:', error?.message || error);
+        if (process.env.NODE_ENV === 'production' || process.env.ALLOW_INSECURE_DEV_TOKEN !== 'true') {
+            return res.status(401).json({ error: 'Invalid or expired authentication token' });
+        }
     }
-    // Fallback to dev JWT decode if present
+    // Fallback dev JWT decode ONLY when explicitly allowed in development
     const decoded = decodeDevToken(idToken);
     if (decoded?.user_id || decoded?.sub || decoded?.uid) {
+        console.warn('[requireFirebaseAuth] WARNING: Insecure dev token bypass used (development only).');
         req.user = { ...decoded, uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
         return next();
     }
@@ -39,7 +57,10 @@ export async function requireAdmin(req, res, next) {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Missing or invalid authorization token' });
     }
-    const idToken = authHeader.split('Bearer ')[1];
+    const idToken = authHeader.split('Bearer ')[1]?.trim();
+    if (!idToken) {
+        return res.status(401).json({ error: 'Missing authorization token' });
+    }
     let uid = '';
     let email = '';
     try {
@@ -50,13 +71,20 @@ export async function requireAdmin(req, res, next) {
             uid = decodedToken.uid;
             email = decodedToken.email || '';
         }
+        else {
+            console.error('[requireAdmin] Firebase Admin Auth SDK not initialized.');
+        }
     }
     catch (error) {
-        console.warn('[requireAdmin] token verification error:', error?.message || error);
+        console.warn('[requireAdmin] token verification failed:', error?.message || error);
+        if (process.env.NODE_ENV === 'production' || process.env.ALLOW_INSECURE_DEV_TOKEN !== 'true') {
+            return res.status(401).json({ error: 'Invalid or expired authentication token' });
+        }
     }
     if (!uid) {
         const decoded = decodeDevToken(idToken);
         if (decoded?.user_id || decoded?.sub || decoded?.uid) {
+            console.warn('[requireAdmin] WARNING: Insecure dev token bypass used for admin (development only).');
             req.user = { ...decoded, uid: decoded.user_id || decoded.sub || decoded.uid, email: decoded.email || '' };
             uid = decoded.user_id || decoded.sub || decoded.uid;
             email = decoded.email || '';
