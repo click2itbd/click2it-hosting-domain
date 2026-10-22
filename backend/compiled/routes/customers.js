@@ -136,63 +136,70 @@ customersRouter.post('/pay-order', requireFirebaseAuth, async (req, res) => {
     try {
         const db = getAdminDb();
         const orderRef = db.collection('orders').doc(orderId);
-        const orderSnap = await orderRef.get();
-        if (!orderSnap.exists) {
-            return res.status(404).json({ error: 'Order not found.' });
-        }
-        const orderData = orderSnap.data();
-        if (orderData.userId !== userId) {
-            return res.status(403).json({ error: 'Unauthorized to pay for this order.' });
-        }
-        if (orderData.paymentStatus === 'verified' || orderData.paymentStatus === 'paid') {
-            return res.status(400).json({ error: 'Order is already paid.' });
-        }
-        const totalAmount = Number(orderData.total || orderData.totalBdt || 0);
-        if (!totalAmount || totalAmount <= 0) {
-            return res.status(400).json({ error: 'Invalid order total amount.' });
-        }
-        // Check user balance
         const userRef = db.collection('users').doc(userId);
-        const userSnap = await userRef.get();
-        const userData = userSnap.exists ? userSnap.data() : {};
-        const currentBalance = typeof userData.balance === 'number' ? userData.balance : 0;
-        if (currentBalance < totalAmount) {
-            return res.status(400).json({
-                error: `Insufficient wallet balance. Order total: ৳${totalAmount.toLocaleString()}, Available: ৳${currentBalance.toLocaleString()}. Please top up your wallet balance.`
+        const now = new Date().toISOString();
+        let txData;
+        let orderData;
+        let totalAmount = 0;
+        let newBalance = 0;
+        // ATOMIC TRANSACTION: Check order status + user balance, then deduct & mark paid simultaneously (race condition safe)
+        try {
+            await db.runTransaction(async (t) => {
+                const orderSnap = await t.get(orderRef);
+                if (!orderSnap.exists) {
+                    throw new Error('Order not found.');
+                }
+                orderData = orderSnap.data();
+                if (orderData.userId !== userId) {
+                    throw new Error('Unauthorized to pay for this order.');
+                }
+                if (orderData.paymentStatus === 'verified' || orderData.paymentStatus === 'paid') {
+                    throw new Error('Order is already paid.');
+                }
+                totalAmount = Number(orderData.total || orderData.totalBdt || 0);
+                if (!totalAmount || totalAmount <= 0) {
+                    throw new Error('Invalid order total amount.');
+                }
+                const userSnap = await t.get(userRef);
+                const userData = userSnap.exists ? userSnap.data() : {};
+                const currentBalance = typeof userData.balance === 'number' ? userData.balance : 0;
+                if (currentBalance < totalAmount) {
+                    throw new Error(`Insufficient wallet balance. Order total: ৳${totalAmount.toLocaleString()}, Available: ৳${currentBalance.toLocaleString()}. Please top up your wallet balance.`);
+                }
+                newBalance = currentBalance - totalAmount;
+                t.update(userRef, {
+                    balance: newBalance,
+                    updatedAt: now
+                });
+                t.update(orderRef, {
+                    paymentStatus: 'verified',
+                    paymentMethod: 'wallet_balance',
+                    paymentVerificationStatus: 'approved',
+                    providerStatus: 'processing',
+                    paymentSubmittedAt: now,
+                    paidAt: now,
+                    updatedAt: now
+                });
+                const txRef = db.collection('wallet_transactions').doc();
+                txData = {
+                    id: txRef.id,
+                    userId,
+                    customerEmail: req.user.email || userData.email || orderData.customerEmail,
+                    customerName: userData.displayName || userData.name || orderData.customerName || 'Customer',
+                    type: 'debit',
+                    amount: totalAmount,
+                    balanceBefore: currentBalance,
+                    balanceAfter: newBalance,
+                    reason: `Payment for Order #${orderId.slice(0, 8)} (${orderData.items?.[0]?.name || 'Domain/Hosting Services'})`,
+                    orderId,
+                    createdAt: now
+                };
+                t.set(txRef, txData);
             });
         }
-        // Deduct balance
-        const newBalance = currentBalance - totalAmount;
-        const now = new Date().toISOString();
-        await userRef.update({
-            balance: newBalance,
-            updatedAt: now
-        });
-        const txRef = db.collection('wallet_transactions').doc();
-        const txData = {
-            id: txRef.id,
-            userId,
-            customerEmail: req.user.email || userData.email || orderData.customerEmail,
-            customerName: userData.displayName || userData.name || orderData.customerName || 'Customer',
-            type: 'debit',
-            amount: totalAmount,
-            balanceBefore: currentBalance,
-            balanceAfter: newBalance,
-            reason: `Payment for Order #${orderId.slice(0, 8)} (${orderData.items?.[0]?.name || 'Domain/Hosting Services'})`,
-            orderId,
-            createdAt: now
-        };
-        await txRef.set(txData);
-        // Update order status to paid / verified
-        await orderRef.update({
-            paymentStatus: 'verified',
-            paymentMethod: 'wallet_balance',
-            paymentVerificationStatus: 'approved',
-            providerStatus: 'processing',
-            paymentSubmittedAt: now,
-            paidAt: now,
-            updatedAt: now
-        });
+        catch (txErr) {
+            return res.status(400).json({ error: txErr.message || 'Payment processing failed.' });
+        }
         // Auto trigger fulfillment (domain registration / hosting provisioning)
         let fulfillmentRes = null;
         try {
@@ -280,17 +287,31 @@ customersRouter.post('/renew-domain', requireFirebaseAuth, async (req, res) => {
             }
         }
         const totalCost = renewPriceBdt * Number(periodYears);
-        // Check user balance
+        // 1. ATOMIC WALLET DEDUCTION TRANSACTION (PREVENTS RACE CONDITIONS & DOUBLE SPENDS)
         const userRef = db.collection('users').doc(userId);
-        const userSnap = await userRef.get();
-        const userData = userSnap.exists ? userSnap.data() : {};
-        const currentBalance = typeof userData.balance === 'number' ? userData.balance : 0;
-        if (currentBalance < totalCost) {
-            return res.status(400).json({
-                error: `Insufficient wallet balance. Renewal cost: ৳${totalCost.toLocaleString()} (${periodYears} yr), Available: ৳${currentBalance.toLocaleString()}. Please top up your wallet balance.`
+        let deductionData;
+        try {
+            deductionData = await db.runTransaction(async (t) => {
+                const uSnap = await t.get(userRef);
+                const uData = uSnap.exists ? uSnap.data() : {};
+                const curBal = typeof uData.balance === 'number' ? uData.balance : 0;
+                if (curBal < totalCost) {
+                    throw new Error(`Insufficient wallet balance. Renewal cost: ৳${totalCost.toLocaleString()} (${periodYears} yr), Available: ৳${curBal.toLocaleString()}. Please top up your wallet balance.`);
+                }
+                const nextBal = curBal - totalCost;
+                t.update(userRef, {
+                    balance: nextBal,
+                    updatedAt: new Date().toISOString()
+                });
+                return { currentBalance: curBal, newBalance: nextBal, userData: uData };
             });
         }
-        // Attempt provider renewal call
+        catch (txErr) {
+            return res.status(400).json({ error: txErr.message || 'Balance deduction failed.' });
+        }
+        const { currentBalance, newBalance, userData } = deductionData;
+        const now = new Date().toISOString();
+        // 2. ATTEMPT PROVIDER RENEWAL CALL
         let providerResult = null;
         let renewSuccess = false;
         try {
@@ -303,16 +324,37 @@ customersRouter.post('/renew-domain', requireFirebaseAuth, async (req, res) => {
             }
         }
         catch (pErr) {
-            console.error('[Domain Renew] Provider call failed:', pErr);
-            return res.status(500).json({ error: `Domain provider renewal failed: ${pErr.message}` });
+            console.error('[Domain Renew] Provider call failed. Rolling back deducted balance:', pErr);
+            // AUTO-ROLLBACK / REFUND ON PROVIDER FAILURE
+            try {
+                await db.runTransaction(async (t) => {
+                    const uSnap = await t.get(userRef);
+                    const curBal = uSnap.data()?.balance || 0;
+                    t.update(userRef, {
+                        balance: curBal + totalCost,
+                        updatedAt: new Date().toISOString()
+                    });
+                });
+                const refundTxRef = db.collection('wallet_transactions').doc();
+                await refundTxRef.set({
+                    id: refundTxRef.id,
+                    userId,
+                    customerEmail: req.user.email || userData.email,
+                    customerName: userData.displayName || userData.name || 'Customer',
+                    type: 'credit',
+                    amount: totalCost,
+                    balanceBefore: newBalance,
+                    balanceAfter: currentBalance,
+                    reason: `Auto-refund: Domain Renewal failed for ${cleanDomain} (${pErr.message})`,
+                    domainName: cleanDomain,
+                    createdAt: new Date().toISOString()
+                });
+            }
+            catch (refundErr) {
+                console.error('[Domain Renew] Critical: failed to auto-rollback balance:', refundErr);
+            }
+            return res.status(500).json({ error: `Domain provider renewal failed: ${pErr.message}. Any deducted balance has been refunded.` });
         }
-        // Deduct balance
-        const newBalance = currentBalance - totalCost;
-        const now = new Date().toISOString();
-        await userRef.update({
-            balance: newBalance,
-            updatedAt: now
-        });
         // Log transaction
         const txRef = db.collection('wallet_transactions').doc();
         await txRef.set({
