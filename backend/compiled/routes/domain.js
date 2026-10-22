@@ -553,10 +553,12 @@ domainRouter.post('/renew', async (req, res) => {
         const db = getAdminDb();
         const domainSnap = await db.collection('domainOrders').where('domain', '==', domain).get();
         domainSnap.forEach(async (docSnap) => {
+            const prevData = docSnap.data() || {};
+            const updatedExpiry = result.newExpiryDate || result.expiresAt || prevData.expiresAt || null;
             await docSnap.ref.update({
-                status: result.success ? 'renewing' : 'failed',
-                expiresAt: result.newExpiryDate || null,
-                updatedAt: new Date(),
+                status: result.success ? 'active' : 'failed',
+                ...(updatedExpiry ? { expiresAt: updatedExpiry, newExpiryDate: updatedExpiry } : {}),
+                updatedAt: new Date().toISOString(),
             });
         });
         return res.json({ success: result.success, data: result, error: result.error });

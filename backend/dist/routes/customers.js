@@ -330,21 +330,52 @@ customersRouter.post('/renew-domain', requireFirebaseAuth, async (req, res) => {
         });
         // Record renewal order document
         const renewalOrderRef = db.collection('domainOrders').doc();
+        const updatedExpiry = providerResult?.newExpiryDate || providerResult?.expiresAt || null;
         await renewalOrderRef.set({
             id: renewalOrderRef.id,
             userId,
             customerEmail: req.user.email || userData.email,
             customerName: userData.displayName || userData.name || 'Customer',
+            domain: cleanDomain,
             domainName: cleanDomain,
             type: 'renewal',
+            action: 'renewal',
             periodYears: Number(periodYears),
+            termYears: Number(periodYears),
+            renewalPeriod: Number(periodYears),
+            price: totalCost,
             amount: totalCost,
             paymentStatus: 'verified',
+            status: renewSuccess ? 'active' : 'pending',
             paymentMethod: 'wallet_balance',
             providerStatus: renewSuccess ? 'completed' : 'manual_review',
             providerResult,
-            createdAt: now
+            ...(updatedExpiry ? { expiresAt: updatedExpiry, newExpiryDate: updatedExpiry } : {}),
+            createdAt: now,
+            updatedAt: now,
         });
+        // Also update existing active domain record in domainOrders
+        if (renewSuccess && updatedExpiry) {
+            try {
+                const activeDomSnap = await db.collection('domainOrders')
+                    .where('domain', '==', cleanDomain)
+                    .where('userId', '==', userId)
+                    .where('status', '==', 'active')
+                    .get();
+                for (const aDoc of activeDomSnap.docs) {
+                    if (aDoc.id !== renewalOrderRef.id) {
+                        await aDoc.ref.update({
+                            expiresAt: updatedExpiry,
+                            newExpiryDate: updatedExpiry,
+                            updatedAt: now,
+                        });
+                    }
+                }
+            }
+            catch (err) {
+                console.warn('[Domain Renew] Failed to update parent active domain expiry:', err?.message);
+            }
+        }
         // Send email
         if (req.user.email || userData.email) {
             await sendEmail({

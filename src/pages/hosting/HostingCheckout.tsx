@@ -799,9 +799,11 @@ export const HostingCheckout: React.FC = () => {
           domain: rItem.domain,
           tld: rItem.domain.split('.').pop() || '',
           termYears: rItem.termYears || 1,
+          renewalPeriod: rItem.termYears || 1,
           price: rItem.price,
           status: 'pending',
           action: 'renewal',
+          type: 'renewal',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });

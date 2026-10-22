@@ -412,9 +412,11 @@ export class OpenproviderDomainProvider {
         }
     }
     async renewDomain(domain, years) {
-        const domainObj = this.splitDomain(domain);
+        const cleanDomain = domain.trim().toLowerCase();
+        const domainObj = this.splitDomain(cleanDomain);
+        const renewYears = Number(years) > 0 ? Number(years) : 1;
         try {
-            const query = new URLSearchParams({ full_name: domain });
+            const query = new URLSearchParams({ full_name: cleanDomain });
             const domainResponse = await this.fetchApi(`/domains?${query.toString()}`);
             const domainRecord = domainResponse.data?.results?.find((item) => item.domain?.name === domainObj.name && item.domain?.extension === domainObj.extension);
             if (!domainRecord?.id) {
@@ -425,22 +427,52 @@ export class OpenproviderDomainProvider {
                 body: JSON.stringify({
                     domain: domainObj,
                     id: domainRecord.id,
-                    period: years
+                    period: renewYears
                 })
             });
-            if (!response.data?.status) {
-                throw new Error('Openprovider did not confirm the domain renewal.');
+            if (!response.data?.status && response.code !== 0) {
+                throw new Error(response.desc || 'Openprovider did not confirm the domain renewal.');
+            }
+            // Fetch refreshed domain details from Openprovider to obtain exact updated expiry
+            let newExpiryDate;
+            try {
+                const updatedDetails = await this.fetchApi(`/domains/${domainRecord.id}`);
+                const freshData = updatedDetails.data || {};
+                const freshExpiry = freshData.renewal_date || freshData.expiration_date;
+                if (freshExpiry) {
+                    newExpiryDate = new Date(freshExpiry).toISOString();
+                }
+            }
+            catch (fetchErr) {
+                console.warn('[Openprovider] Could not fetch refreshed domain details after renewal:', fetchErr);
+            }
+            // Fallback calculation if Openprovider details call did not return a date
+            if (!newExpiryDate) {
+                const priorExpiry = domainRecord.renewal_date || domainRecord.expiration_date;
+                if (priorExpiry) {
+                    const d = new Date(priorExpiry);
+                    d.setFullYear(d.getFullYear() + renewYears);
+                    newExpiryDate = d.toISOString();
+                }
+                else {
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() + renewYears);
+                    newExpiryDate = d.toISOString();
+                }
             }
             return {
                 success: true,
-                domain: domain,
+                domain: cleanDomain,
                 transactionId: String(domainRecord.id),
+                newExpiryDate,
+                expiresAt: newExpiryDate,
+                status: response.data?.status || 'active',
             };
         }
         catch (error) {
             return {
                 success: false,
-                domain: domain,
+                domain: cleanDomain,
                 error: error.message
             };
         }

@@ -485,7 +485,8 @@ async function fulfillDomainOrder(domainOrderId: string, domainData: any, actorU
       );
     } else if (domainData.type === 'renewal' || domainData.action === 'renewal') {
       action = 'renew';
-      result = await provider.renewDomain(domainData.domain, domainData.renewalPeriod || 1);
+      const renewPeriod = Number(domainData.renewalPeriod || domainData.termYears || domainData.years || 1);
+      result = await provider.renewDomain(domainData.domain, renewPeriod);
     } else {
       action = 'register';
       const nameParts = (domainData.customerName || '').trim().split(/\s+/);
@@ -558,12 +559,13 @@ async function fulfillDomainOrder(domainOrderId: string, domainData: any, actorU
       ? 'The transfer request may have reached Openprovider, but no definitive result was returned. Check Openprovider before retrying.'
       : result?.error || null;
 
+  const calculatedExpiry = result?.expiresAt || result?.newExpiryDate || domainData.expiresAt || null;
   await db.collection('domainOrders').doc(domainOrderId).update({
     status: newStatus,
     registrationId: result?.registrationId || result?.transferId || domainData.registrationId || null,
     transferId: result?.transferId || domainData.transferId || null,
-    expiresAt: result?.expiresAt || domainData.expiresAt || null,
-    newExpiryDate: result?.newExpiryDate || null,
+    expiresAt: calculatedExpiry,
+    newExpiryDate: calculatedExpiry,
     error: providerMessage,
     fulfillmentError: providerMessage,
     providerStatus: result?.status || null,
@@ -577,6 +579,28 @@ async function fulfillDomainOrder(domainOrderId: string, domainData: any, actorU
     } : {}),
     updatedAt: now,
   });
+  if (action === 'renew' && isSuccess && calculatedExpiry) {
+    try {
+      const cleanDom = String(domainData.domain || '').trim().toLowerCase();
+      const activeDomainsSnap = await db.collection('domainOrders')
+        .where('domain', '==', cleanDom)
+        .where('status', '==', 'active')
+        .get();
+
+      for (const aDoc of activeDomainsSnap.docs) {
+        if (aDoc.id !== domainOrderId) {
+          await aDoc.ref.update({
+            expiresAt: calculatedExpiry,
+            newExpiryDate: calculatedExpiry,
+            updatedAt: now,
+          });
+        }
+      }
+    } catch (renewUpdateErr: any) {
+      console.warn('[Fulfillment] Error updating primary active domain record after renewal:', renewUpdateErr.message);
+    }
+  }
+
   if (action === 'transfer' && isSuccess && transferAuthCodeRef) {
     try {
       await transferAuthCodeRef.delete();

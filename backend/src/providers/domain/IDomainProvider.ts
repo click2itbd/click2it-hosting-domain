@@ -46,6 +46,8 @@ export interface DomainRenewalResult {
   success: boolean;
   domain: string;
   newExpiryDate?: string;
+  expiresAt?: string;
+  status?: string;
   transactionId?: string;
   error?: string;
 }
