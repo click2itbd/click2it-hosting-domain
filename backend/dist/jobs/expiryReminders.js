@@ -28,18 +28,26 @@ function parseExpiryDate(val) {
 }
 export function setupExpiryReminders() {
     cron.schedule('0 0 * * *', async () => {
-        console.log('[CRON] Running expiry reminders job...');
+        console.log('[CRON] Running in-memory expiry reminders job...');
         try {
-            await processExpiryReminders();
+            const result = await processExpiryReminders();
+            console.log('[CRON] In-memory expiry reminders completed:', result);
         }
         catch (error) {
-            console.error('[CRON] Expiry reminders job failed:', error);
+            console.error('[CRON] In-memory expiry reminders job failed:', error);
         }
     });
 }
-async function processExpiryReminders() {
+export async function processExpiryReminders() {
     const db = getAdminDb();
     const now = new Date();
+    const stats = {
+        domainsChecked: 0,
+        domainRemindersSent: 0,
+        hostingChecked: 0,
+        hostingRemindersSent: 0,
+        errors: 0
+    };
     const daysToCheck = [30, 7, 1];
     const targetDates = daysToCheck.map(days => {
         const d = new Date(now);
@@ -50,53 +58,72 @@ async function processExpiryReminders() {
         };
     });
     // 1. Process Domain Expiry Reminders
-    const domainsRef = db.collection('domainOrders');
-    const activeDomainsSnap = await domainsRef.where('status', '==', 'active').get();
-    for (const doc of activeDomainsSnap.docs) {
-        try {
-            const data = doc.data();
-            const expiryDate = parseExpiryDate(data.expiresAt || data.newExpiryDate);
-            if (!expiryDate)
-                continue;
-            const expiryIsoPrefix = expiryDate.toISOString().split('T')[0];
-            const daysDiff = Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            for (const target of targetDates) {
-                const reminderField = `reminderSent_${target.days}d`;
-                const isTargetMatch = expiryIsoPrefix === target.dateStringPrefix || daysDiff === target.days;
-                if (isTargetMatch && !data[reminderField]) {
-                    await sendReminderEmail(doc.id, 'domain', data, target.days, expiryDate);
-                    await doc.ref.update({ [reminderField]: true });
+    try {
+        const domainsRef = db.collection('domainOrders');
+        const activeDomainsSnap = await domainsRef.where('status', '==', 'active').get();
+        stats.domainsChecked = activeDomainsSnap.size;
+        for (const doc of activeDomainsSnap.docs) {
+            try {
+                const data = doc.data();
+                const expiryDate = parseExpiryDate(data.expiresAt || data.newExpiryDate);
+                if (!expiryDate)
+                    continue;
+                const expiryIsoPrefix = expiryDate.toISOString().split('T')[0];
+                const daysDiff = Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                for (const target of targetDates) {
+                    const reminderField = `reminderSent_${target.days}d`;
+                    const isTargetMatch = expiryIsoPrefix === target.dateStringPrefix || daysDiff === target.days;
+                    if (isTargetMatch && !data[reminderField]) {
+                        await sendReminderEmail(doc.id, 'domain', data, target.days, expiryDate);
+                        await doc.ref.update({ [reminderField]: true });
+                        stats.domainRemindersSent++;
+                    }
                 }
             }
+            catch (docErr) {
+                console.error(`[CRON] Error processing domain expiry for doc ${doc.id}:`, docErr);
+                stats.errors++;
+            }
         }
-        catch (docErr) {
-            console.error(`[CRON] Error processing domain expiry for doc ${doc.id}:`, docErr);
-        }
+    }
+    catch (err) {
+        console.error('[CRON] Error fetching active domain orders:', err);
+        stats.errors++;
     }
     // 2. Process Hosting Expiry Reminders
-    const hostingRef = db.collection('hostingAccounts');
-    const activeHostingSnap = await hostingRef.where('status', '==', 'active').get();
-    for (const doc of activeHostingSnap.docs) {
-        try {
-            const data = doc.data();
-            const expiryDate = parseExpiryDate(data.expiresAt || data.newExpiryDate);
-            if (!expiryDate)
-                continue;
-            const expiryIsoPrefix = expiryDate.toISOString().split('T')[0];
-            const daysDiff = Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            for (const target of targetDates) {
-                const reminderField = `reminderSent_${target.days}d`;
-                const isTargetMatch = expiryIsoPrefix === target.dateStringPrefix || daysDiff === target.days;
-                if (isTargetMatch && !data[reminderField]) {
-                    await sendReminderEmail(doc.id, 'hosting', data, target.days, expiryDate);
-                    await doc.ref.update({ [reminderField]: true });
+    try {
+        const hostingRef = db.collection('hostingAccounts');
+        const activeHostingSnap = await hostingRef.where('status', '==', 'active').get();
+        stats.hostingChecked = activeHostingSnap.size;
+        for (const doc of activeHostingSnap.docs) {
+            try {
+                const data = doc.data();
+                const expiryDate = parseExpiryDate(data.expiresAt || data.newExpiryDate);
+                if (!expiryDate)
+                    continue;
+                const expiryIsoPrefix = expiryDate.toISOString().split('T')[0];
+                const daysDiff = Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                for (const target of targetDates) {
+                    const reminderField = `reminderSent_${target.days}d`;
+                    const isTargetMatch = expiryIsoPrefix === target.dateStringPrefix || daysDiff === target.days;
+                    if (isTargetMatch && !data[reminderField]) {
+                        await sendReminderEmail(doc.id, 'hosting', data, target.days, expiryDate);
+                        await doc.ref.update({ [reminderField]: true });
+                        stats.hostingRemindersSent++;
+                    }
                 }
             }
-        }
-        catch (docErr) {
-            console.error(`[CRON] Error processing hosting expiry for doc ${doc.id}:`, docErr);
+            catch (docErr) {
+                console.error(`[CRON] Error processing hosting expiry for doc ${doc.id}:`, docErr);
+                stats.errors++;
+            }
         }
     }
+    catch (err) {
+        console.error('[CRON] Error fetching active hosting accounts:', err);
+        stats.errors++;
+    }
+    return stats;
 }
 async function sendReminderEmail(id, type, data, daysLeft, parsedExpiry) {
     const email = data.customerEmail || data.email || data.contactEmail;

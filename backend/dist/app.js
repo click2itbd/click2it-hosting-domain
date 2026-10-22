@@ -19,6 +19,7 @@ import emailRouter from "./routes/email.js";
 import webhookRouter from "./routes/webhook.js";
 import campaignRouter from "./routes/campaign.js";
 import customersRouter from "./routes/customers.js";
+import { cronRouter } from "./routes/cron.js";
 export function createApp() {
     const app = express();
     app.use(requestId);
@@ -184,6 +185,7 @@ export function createApp() {
     apiRouter.use("/ai", aiRouter);
     apiRouter.use("/webhook", webhookRouter);
     apiRouter.use("/customers", customersRouter);
+    apiRouter.use("/cron", cronRouter);
     apiRouter.use("/email", emailRouter);
     apiRouter.use("/send-email", emailRouter);
     apiRouter.use("/", emailRouter);
