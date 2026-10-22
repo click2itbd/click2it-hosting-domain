@@ -5,14 +5,34 @@ export interface PricingSettings {
   markupPercent: number;
 }
 
-export async function getDomainPricingSettings(): Promise<PricingSettings> {
-  const publicSettings = await getAdminDocument('settings', 'public_config');
-  const privateSettings = await getAdminDocument('settings', 'api_keys');
-  const settings = { ...(privateSettings.data || {}), ...(publicSettings.data || {}) };
-  const usdToBdtRate = Number(settings.usdToBdtRate) || 123;
-  const markupPercent = Number.isFinite(Number(settings.domainMarkupPercent)) ? Number(settings.domainMarkupPercent) : 15;
+let cachedPricingSettings: { data: PricingSettings; expiresAt: number } | null = null;
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes in-memory cache
 
-  return { usdToBdtRate, markupPercent };
+export function invalidateDomainPricingSettingsCache(): void {
+  cachedPricingSettings = null;
+}
+
+export async function getDomainPricingSettings(forceFresh: boolean = false): Promise<PricingSettings> {
+  if (!forceFresh && cachedPricingSettings && Date.now() < cachedPricingSettings.expiresAt) {
+    return cachedPricingSettings.data;
+  }
+
+  try {
+    const publicSettings = await getAdminDocument('settings', 'public_config');
+    const privateSettings = await getAdminDocument('settings', 'api_keys');
+    const settings = { ...(privateSettings.data || {}), ...(publicSettings.data || {}) };
+    const usdToBdtRate = Number(settings.usdToBdtRate) || 123;
+    const markupPercent = Number.isFinite(Number(settings.domainMarkupPercent)) ? Number(settings.domainMarkupPercent) : 15;
+
+    const data: PricingSettings = { usdToBdtRate, markupPercent };
+    cachedPricingSettings = { data, expiresAt: Date.now() + CACHE_TTL_MS };
+    return data;
+  } catch {
+    if (cachedPricingSettings) {
+      return cachedPricingSettings.data;
+    }
+    return { usdToBdtRate: 123, markupPercent: 15 };
+  }
 }
 
 export function calculateCustomerPriceBdt(supplierPriceUsd: number, settings: PricingSettings): number {

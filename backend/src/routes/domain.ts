@@ -4,7 +4,7 @@ import { getDomainProvider } from '../providers/providerFactory.js';
 import { DomainAvailabilityResult, DomainRegistrationRequest, DomainRegistrationResult, WhoisResult, DomainTransferResult, TldPricingResult } from '../providers/domain/IDomainProvider.js';
 import { sendEmail } from '../services/email.js';
 import { getAdminDocument, isUserAdmin } from '../firebase/admin.js';
-import { getDomainPricingSettings, calculateCustomerPriceBdt } from '../services/domainPricing.js';
+import { getDomainPricingSettings, calculateCustomerPriceBdt, invalidateDomainPricingSettingsCache } from '../services/domainPricing.js';
 import { ProviderError } from '../providers/domain/DomainProviderError.js';
 import { BtclDomainProvider, isBdDomain } from '../providers/domain/BtclDomainProvider.js';
 import { resolveDomainProvider, getBtclConfig, saveBtclConfig, maskBtclConfig } from '../services/btclConfig.js';
@@ -25,6 +25,20 @@ interface DomainPricing {
 const domainRouter = Router();
 let domainPricingCache: { expiresAt: number; data: DomainPricing[] } | null = null;
 let livePricingCooldownUntil = 0;
+
+// High-performance 24-hour TLD & Renewal in-memory caches (instant 0ms response, zero provider rate-limit pressure)
+const TLD_PRICING_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const tldPricingCache = new Map<string, { data: any; expiresAt: number }>();
+
+const RENEWAL_PRICING_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
+const renewalPricingCache = new Map<string, { data: any; expiresAt: number }>();
+
+export function clearDomainPricingCaches(): void {
+  clearDomainPricingCaches();
+  tldPricingCache.clear();
+  renewalPricingCache.clear();
+  invalidateDomainPricingSettingsCache();
+}
 const PRICED_TLDS = [
   'com', 'net', 'org', 'xyz', 'io', 'co', 'dev', 'online', 'info', 'biz', 'store',
   'site', 'app', 'ai', 'tech', 'me', 'shop', 'pro', 'live', 'cloud', 'digital', 'space', 'agency', 'link', 'club'
@@ -215,7 +229,7 @@ export async function getEffectiveDomainPricingList(forceLive: boolean = false):
         }
       }
       if (list.length > 0) {
-        domainPricingCache = { expiresAt: Date.now() + 5 * 60_000, data: list };
+        domainPricingCache = { expiresAt: Date.now() + 24 * 60 * 60_000, data: list };
         // Trigger live refresh in background so next time it is fresh without blocking the user
         syncLiveOpenproviderPricingInBackground().catch(() => {});
         return list;
@@ -647,6 +661,12 @@ domainRouter.post('/tld-pricing', async (req: any, res: Response) => {
     const cleanTld = String(tld).trim().replace(/^\./, '').toLowerCase();
     const formattedTld = `.${cleanTld}`;
 
+    // 1. Return from 24h in-memory cache instantly
+    const cached = tldPricingCache.get(cleanTld);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json({ success: true, data: cached.data });
+    }
+
     let pricingSettings = { usdToBdtRate: 123, markupPercent: 15 };
     try {
       pricingSettings = await getDomainPricingSettings();
@@ -659,17 +679,16 @@ domainRouter.post('/tld-pricing', async (req: any, res: Response) => {
       try {
         const result = await (provider as any).getTldPricing(cleanTld);
         if (result && result.registrationPrice > 0) {
-          return res.json({ 
-            success: true, 
-            data: { 
-              tld: formattedTld,
-              currency: 'BDT',
-              registrationPrice: calculateCustomerPriceBdt(result.registrationPrice, pricingSettings),
-              renewalPrice: calculateCustomerPriceBdt(result.renewalPrice, pricingSettings),
-              transferPrice: calculateCustomerPriceBdt(result.transferPrice, pricingSettings),
-              restorePrice: calculateCustomerPriceBdt(result.restorePrice || result.renewalPrice, pricingSettings),
-            } 
-          });
+          const responseData = { 
+            tld: formattedTld,
+            currency: 'BDT',
+            registrationPrice: calculateCustomerPriceBdt(result.registrationPrice, pricingSettings),
+            renewalPrice: calculateCustomerPriceBdt(result.renewalPrice, pricingSettings),
+            transferPrice: calculateCustomerPriceBdt(result.transferPrice, pricingSettings),
+            restorePrice: calculateCustomerPriceBdt(result.restorePrice || result.renewalPrice, pricingSettings),
+          };
+          tldPricingCache.set(cleanTld, { data: responseData, expiresAt: Date.now() + TLD_PRICING_CACHE_TTL });
+          return res.json({ success: true, data: responseData });
         }
       } catch (err: any) {
         console.warn(`[Domain] Live getTldPricing failed for ${formattedTld}, using fallback:`, err.message);
@@ -682,17 +701,16 @@ domainRouter.post('/tld-pricing', async (req: any, res: Response) => {
       || fullPricing.find(p => p.tld.toLowerCase().replace(/^\./, '') === cleanTld);
 
     if (match && match.registerPrice > 0) {
-      return res.json({ 
-        success: true, 
-        data: { 
-          tld: formattedTld,
-          currency: 'BDT',
-          registrationPrice: match.registerPrice,
-          renewalPrice: match.renewPrice,
-          transferPrice: match.transferPrice,
-          restorePrice: match.renewPrice,
-        }
-      });
+      const responseData = { 
+        tld: formattedTld,
+        currency: 'BDT',
+        registrationPrice: match.registerPrice,
+        renewalPrice: match.renewPrice,
+        transferPrice: match.transferPrice,
+        restorePrice: match.renewPrice,
+      };
+      tldPricingCache.set(cleanTld, { data: responseData, expiresAt: Date.now() + TLD_PRICING_CACHE_TTL });
+      return res.json({ success: true, data: responseData });
     }
 
     return res.status(404).json({
@@ -773,6 +791,12 @@ domainRouter.post('/renewal-price', async (req: any, res: Response) => {
     const { domain } = req.body;
     if (!domain) return res.json({ success: false, error: 'domain is required' });
 
+    const cleanDomain = String(domain).trim().toLowerCase();
+    const cached = renewalPricingCache.get(cleanDomain);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json({ success: true, data: cached.data });
+    }
+
     const config = await getDomainConfig();
     const provider = getDomainProvider(config);
     let pricingSettings = { usdToBdtRate: 123, markupPercent: 15 };
@@ -791,15 +815,14 @@ domainRouter.post('/renewal-price', async (req: any, res: Response) => {
 
     if (result && result.success && Number.isFinite(result.supplierPriceUsd) && result.supplierPriceUsd > 0) {
       const customerPriceBdt = calculateCustomerPriceBdt(result.supplierPriceUsd, pricingSettings);
-      return res.json({ 
-        success: true, 
-        data: { 
-          domain: result.domain,
-          tld: result.tld,
-          renewalPriceBdt: customerPriceBdt,
-          maxDuration: result.maxDuration || 10,
-        } 
-      });
+      const responseData = { 
+        domain: result.domain,
+        tld: result.tld,
+        renewalPriceBdt: customerPriceBdt,
+        maxDuration: result.maxDuration || 10,
+      };
+      renewalPricingCache.set(cleanDomain, { data: responseData, expiresAt: Date.now() + RENEWAL_PRICING_CACHE_TTL });
+      return res.json({ success: true, data: responseData });
     }
 
     // Fallback to Firestore / default catalogue
@@ -811,15 +834,14 @@ domainRouter.post('/renewal-price', async (req: any, res: Response) => {
       || fullPricing.find(p => p.tld.toLowerCase().replace(/^\./, '') === tld);
 
     if (match && match.renewPrice > 0) {
-      return res.json({ 
-        success: true, 
-        data: { 
-          domain,
-          tld: formattedTld,
-          renewalPriceBdt: match.renewPrice,
-          maxDuration: 10,
-        }
-      });
+      const responseData = { 
+        domain,
+        tld: formattedTld,
+        renewalPriceBdt: match.renewPrice,
+        maxDuration: 10,
+      };
+      renewalPricingCache.set(cleanDomain, { data: responseData, expiresAt: Date.now() + RENEWAL_PRICING_CACHE_TTL });
+      return res.json({ success: true, data: responseData });
     }
 
     return res.status(404).json({ success: false, error: `Renewal price for ${domain} could not be determined.` });
@@ -833,6 +855,13 @@ domainRouter.post('/renewal-price-breakdown', async (req: any, res: Response) =>
   try {
     const { domain } = req.body;
     if (!domain) return res.json({ success: false, error: 'domain is required' });
+
+    const cleanDomain = String(domain).trim().toLowerCase();
+    const cacheKey = `breakdown_${cleanDomain}`;
+    const cached = renewalPricingCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json({ success: true, data: cached.data });
+    }
 
     const config = await getDomainConfig();
     const provider = getDomainProvider(config);
@@ -854,17 +883,16 @@ domainRouter.post('/renewal-price-breakdown', async (req: any, res: Response) =>
       const customerPriceBdt = calculateCustomerPriceBdt(result.supplierPriceUsd, pricingSettings);
       const sellingPriceUsd = result.supplierPriceUsd * (1 + pricingSettings.markupPercent / 100);
 
-      return res.json({ 
-        success: true, 
-        data: { 
-          ...result,
-          sellingPriceBdt: customerPriceBdt,
-          sellingPriceUsd: Math.round(sellingPriceUsd * 100) / 100,
-          markupAmountUsd: Math.round((sellingPriceUsd - result.supplierPriceUsd) * 100) / 100,
-          markupPercent: pricingSettings.markupPercent,
-          exchangeRate: pricingSettings.usdToBdtRate,
-        } 
-      });
+      const responseData = { 
+        ...result,
+        sellingPriceBdt: customerPriceBdt,
+        sellingPriceUsd: Math.round(sellingPriceUsd * 100) / 100,
+        markupAmountUsd: Math.round((sellingPriceUsd - result.supplierPriceUsd) * 100) / 100,
+        markupPercent: pricingSettings.markupPercent,
+        exchangeRate: pricingSettings.usdToBdtRate,
+      };
+      renewalPricingCache.set(cacheKey, { data: responseData, expiresAt: Date.now() + RENEWAL_PRICING_CACHE_TTL });
+      return res.json({ success: true, data: responseData });
     }
 
     // Fallback to Firestore / default catalogue
