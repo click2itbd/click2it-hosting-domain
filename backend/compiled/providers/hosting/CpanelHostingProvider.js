@@ -232,6 +232,20 @@ export class CpanelHostingProvider {
         await this.verifyAccountExists(providerAccountId);
         await this.whmRequest('changepackage', { user: providerAccountId, pkg: newPlanCode });
     }
+    async triggerAutoSSL(providerAccountId) {
+        if (!providerAccountId) {
+            throw new ProviderError('validation_error', 'Provider account ID is required');
+        }
+        try {
+            const result = await this.whmRequest('start_autossl_check_for_user', { user: providerAccountId });
+            const statusMsg = result?.metadata?.reason || result?.statusmsg || 'AutoSSL check successfully triggered for user';
+            return { success: true, message: statusMsg };
+        }
+        catch (err) {
+            console.warn(`[AutoSSL] Failed to trigger start_autossl_check_for_user for ${providerAccountId}:`, err.message);
+            return { success: false, message: err.message || 'AutoSSL check failed to start' };
+        }
+    }
     async verifyAccountExists(providerAccountId) {
         try {
             await this.whmRequest('accountsummary', { user: providerAccountId });

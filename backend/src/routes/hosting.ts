@@ -13,6 +13,7 @@ import {
   changeHostingPlan,
   classifyHostingError,
   createHostingLoginSession,
+  triggerHostingAutoSSL,
 } from '../services/hosting.js';
 import { HostingUsageStats } from '../providers/hosting/IHostingProvider.js';
 import { config } from '../config/index.js';
@@ -401,3 +402,50 @@ hostingRouter.post('/cancellation-request', requireFirebaseAuth, async (req: any
 });
 
 export default hostingRouter;
+
+/**
+ * POST /api/hosting/autossl/trigger
+ * Triggers cPanel AutoSSL check for a specific hosting account or provider username
+ */
+hostingRouter.post('/autossl/trigger', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const { hostingAccountId, providerAccountId } = req.body;
+    let targetProviderId = providerAccountId;
+
+    const db = getAdminDb();
+    if (hostingAccountId) {
+      const snap = await db.collection('hostingAccounts').doc(hostingAccountId).get();
+      if (!snap.exists) {
+        return res.status(404).json({ success: false, error: 'Hosting account not found' });
+      }
+      const data = snap.data() || {};
+      if (data.userId !== req.user.uid) {
+        const isAdmin = await isUserAdmin(req.user.uid, req.user.email);
+        if (!isAdmin) {
+          return res.status(403).json({ success: false, error: 'Unauthorized to manage this hosting account' });
+        }
+      }
+      targetProviderId = data.providerAccountId || data.username || targetProviderId;
+    }
+
+    if (!targetProviderId) {
+      return res.status(400).json({ success: false, error: 'providerAccountId or hostingAccountId is required' });
+    }
+
+    const result = await triggerHostingAutoSSL(targetProviderId);
+    if (hostingAccountId) {
+      await db.collection('hostingAccounts').doc(hostingAccountId).update({
+        lastAutoSslTriggeredAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return res.json({
+      success: result.success,
+      message: result.message || 'AutoSSL check successfully triggered. Certificate will issue automatically.'
+    });
+  } catch (error: any) {
+    console.error('AutoSSL trigger error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Failed to trigger AutoSSL' });
+  }
+});

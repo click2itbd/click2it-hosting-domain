@@ -66,7 +66,8 @@ export function getHostingProvider(config?: { hostingApiType?: string; hostingAp
       unsuspendAccount: async () => { throw new Error('Hosting provider not configured.'); },
       terminateAccount: async () => { throw new Error('Hosting provider not configured.'); },
       getUsage: async () => { throw new Error('Hosting provider not configured.'); },
-      changePlan: async () => { throw new Error('Hosting provider not configured.'); }
+      changePlan: async () => { throw new Error('Hosting provider not configured.'); },
+      triggerAutoSSL: async () => ({ success: false, message: 'Hosting provider not configured.' })
     };
   }
 
@@ -79,7 +80,8 @@ export function getHostingProvider(config?: { hostingApiType?: string; hostingAp
           unsuspendAccount: async () => { throw new Error('cPanel API key not configured.'); },
           terminateAccount: async () => { throw new Error('cPanel API key not configured.'); },
           getUsage: async () => { throw new Error('cPanel API key not configured.'); },
-          changePlan: async () => { throw new Error('cPanel API key not configured.'); }
+          changePlan: async () => { throw new Error('cPanel API key not configured.'); },
+          triggerAutoSSL: async () => ({ success: false, message: 'cPanel API key not configured.' })
         };
       }
       return new CpanelHostingProvider(hostingApiKey, hostingApiUrl, hostingApiUsername);

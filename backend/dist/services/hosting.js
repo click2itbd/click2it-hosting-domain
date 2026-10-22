@@ -124,3 +124,10 @@ export async function createHostingLoginSession(providerAccountId) {
     }
     return provider.createLoginSession(providerAccountId);
 }
+export async function triggerHostingAutoSSL(providerAccountId) {
+    const { provider } = await getHostingProviderWithSettings();
+    if (typeof provider.triggerAutoSSL === 'function') {
+        return provider.triggerAutoSSL(providerAccountId);
+    }
+    return { success: false, message: 'AutoSSL trigger is not supported by current hosting provider' };
+}

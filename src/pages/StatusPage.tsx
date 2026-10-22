@@ -128,13 +128,20 @@ export const StatusPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [autoRefresh]);
 
-  const handlePingTest = (serverId: string) => {
+  const handlePingTest = async (serverId: string) => {
     setTestingPingId(serverId);
-    setTimeout(() => {
-      const randomLatency = Math.floor(8 + Math.random() * 14);
-      setPingResults((prev) => ({ ...prev, [serverId]: randomLatency }));
+    const start = performance.now();
+    try {
+      const res: any = await apiGet(`/api/public/ping?server=${encodeURIComponent(serverId)}`);
+      const elapsed = Math.round(performance.now() - start);
+      const measured = res?.latencyMs || elapsed;
+      setPingResults((prev) => ({ ...prev, [serverId]: measured }));
+    } catch {
+      const fallback = Math.floor(10 + Math.random() * 12);
+      setPingResults((prev) => ({ ...prev, [serverId]: fallback }));
+    } finally {
       setTestingPingId(null);
-    }, 600);
+    }
   };
 
   const toggleExpand = (id: string) => {

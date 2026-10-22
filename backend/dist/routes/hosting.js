@@ -3,7 +3,7 @@ import { getAdminDb, isUserAdmin } from '../firebase/admin.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { sendEmail } from '../services/email.js';
 import { getAdminDocument } from '../firebase/admin.js';
-import { testHostingConnection, provisionHostingAccount, suspendHostingAccount, unsuspendHostingAccount, terminateHostingAccount, getHostingAccountUsage, changeHostingPlan, classifyHostingError, createHostingLoginSession, } from '../services/hosting.js';
+import { testHostingConnection, provisionHostingAccount, suspendHostingAccount, unsuspendHostingAccount, terminateHostingAccount, getHostingAccountUsage, changeHostingPlan, classifyHostingError, createHostingLoginSession, triggerHostingAutoSSL, } from '../services/hosting.js';
 import { config } from '../config/index.js';
 const hostingRouter = Router();
 hostingRouter.get('/health', async (req, res) => {
@@ -362,3 +362,46 @@ hostingRouter.post('/cancellation-request', requireFirebaseAuth, async (req, res
     }
 });
 export default hostingRouter;
+/**
+ * POST /api/hosting/autossl/trigger
+ * Triggers cPanel AutoSSL check for a specific hosting account or provider username
+ */
+hostingRouter.post('/autossl/trigger', requireFirebaseAuth, async (req, res) => {
+    try {
+        const { hostingAccountId, providerAccountId } = req.body;
+        let targetProviderId = providerAccountId;
+        const db = getAdminDb();
+        if (hostingAccountId) {
+            const snap = await db.collection('hostingAccounts').doc(hostingAccountId).get();
+            if (!snap.exists) {
+                return res.status(404).json({ success: false, error: 'Hosting account not found' });
+            }
+            const data = snap.data() || {};
+            if (data.userId !== req.user.uid) {
+                const isAdmin = await isUserAdmin(req.user.uid, req.user.email);
+                if (!isAdmin) {
+                    return res.status(403).json({ success: false, error: 'Unauthorized to manage this hosting account' });
+                }
+            }
+            targetProviderId = data.providerAccountId || data.username || targetProviderId;
+        }
+        if (!targetProviderId) {
+            return res.status(400).json({ success: false, error: 'providerAccountId or hostingAccountId is required' });
+        }
+        const result = await triggerHostingAutoSSL(targetProviderId);
+        if (hostingAccountId) {
+            await db.collection('hostingAccounts').doc(hostingAccountId).update({
+                lastAutoSslTriggeredAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            });
+        }
+        return res.json({
+            success: result.success,
+            message: result.message || 'AutoSSL check successfully triggered. Certificate will issue automatically.'
+        });
+    }
+    catch (error) {
+        console.error('AutoSSL trigger error:', error);
+        return res.status(500).json({ success: false, error: error.message || 'Failed to trigger AutoSSL' });
+    }
+});

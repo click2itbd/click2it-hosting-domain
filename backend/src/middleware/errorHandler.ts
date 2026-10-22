@@ -1,8 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import { captureBackendException } from '../services/sentry.js';
 
 export function errorHandler(err: any, req: Request, res: Response, next: NextFunction) {
   const requestId = (req as any).requestId || 'unknown';
   console.error(`[${requestId}] Error:`, err);
+  
+  // Forward to Sentry APM in background if SENTRY_DSN is configured
+  captureBackendException(err, req).catch(() => {});
   
   const statusCode = err.statusCode || err.status || 500;
   

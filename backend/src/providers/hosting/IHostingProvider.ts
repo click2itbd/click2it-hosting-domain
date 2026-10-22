@@ -36,4 +36,5 @@ export interface IHostingProvider {
   changePlan(providerAccountId: string, newPlanCode: string): Promise<void>;
   createLoginSession?(providerAccountId: string): Promise<string>;
   testConnection?(): Promise<{ success: boolean; code: string; message: string }>;
+  triggerAutoSSL?(providerAccountId: string): Promise<{ success: boolean; message: string }>;
 }

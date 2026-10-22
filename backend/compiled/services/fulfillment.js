@@ -900,6 +900,12 @@ async function fulfillHostingAccount(hostingAccountId, hostingData, actorUid) {
                 customerEmail: contactEmail,
                 updatedAt: now,
             });
+            // Automated AutoSSL Engine: Queue instant certificate check on cPanel server
+            if (result.providerAccountId && typeof provider.triggerAutoSSL === 'function') {
+                provider.triggerAutoSSL(result.providerAccountId).catch((sslErr) => {
+                    console.warn('[Fulfillment] Background AutoSSL queue error:', sslErr.message);
+                });
+            }
         }
         else {
             await db.collection('hostingAccounts').doc(hostingAccountId).update({
