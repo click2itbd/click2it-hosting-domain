@@ -973,6 +973,7 @@ export const HostingCheckout: React.FC = () => {
         }
 
         let walletPaid = false;
+        let payErrorMsg = '';
         try {
           const token = await user.getIdToken();
           const res = await apiClient.post('/api/customers/pay-order', { orderId }, {
@@ -980,46 +981,12 @@ export const HostingCheckout: React.FC = () => {
           });
           if (res.data?.success) {
             walletPaid = true;
+          } else if (res.data?.error) {
+            payErrorMsg = res.data.error;
           }
         } catch (apiErr: any) {
-          console.warn('API pay-order error, attempting direct Firestore fallback:', apiErr);
-        }
-
-        // Direct fallback if API was unreachable
-        if (!walletPaid) {
-          try {
-            const walletUid = targetUserId !== 'guest' ? targetUserId : user.uid;
-            const userDocSnap = await getDoc(doc(db, 'users', walletUid));
-            const currentBal = typeof userDocSnap.data()?.balance === 'number' ? userDocSnap.data()?.balance : 0;
-            if (currentBal >= grandTotal) {
-              const newBal = currentBal - grandTotal;
-              const now = new Date().toISOString();
-              await updateDoc(doc(db, 'users', walletUid), { balance: newBal, updatedAt: now });
-              await updateDoc(doc(db, 'orders', orderId), {
-                paymentStatus: 'verified',
-                paymentMethod: 'wallet_balance',
-                status: 'completed',
-                paidAt: now,
-                updatedAt: now
-              });
-              const txDoc = doc(collection(db, 'wallet_transactions'));
-              await setDoc(txDoc, {
-                id: txDoc.id,
-                userId: walletUid,
-                customerEmail: formData.email || user.email,
-                type: 'debit',
-                amount: grandTotal,
-                balanceBefore: currentBal,
-                balanceAfter: newBal,
-                reason: `Payment for Order #${orderId.slice(0, 8)}`,
-                orderId,
-                createdAt: now
-              });
-              walletPaid = true;
-            }
-          } catch (fErr) {
-            console.error('Direct Firestore wallet payment failed:', fErr);
-          }
+          payErrorMsg = apiErr?.response?.data?.error || apiErr?.message || 'Payment processing failed.';
+          console.error('API pay-order error:', apiErr);
         }
 
         if (walletPaid) {
@@ -1028,7 +995,7 @@ export const HostingCheckout: React.FC = () => {
           navigate(`/order-success/${orderId}`);
           return;
         } else {
-          throw new Error('Insufficient wallet balance or payment failed. Please add funds in User Profile or choose bKash.');
+          throw new Error(payErrorMsg || 'Insufficient wallet balance or payment failed. Please add funds in User Profile or choose bKash.');
         }
       } else if (formData.paymentMethod === 'bkash') {
         clearCart();

@@ -76,7 +76,7 @@ export function createApp(): Express {
   );
 
   const envOrigins = process.env.CORS_ALLOWED_ORIGINS 
-    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()) 
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) 
     : [];
 
   const allowedOrigins = [
@@ -84,6 +84,10 @@ export function createApp(): Express {
     "https://www.click2itbd.com",
     "http://click2itbd.com",
     "http://www.click2itbd.com",
+    "https://click2it.com.bd",
+    "https://www.click2it.com.bd",
+    "http://click2it.com.bd",
+    "http://www.click2it.com.bd",
     "https://click2it.bd",
     "https://www.click2it.bd",
     "http://click2it.bd",
@@ -91,15 +95,34 @@ export function createApp(): Express {
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     ...envOrigins,
     ...(config.cors?.origins || []),
   ];
 
+  const isDev = process.env.NODE_ENV !== "production";
+
   const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
-      // Allow requests with no origin (like curl, Postman, mobile apps) or dynamically reflect any requesting origin
-      // This ensures seamless operation in AI Studio preview iframes, Cloud Workstations, localhost, and production domains
-      callback(null, true);
+      // Allow non-browser requests with no origin (like curl, Postman, server cron, mobile apps)
+      if (!origin) {
+        return callback(null, true);
+      }
+      // Allow local development, whitelisted production domains, and Firebase preview URLs
+      const isAllowed =
+        isDev ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.click2it.com.bd') ||
+        origin.endsWith('.click2itbd.com') ||
+        origin.endsWith('.click2it.bd') ||
+        origin.endsWith('.web.app') ||
+        origin.endsWith('.firebaseapp.com');
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+      // Reject untrusted cross-origin requests in production
+      return callback(new Error(`Origin ${origin} is not allowed by CORS policy.`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
@@ -137,8 +160,6 @@ export function createApp(): Express {
     const token = rawHeader.startsWith('Bearer ') ? rawHeader.slice(7).trim() : undefined;
     runWithRequestToken(token, () => next());
   });
-
-  const isDev = process.env.NODE_ENV !== "production";
 
   const generalLimiter = rateLimit({
     windowMs: config.rateLimit.windowMs,

@@ -163,6 +163,10 @@ customersRouter.post('/pay-order', requireFirebaseAuth, async (req: any, res: Re
     let totalAmount = 0;
     let newBalance = 0;
 
+    const callerUid = req.user.uid;
+    const callerEmail = req.user.email;
+    const isAdmin = await isUserAdmin(callerUid, callerEmail).catch(() => false);
+
     // ATOMIC TRANSACTION: Check order status + user balance, then deduct & mark paid simultaneously (race condition safe)
     try {
       await db.runTransaction(async (t: any) => {
@@ -172,7 +176,10 @@ customersRouter.post('/pay-order', requireFirebaseAuth, async (req: any, res: Re
         }
 
         orderData = orderSnap.data();
-        if (orderData.userId !== userId) {
+        const targetUserId = orderData.userId || callerUid;
+
+        // Allow owner OR authorized Admin/Staff to pay for customer order
+        if (targetUserId !== callerUid && !isAdmin) {
           throw new Error('Unauthorized to pay for this order.');
         }
 
@@ -185,17 +192,18 @@ customersRouter.post('/pay-order', requireFirebaseAuth, async (req: any, res: Re
           throw new Error('Invalid order total amount.');
         }
 
-        const userSnap = await t.get(userRef);
+        const targetUserRef = db.collection('users').doc(targetUserId);
+        const userSnap = await t.get(targetUserRef);
         const userData: any = userSnap.exists ? userSnap.data() : {};
         const currentBalance = typeof userData.balance === 'number' ? userData.balance : 0;
 
         if (currentBalance < totalAmount) {
-          throw new Error(`Insufficient wallet balance. Order total: ৳${totalAmount.toLocaleString()}, Available: ৳${currentBalance.toLocaleString()}. Please top up your wallet balance.`);
+          throw new Error(`Insufficient wallet balance. Order total: ৳${totalAmount.toLocaleString()}, Available: ৳${currentBalance.toLocaleString()}. Please top up customer wallet balance.`);
         }
 
         newBalance = currentBalance - totalAmount;
 
-        t.update(userRef, {
+        t.update(targetUserRef, {
           balance: newBalance,
           updatedAt: now
         });
@@ -213,14 +221,14 @@ customersRouter.post('/pay-order', requireFirebaseAuth, async (req: any, res: Re
         const txRef = db.collection('wallet_transactions').doc();
         txData = {
           id: txRef.id,
-          userId,
-          customerEmail: req.user.email || userData.email || orderData.customerEmail,
+          userId: targetUserId,
+          customerEmail: userData.email || orderData.customerEmail || req.user.email,
           customerName: userData.displayName || userData.name || orderData.customerName || 'Customer',
           type: 'debit',
           amount: totalAmount,
           balanceBefore: currentBalance,
           balanceAfter: newBalance,
-          reason: `Payment for Order #${orderId.slice(0, 8)} (${orderData.items?.[0]?.name || 'Domain/Hosting Services'})`,
+          reason: `Payment for Order #${orderId.slice(0, 8)} (${orderData.items?.[0]?.name || 'Domain/Hosting Services'})${isAdmin && targetUserId !== callerUid ? ' [Admin Assisted]' : ''}`,
           orderId,
           createdAt: now
         };
@@ -1079,73 +1087,81 @@ customersRouter.post('/admin/deposits/:depositId/verify', requireFirebaseAuth, a
   try {
     const db = getAdminDb();
     const depRef = db.collection('deposit_requests').doc(depositId);
-    const depSnap = await depRef.get();
-
-    if (!depSnap.exists) {
-      return res.status(404).json({ error: 'Deposit request not found.' });
-    }
-
-    const depData: any = depSnap.data();
-    if (depData.status !== 'pending') {
-      return res.status(400).json({ error: `Deposit request is already ${depData.status}.` });
-    }
-
     const now = new Date().toISOString();
 
-    if (action === 'approve') {
-      const userRef = db.collection('users').doc(depData.userId);
-      const userSnap = await userRef.get();
+    let finalNewBalance = 0;
+    let depData: any = null;
 
-      if (!userSnap.exists) {
-        return res.status(404).json({ error: 'Customer user document not found.' });
+    if (action === 'approve') {
+      // ATOMIC TRANSACTION: Ensure deposit status check and balance update happen atomically together (Zero Race Condition)
+      try {
+        await db.runTransaction(async (t: any) => {
+          const depSnap = await t.get(depRef);
+          if (!depSnap.exists) {
+            throw new Error('Deposit request not found.');
+          }
+
+          depData = depSnap.data();
+          if (depData.status !== 'pending') {
+            throw new Error(`Deposit request is already ${depData.status}.`);
+          }
+
+          const userRef = db.collection('users').doc(depData.userId);
+          const userSnap = await t.get(userRef);
+          if (!userSnap.exists) {
+            throw new Error('Customer user document not found.');
+          }
+
+          const userData: any = userSnap.data();
+          const currentBalance = typeof userData.balance === 'number' ? userData.balance : 0;
+          finalNewBalance = currentBalance + Number(depData.amount || 0);
+
+          t.update(userRef, {
+            balance: finalNewBalance,
+            updatedAt: now
+          });
+
+          // Log wallet transaction
+          const txRef = db.collection('wallet_transactions').doc();
+          t.set(txRef, {
+            id: txRef.id,
+            userId: depData.userId,
+            customerEmail: depData.customerEmail,
+            customerName: depData.customerName,
+            type: 'credit',
+            amount: depData.amount,
+            balanceBefore: currentBalance,
+            balanceAfter: finalNewBalance,
+            reason: `Approved Deposit via ${(depData.paymentMethod || 'Manual').toUpperCase()} (TX: ${depData.transactionId || 'N/A'})`,
+            depositRequestId: depositId,
+            adminNotes: adminNotes || '',
+            createdBy: req.user.email || 'Admin',
+            createdAt: now
+          });
+
+          t.update(depRef, {
+            status: 'approved',
+            adminNotes: adminNotes || '',
+            verifiedAt: now,
+            verifiedBy: req.user.email || 'Admin',
+            updatedAt: now
+          });
+        });
+      } catch (txErr: any) {
+        return res.status(400).json({ error: txErr.message || 'Deposit verification failed.' });
       }
 
-      const userData: any = userSnap.data();
-      const currentBalance = typeof userData.balance === 'number' ? userData.balance : 0;
-      const newBalance = currentBalance + depData.amount;
-
-      await userRef.update({
-        balance: newBalance,
-        updatedAt: now
-      });
-
-      // Log wallet transaction
-      const txRef = db.collection('wallet_transactions').doc();
-      await txRef.set({
-        id: txRef.id,
-        userId: depData.userId,
-        customerEmail: depData.customerEmail,
-        customerName: depData.customerName,
-        type: 'credit',
-        amount: depData.amount,
-        balanceBefore: currentBalance,
-        balanceAfter: newBalance,
-        reason: `Approved Deposit via ${depData.paymentMethod.toUpperCase()} (TX: ${depData.transactionId})`,
-        depositRequestId: depositId,
-        adminNotes: adminNotes || '',
-        createdBy: req.user.email || 'Admin',
-        createdAt: now
-      });
-
-      await depRef.update({
-        status: 'approved',
-        adminNotes: adminNotes || '',
-        verifiedAt: now,
-        verifiedBy: req.user.email || 'Admin',
-        updatedAt: now
-      });
-
       // Send email
-      if (depData.customerEmail) {
-        await sendEmail({
+      if (depData?.customerEmail) {
+        sendEmail({
           to: depData.customerEmail,
           subject: `Deposit Approved - ৳${depData.amount.toLocaleString()} Credited`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
               <h2 style="color: #10b981;">Deposit Request Approved!</h2>
-              <p>Dear ${depData.customerName},</p>
+              <p>Dear ${depData.customerName || 'Valued Customer'},</p>
               <p>Your deposit of <strong>৳${depData.amount.toLocaleString()}</strong> has been verified and added to your wallet balance.</p>
-              <p><strong>New Balance:</strong> ৳${newBalance.toLocaleString()}</p>
+              <p><strong>New Balance:</strong> ৳${finalNewBalance.toLocaleString()}</p>
               <p>You can now use your balance for domain registration, renewals, and web hosting!</p>
               <p style="margin-top: 20px; color: #64748b; text-align: center;">Thank you for choosing Click2IT!</p>
             </div>
@@ -1158,18 +1174,34 @@ customersRouter.post('/admin/deposits/:depositId/verify', requireFirebaseAuth, a
       return res.json({
         success: true,
         message: 'Deposit request approved and funds added to customer balance.',
-        newBalance
+        newBalance: finalNewBalance
       });
 
     } else {
-      // Reject
-      await depRef.update({
-        status: 'rejected',
-        adminNotes: adminNotes || '',
-        verifiedAt: now,
-        verifiedBy: req.user.email || 'Admin',
-        updatedAt: now
-      });
+      // Reject atomically
+      try {
+        await db.runTransaction(async (t: any) => {
+          const depSnap = await t.get(depRef);
+          if (!depSnap.exists) {
+            throw new Error('Deposit request not found.');
+          }
+
+          depData = depSnap.data();
+          if (depData.status !== 'pending') {
+            throw new Error(`Deposit request is already ${depData.status}.`);
+          }
+
+          t.update(depRef, {
+            status: 'rejected',
+            adminNotes: adminNotes || '',
+            verifiedAt: now,
+            verifiedBy: req.user.email || 'Admin',
+            updatedAt: now
+          });
+        });
+      } catch (txErr: any) {
+        return res.status(400).json({ error: txErr.message || 'Deposit rejection failed.' });
+      }
 
       if (depData.customerEmail) {
         await sendEmail({
