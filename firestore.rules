@@ -354,7 +354,7 @@ service cloud.firestore {
     // ===============================================================
 
     // 1. Users Collection
-    // Strict RBAC: No self-privilege-escalation; users cannot change role, permissions, or email
+    // Strict RBAC: No self-privilege-escalation; users cannot change role, permissions, email, or balance
     match /users/{userId} {
       allow read: if isOwner(userId) || isStaff();
 
@@ -363,7 +363,8 @@ service cloud.firestore {
           (isOwner(userId) &&
            request.resource.data.get('role', 'user') == 'user' &&
            request.resource.data.get('isAdmin', false) == false &&
-           request.resource.data.get('permissions', []).size() == 0)
+           request.resource.data.get('permissions', []).size() == 0 &&
+           request.resource.data.get('balance', 0) == 0)
           || isStaff()
         );
 
@@ -373,7 +374,8 @@ service cloud.firestore {
            request.resource.data.get('role', 'user') == resource.data.get('role', 'user') &&
            request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false) &&
            request.resource.data.get('permissions', []) == resource.data.get('permissions', []) &&
-           request.resource.data.get('email', '') == resource.data.get('email', ''))
+           request.resource.data.get('email', '') == resource.data.get('email', '') &&
+           request.resource.data.get('balance', 0) == resource.data.get('balance', 0))
           || isStaff()
         );
 
