@@ -3,6 +3,8 @@ import { getAdminDb, isUserAdmin } from '../firebase/admin.js';
 import { sendEmail, queueEmail } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { fulfillOrder } from '../services/fulfillment.js';
+import { extractClientIp } from '../services/securityAudit.js';
+import { processAffiliateCommissionForOrder } from '../services/affiliateFraud.js';
 const ordersRouter = Router();
 /**
  * POST /api/orders/create
@@ -118,6 +120,9 @@ ordersRouter.post('/create', requireFirebaseAuth, async (req, res) => {
             company: formData.company || null,
             paymentMethod,
             transactionId: ['bkash', 'bank'].includes(paymentMethod) && formData.transactionId ? formData.transactionId.trim() : null,
+            senderPhone: formData.senderPhone || formData.phone || null,
+            affiliateRef: req.body.affiliateRef || req.body.referredBy || null,
+            clientIp: extractClientIp(req),
             vpsConfig: vpsConfig ? {
                 hostname: (vpsConfig.hostname || '').trim(),
                 os: vpsConfig.os || 'almalinux',
@@ -523,6 +528,10 @@ ordersRouter.post('/admin/:orderId/payment/verify', requireFirebaseAuth, async (
             catch (auditErr) {
                 console.warn('[Orders] Failed to write audit log:', auditErr);
             }
+            // Process affiliate referral commission with anti-fraud verification
+            processAffiliateCommissionForOrder({ id: orderId, ...orderData, total: orderTotal }, extractClientIp(req)).catch(err => {
+                console.warn('[Orders] Affiliate commission processing error:', err);
+            });
             let emailSent = false;
             if (orderData.customerEmail) {
                 try {

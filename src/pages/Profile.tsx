@@ -12,6 +12,7 @@ import { compressImage } from '../lib/imageCompressor';
 import { toast } from 'react-hot-toast';
 import { User, Mail, Globe, Phone, MapPin, Building, Save, Camera, Loader2, ShoppingBag, Package, Clock, CheckCircle2, XCircle, ChevronRight, Tag, MessageSquare, Image as ImageIcon, Lock, Shield, Truck, Box, Check, Star, Plus, Wallet } from 'lucide-react';
 import { CustomerWalletTab } from '../components/CustomerWalletTab';
+import { SecurityAuditLogsTab } from '../components/SecurityAuditLogsTab';
 import { SEO } from '../components/SEO';
 import { formatCurrency } from '../lib/utils';
 import { generatePDF } from '../lib/pdf';
@@ -353,6 +354,7 @@ export const Profile: React.FC = () => {
                    {(() => {
                      const tabs = [
                        { id: 'profile', label: 'My Profile', icon: User },
+                       { id: 'security', label: 'Security & Audit', icon: Shield },
                        { id: 'wallet', label: 'My Wallet', icon: Wallet },
                        { id: 'orders', label: 'My Invoices & Orders', icon: ShoppingBag },
                        { id: 'my_domains', label: 'My Services', icon: Globe },
@@ -574,11 +576,20 @@ export const Profile: React.FC = () => {
                            Send Reset Link
                          </button>
                       </div>
+                      <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <span className="text-xs text-gray-500">View real-time logins, IP addresses, devices, and nameserver audit trails</span>
+                        <button type="button" onClick={() => setActiveTab('security')} className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 self-start sm:self-auto">
+                          View Security & Audit Logs <ChevronRight size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
                 </div>
              )}
+
+             {/* SECURITY TAB */}
+             {activeTab === 'security' && <SecurityAuditLogsTab />}
 
              {/* ORDERS TAB */}
              {activeTab === 'orders' && (

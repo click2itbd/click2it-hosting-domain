@@ -684,6 +684,18 @@ export const HostingCheckout: React.FC = () => {
       const transferItems = items.filter(item => item.itemType === 'domain_transfer');
 
       if (!orderId) {
+        // Retrieve affiliate referral if present
+        let affiliateRef: string | null = null;
+        try {
+          const rawRef = localStorage.getItem('affiliate_ref');
+          if (rawRef) {
+            const parsed = JSON.parse(rawRef);
+            if (parsed.code && (!parsed.expiry || parsed.expiry > Date.now())) {
+              affiliateRef = parsed.code;
+            }
+          }
+        } catch (e) {}
+
         // Authoritative Server-side Order Placement
         const token = user ? await user.getIdToken() : undefined;
         const res = await apiClient.post('/api/orders/create', {
@@ -693,7 +705,8 @@ export const HostingCheckout: React.FC = () => {
           hostingConfig,
           vpsConfig: hasVps ? vpsConfig : null,
           discountCode: appliedDiscount?.code || discountCode,
-          targetUserId
+          targetUserId,
+          affiliateRef
         }, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
         });

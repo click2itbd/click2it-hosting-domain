@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { getAdminDb, isUserAdmin, getAdminAuth } from '../firebase/admin.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { sendEmail } from '../services/email.js';
+import { recordSecurityLog, extractClientIp } from '../services/securityAudit.js';
 import { fulfillOrder } from '../services/fulfillment.js';
 import { getDomainProviderConfig } from '../services/domainProviderConfig.js';
 import { getDomainProvider } from '../providers/providerFactory.js';
@@ -1427,6 +1428,63 @@ customersRouter.post('/admin/create', requireFirebaseAuth, async (req: any, res:
   } catch (error: any) {
     console.error('Failed to create customer account:', error);
     return res.status(500).json({ error: error.message || 'Failed to create customer account.' });
+  }
+});
+
+/**
+ * GET /api/customers/security-logs
+ * Fetch the authenticated customer's security audit logs
+ */
+customersRouter.get('/security-logs', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const db = getAdminDb();
+    const snap = await db.collection('user_security_logs')
+      .where('userId', '==', userId)
+      .limit(50)
+      .get();
+
+    const logs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+    // In-memory sort by timestamp desc (composite index safe)
+    logs.sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+
+    return res.json({ success: true, logs });
+  } catch (err: any) {
+    console.error('Failed to fetch security logs:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to fetch security logs' });
+  }
+});
+
+/**
+ * POST /api/customers/security-logs/record
+ * Record a security event (LOGIN, PASSWORD_RESET_REQUEST, PASSWORD_CHANGE, etc.)
+ */
+customersRouter.post('/security-logs/record', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { action, details, metadata } = req.body;
+    const clientIp = extractClientIp(req);
+    const userAgent = req.headers['user-agent'] || '';
+
+    await recordSecurityLog({
+      userId,
+      action: action || 'LOGIN',
+      details: details || 'User session activity',
+      ipAddress: clientIp,
+      userAgent,
+      metadata
+    });
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('Failed to record security log:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to record security log' });
   }
 });
 

@@ -71,7 +71,7 @@ service cloud.firestore {
     // Access: Admin / Backend service account only; Public blocked from tampering
     //
     // Collections: apiLogs, audit_logs, domainAuditLog, fulfillmentAuditLog,
-    //              paymentAuditLog, emailLogs, provisioningLogs
+    //              paymentAuditLog, emailLogs, provisioningLogs, user_security_logs
     // Purpose: System audit and event logging
     // Access: Admin/Staff read; Authenticated or Staff write; Immutable (no update/delete)
     //
@@ -648,7 +648,7 @@ service cloud.firestore {
     }
 
     match /affiliate_commissions/{commId} {
-      allow read: if (resource != null && isOwner(resource.data.get('userId', ''))) || isStaff();
+      allow read: if (resource != null && (isOwner(resource.data.get('affiliateId', '')) || isOwner(resource.data.get('userId', '')))) || isStaff();
       allow create, update, delete: if isAdmin();
     }
 
@@ -684,6 +684,12 @@ service cloud.firestore {
     match /audit_logs/{logId} {
       allow read: if isStaff();
       allow create: if isStaff() || (isAuthenticated() && isValidAuditLog(request.resource.data));
+      allow update, delete: if false;
+    }
+
+    match /user_security_logs/{logId} {
+      allow read: if isStaff() || (isAuthenticated() && resource.data.get('userId', '') == request.auth.uid);
+      allow create: if isStaff() || (isAuthenticated() && request.resource.data.get('userId', '') == request.auth.uid);
       allow update, delete: if false;
     }
 

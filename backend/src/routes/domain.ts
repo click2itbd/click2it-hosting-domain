@@ -12,6 +12,7 @@ import { resolveDomainProvider, getBtclConfig, saveBtclConfig, maskBtclConfig } 
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { getDomainProviderConfig as getDomainConfig } from '../services/domainProviderConfig.js';
 import { getPublicServerIp } from '../services/ipService.js';
+import { recordSecurityLog, extractClientIp } from '../services/securityAudit.js';
 
 interface DomainPricing {
   id?: string;
@@ -2302,6 +2303,14 @@ domainRouter.post('/manage', requireFirebaseAuth, async (req: any, res: Response
           requestedNs: uniqueNs,
           updatedAt: new Date().toISOString()
         });
+        recordSecurityLog({
+          userId: req.user.uid,
+          action: 'NAMESERVER_CHANGE',
+          details: `Requested nameserver update for BD domain "${domain}" to: ${uniqueNs.join(', ')}`,
+          ipAddress: extractClientIp(req),
+          userAgent: req.headers['user-agent'] || '',
+          metadata: { domain, requestedNs: uniqueNs, manualQueued: true }
+        }).catch(err => console.warn('[SecurityAudit] Nameserver change log error:', err));
         return res.json({
           success: true,
           manualQueued: true,
@@ -2337,6 +2346,14 @@ domainRouter.post('/manage', requireFirebaseAuth, async (req: any, res: Response
             nsUpdatePending: false,
             updatedAt: new Date().toISOString()
           });
+          recordSecurityLog({
+            userId: req.user.uid,
+            action: 'NAMESERVER_CHANGE',
+            details: `Successfully changed nameservers for "${domain}" to: ${uniqueNs.join(', ')}`,
+            ipAddress: extractClientIp(req),
+            userAgent: req.headers['user-agent'] || '',
+            metadata: { domain, nameservers: uniqueNs }
+          }).catch(err => console.warn('[SecurityAudit] Nameserver change log error:', err));
         } catch (e) { console.error('[set_ns] Firestore update error:', e); }
       }
       return res.json({ success: result.success, data: result, error: result.error });

@@ -84,6 +84,10 @@ export function UserAffiliateTab() {
             {copied ? 'Copied' : 'Copy Link'}
           </button>
         </div>
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200/80 rounded-lg p-2.5 mt-3 flex items-center gap-1.5">
+          <AlertCircle size={14} className="shrink-0 text-amber-600" />
+          <span><strong>Anti-Fraud Rule:</strong> Self-referral purchases (matching IP address, email, or bKash/Nagad payment number) are automatically disqualified.</span>
+        </p>
       </div>
 
       {/* Request Payout */}
@@ -116,13 +120,24 @@ export function UserAffiliateTab() {
                 <td className="px-6 py-4 text-sm">{new Date(c.createdAt).toLocaleDateString()}</td>
                 <td className="px-6 py-4 font-bold text-gray-800">{formatCurrency(c.commissionAmount)}</td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded-full ${
-                    c.status === 'available' ? 'bg-blue-100 text-blue-700' :
-                    c.status === 'paid' ? 'bg-green-100 text-green-700' :
-                    'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {c.status}
-                  </span>
+                  {c.status === 'fraud_flagged' ? (
+                    <div>
+                      <span className="px-2.5 py-1 text-[10px] font-bold uppercase rounded-full bg-rose-100 text-rose-700 inline-block">
+                        Blocked (Self-Referral Detected)
+                      </span>
+                      {c.fraudReason && (
+                        <p className="text-[11px] text-rose-600 mt-1 max-w-xs">{c.fraudReason}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded-full ${
+                      c.status === 'available' ? 'bg-blue-100 text-blue-700' :
+                      c.status === 'paid' ? 'bg-green-100 text-green-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {c.status}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

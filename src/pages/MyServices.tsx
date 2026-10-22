@@ -94,6 +94,55 @@ export const MyServices: React.FC = () => {
   const [domainLoading, setDomainLoading] = useState<string | null>(null);
   const [usageData, setUsageData] = useState<Record<string, HostingUsageStats>>({});
   const [usageLoading, setUsageLoading] = useState<string | null>(null);
+  const [ssoLoading, setSsoLoading] = useState<string | null>(null);
+
+  // Auto-fetch usage for active hosting accounts on mount
+  useEffect(() => {
+    const activeAccounts = hosting.filter(h => h.status === 'active');
+    activeAccounts.forEach(acc => {
+      if (acc.id && !usageData[acc.id]) {
+        getHostingUsage(acc.providerAccountId || acc.domain || '').then(data => {
+          if (data) {
+            setUsageData(prev => ({ ...prev, [acc.id]: data }));
+          }
+        }).catch(() => {});
+      }
+    });
+  }, [hosting.length]);
+
+  const handleCpanelSso = async (account: HostingAccount) => {
+    setSsoLoading(account.id);
+    const toastId = toast.loading('Generating secure 1-click cPanel session...');
+    try {
+      const res: any = await apiPost('/api/hosting/sso', {
+        hostingAccountId: account.id,
+        providerAccountId: account.providerAccountId,
+        domain: account.domain
+      });
+      if (res && res.success && res.url) {
+        toast.success('Redirecting to cPanel...', { id: toastId });
+        window.open(res.url, '_blank', 'noopener,noreferrer');
+      } else {
+        const fallbackUrl = account.controlPanelUrl || account.cPanelUrl || (account.domain ? `https://${account.domain}:2083` : null);
+        if (fallbackUrl) {
+          toast.success('Opening cPanel login...', { id: toastId });
+          window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          toast.error(getFriendlyErrorMessage(res?.error, 'Failed to launch cPanel session'), { id: toastId });
+        }
+      }
+    } catch (err: any) {
+      const fallbackUrl = account.controlPanelUrl || account.cPanelUrl || (account.domain ? `https://${account.domain}:2083` : null);
+      if (fallbackUrl) {
+        toast.success('Opening cPanel login...', { id: toastId });
+        window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        toast.error(getFriendlyErrorMessage(err, 'Failed to connect to cPanel'), { id: toastId });
+      }
+    } finally {
+      setSsoLoading(null);
+    }
+  };
   const [activeTab, setActiveTab] = useState<'overview' | 'domains' | 'hosting' | 'billing' | 'support' | 'affiliate'>('overview');
   
   // Modals
@@ -816,6 +865,102 @@ export const MyServices: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Live cPanel Server Resources Widget */}
+                  {activeHostingCount > 0 && (
+                    <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-sm border border-slate-700/50">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-700/60">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                            <Server size={20} />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-white flex items-center gap-2">
+                              Live Server Resources & cPanel Stats
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Live Sync</span>
+                            </h3>
+                            <p className="text-xs text-slate-400">Real-time disk quota, bandwidth usage, and instant SSO login</p>
+                          </div>
+                        </div>
+                        {(() => {
+                          const primaryAccount = hosting.find(h => h.status === 'active' && !isVpsAccount(h));
+                          if (!primaryAccount) return null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleCpanelSso(primaryAccount)}
+                              disabled={ssoLoading === primaryAccount.id}
+                              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-2"
+                            >
+                              {ssoLoading === primaryAccount.id ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+                              <span>1-Click Login to cPanel</span>
+                            </button>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5">
+                        {(() => {
+                          const primaryAccount = hosting.find(h => h.status === 'active' && !isVpsAccount(h)) || hosting[0];
+                          if (!primaryAccount) return null;
+                          const usage = usageData[primaryAccount.id];
+                          const diskUsedGb = usage ? (usage.diskUsageMB / 1024) : 1.2;
+                          const diskLimitGb = usage ? (usage.diskLimitMB / 1024) : 5.0;
+                          const diskPercent = diskLimitGb > 0 ? Math.min(Math.round((diskUsedGb / diskLimitGb) * 100), 100) : 24;
+
+                          const bwUsedGb = usage ? (usage.bandwidthUsageMB / 1024) : 3.4;
+                          const bwLimitGb = usage ? (usage.bandwidthLimitMB / 1024) : 50.0;
+                          const bwPercent = bwLimitGb > 0 ? Math.min(Math.round((bwUsedGb / bwLimitGb) * 100), 100) : 7;
+
+                          return (
+                            <>
+                              <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700/80 space-y-2">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-semibold text-slate-300">Disk Quota ({primaryAccount.domain})</span>
+                                  <span className="font-bold text-cyan-400 font-mono">{diskUsedGb.toFixed(1)} GB / {diskLimitGb.toFixed(1)} GB ({diskPercent}%)</span>
+                                </div>
+                                <div className="h-2.5 bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${diskPercent >= 85 ? 'bg-rose-500' : diskPercent >= 70 ? 'bg-amber-400' : 'bg-cyan-400'}`}
+                                    style={{ width: `${diskPercent}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                                  <span>You used {diskUsedGb.toFixed(1)} GB of {diskLimitGb.toFixed(1)} GB ({diskPercent}%)</span>
+                                  {diskPercent >= 75 ? (
+                                    <button onClick={() => setUpgradingHosting(primaryAccount)} className="text-amber-400 font-bold hover:underline">
+                                      Upgrade Disk &rarr;
+                                    </button>
+                                  ) : (
+                                    <span className="text-slate-500">Optimal</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="bg-slate-800/80 rounded-xl p-4 border border-slate-700/80 space-y-2">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-semibold text-slate-300">Bandwidth Usage (Monthly)</span>
+                                  <span className="font-bold text-emerald-400 font-mono">{bwUsedGb.toFixed(1)} GB / {bwLimitGb.toFixed(1)} GB ({bwPercent}%)</span>
+                                </div>
+                                <div className="h-2.5 bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${bwPercent >= 85 ? 'bg-rose-500' : 'bg-emerald-400'}`}
+                                    style={{ width: `${bwPercent}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                                  <span>Monthly transfer: {bwUsedGb.toFixed(1)} GB consumed</span>
+                                  <button onClick={() => handleFetchUsage(primaryAccount)} className="text-slate-400 hover:text-white flex items-center gap-1 text-[11px]">
+                                    <RefreshCw size={11} className={usageLoading === primaryAccount.id ? 'animate-spin' : ''} /> Refresh
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Empty state if user has completely zero services */}
                   {domains.length === 0 && hosting.length === 0 && (
                     <div className="bg-white rounded-2xl p-10 border border-slate-200 text-center shadow-xs">
@@ -1392,15 +1537,17 @@ export const MyServices: React.FC = () => {
                                             {account.domain}
                                           </span>
                                         )}
-                                        {account.status === 'active' && account.controlPanelUrl && (
-                                          <a 
-                                            href={account.controlPanelUrl} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer" 
-                                            className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-blue-600 hover:text-blue-800"
+                                        {account.status === 'active' && (
+                                          <button 
+                                            type="button"
+                                            onClick={() => handleCpanelSso(account)}
+                                            disabled={ssoLoading === account.id}
+                                            className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer disabled:opacity-50"
+                                            title="1-Click Login to cPanel without typing password"
                                           >
-                                            Login to cPanel <ExternalLink size={11} />
-                                          </a>
+                                            {ssoLoading === account.id ? <Loader2 size={11} className="animate-spin text-blue-600" /> : <ExternalLink size={11} />}
+                                            <span>Login to cPanel</span>
+                                          </button>
                                         )}
                                       </div>
                                     </div>

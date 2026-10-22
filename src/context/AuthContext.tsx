@@ -119,6 +119,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           if (firebaseUser) {
             setUser(firebaseUser);
+
+            // Record security audit login event once per browser session
+            try {
+              const sessionKey = `sec_log_${firebaseUser.uid}`;
+              if (!sessionStorage.getItem(sessionKey)) {
+                sessionStorage.setItem(sessionKey, '1');
+                import('../services/apiClient').then(({ apiPost }) => {
+                  apiPost('/api/customers/security-logs/record', {
+                    action: 'LOGIN',
+                    details: 'Successful portal login session',
+                  }).catch(() => {});
+                });
+              }
+            } catch (e) {}
+
             const isBootstrap = isBootstrapAdminEmail(firebaseUser.email);
             const fallbackProfile: UserProfile = {
               uid: firebaseUser.uid,
