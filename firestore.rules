@@ -504,42 +504,42 @@ service cloud.firestore {
     }
 
     // 7. Orders Collection
-    // Customer owner read & create; restricted updates; Admin/Staff full access
+    // Customer owner read & create (pending/unpaid only); Admin/Staff full access & lifecycle management
     match /orders/{orderId} {
       allow read: if (resource != null && isOwner(resource.data.get('userId', ''))) || isStaff();
       
       allow create: if isAuthenticated() && isValidOrder(request.resource.data) &&
-        (request.resource.data.get('userId', '') == request.auth.uid || isStaff());
-      
-      allow update: if isAuthenticated() && isValidOrder(request.resource.data) &&
         (
-          (resource != null &&
-           isOwner(resource.data.get('userId', '')) &&
-           request.resource.data.get('userId', '') == resource.data.get('userId', '') &&
-           areImmutableFieldsUnchanged(['userId', 'createdAt']))
+          (request.resource.data.get('userId', '') == request.auth.uid &&
+           request.resource.data.get('paymentStatus', 'pending') in ['pending', 'unpaid', 'awaiting_payment', 'awaiting_verification', 'submitted', 'failed', 'cancelled'] &&
+           request.resource.data.get('status', 'pending') in ['pending', 'processing', 'unpaid', 'on-hold', 'cancelled'])
           || isStaff()
         );
-
-      allow delete: if isAdmin();
+      
+      allow update, delete: if isStaff();
     }
 
     // 8. Hosting Orders
     match /hostingOrders/{orderId} {
       allow read: if (resource != null && isOwner(resource.data.get('userId', ''))) || isStaff();
       allow create: if isAuthenticated() && isValidHostingOrder(request.resource.data) &&
-        (request.resource.data.get('userId', '') == request.auth.uid || isStaff());
-      allow update: if isAuthenticated() && isValidHostingOrder(request.resource.data) &&
-        ((resource != null && isOwner(resource.data.get('userId', ''))) || isStaff());
-      allow delete: if isAdmin();
+        (
+          (request.resource.data.get('userId', '') == request.auth.uid &&
+           request.resource.data.get('status', 'pending') in ['pending', 'processing', 'unpaid'])
+          || isStaff()
+        );
+      allow update, delete: if isStaff();
     }
 
     match /hosting_orders/{orderId} {
       allow read: if (resource != null && isOwner(resource.data.get('userId', ''))) || isStaff();
       allow create: if isAuthenticated() && isValidHostingOrder(request.resource.data) &&
-        (request.resource.data.get('userId', '') == request.auth.uid || isStaff());
-      allow update: if isAuthenticated() && isValidHostingOrder(request.resource.data) &&
-        ((resource != null && isOwner(resource.data.get('userId', ''))) || isStaff());
-      allow delete: if isAdmin();
+        (
+          (request.resource.data.get('userId', '') == request.auth.uid &&
+           request.resource.data.get('status', 'pending') in ['pending', 'processing', 'unpaid'])
+          || isStaff()
+        );
+      allow update, delete: if isStaff();
     }
 
     // 9. Hosting Accounts & Service Instances
