@@ -1,3 +1,4 @@
+import rateLimit from 'express-rate-limit';
 import { Router, Response } from 'express';
 import { getAdminDb } from '../firebase/admin.js';
 import { getDomainProvider } from '../providers/providerFactory.js';
@@ -23,6 +24,46 @@ interface DomainPricing {
 }
 
 const domainRouter = Router();
+
+// =========================================================================
+// ANTI-SCRAPER & BOT PROTECTION RATE LIMITERS (Issue 5 Fix)
+// Protects upstream Openprovider & BTCL APIs from quota exhaustion & denial-of-service
+// =========================================================================
+
+/**
+ * Domain Search Rate Limiter:
+ * Up to 30 searches per minute per IP for normal human shoppers.
+ * Blocks rapid automated crawlers and scraper bots.
+ */
+const domainSearchLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: process.env.NODE_ENV === 'test' ? 1000 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many domain searches from your IP address. Please slow down and try again in a minute.'
+  }
+});
+
+/**
+ * Domain WHOIS Rate Limiter:
+ * Up to 10 lookups per minute per IP to protect registry WHOIS rate limits.
+ */
+const domainWhoisLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: process.env.NODE_ENV === 'test' ? 1000 : 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'WHOIS lookup limit exceeded. Please wait 1 minute before checking another WHOIS record.'
+  }
+});
+
+// Short-lived 60-second in-memory availability cache to eliminate duplicate queries
+const domainAvailabilityCache = new Map<string, { result: DomainAvailabilityResult; expiresAt: number }>();
+
 let domainPricingCache: { expiresAt: number; data: DomainPricing[] } | null = null;
 let livePricingCooldownUntil = 0;
 
@@ -273,7 +314,7 @@ export async function getEffectiveDomainPricingList(forceLive: boolean = false):
   return DEFAULT_FALLBACK_PRICING;
 }
 
-domainRouter.get('/check', async (req: any, res: Response) => {
+domainRouter.get('/check', domainSearchLimiter, async (req: any, res: Response) => {
   try {
     const domains = Array.isArray(req.body.domains) ? req.body.domains : [];
     if (!domains.length) return res.json({ success: false, error: 'domains array is required' });
@@ -288,7 +329,7 @@ domainRouter.get('/check', async (req: any, res: Response) => {
   }
 });
 
-domainRouter.post('/check', async (req: any, res: Response) => {
+domainRouter.post('/check', domainSearchLimiter, async (req: any, res: Response) => {
   try {
     const domains = Array.isArray(req.body.domains) ? req.body.domains : [];
     if (!domains.length) return res.json({ success: false, error: 'domains array is required' });
@@ -300,11 +341,27 @@ domainRouter.post('/check', async (req: any, res: Response) => {
       pricingSettings = await getDomainPricingSettings();
     } catch {}
 
+    const cachedMap = new Map<string, DomainAvailabilityResult>();
+    const domainsToFetch: string[] = [];
+    const now = Date.now();
+
+    for (const d of domains) {
+      const clean = String(d).trim().toLowerCase();
+      const cached = domainAvailabilityCache.get(clean);
+      if (cached && cached.expiresAt > now) {
+        cachedMap.set(clean, cached.result);
+      } else {
+        domainsToFetch.push(clean);
+      }
+    }
+
     let results: DomainAvailabilityResult[] = [];
-    try {
-      results = await provider.checkAvailability(domains);
-    } catch (error: any) {
-      console.warn('[Domain] Provider checkAvailability failed:', error?.message);
+    if (domainsToFetch.length > 0) {
+      try {
+        results = await provider.checkAvailability(domainsToFetch);
+      } catch (error: any) {
+        console.warn('[Domain] Provider checkAvailability failed:', error?.message);
+      }
     }
 
     // Only fallback if provider returned nothing or completely threw
@@ -417,14 +474,33 @@ domainRouter.post('/check', async (req: any, res: Response) => {
       };
     }));
 
-    return res.json({ success: true, data: enriched });
+    // Store fresh results in 60-second in-memory availability cache
+    for (const r of enriched) {
+      if (r && r.domain) {
+        domainAvailabilityCache.set(r.domain.toLowerCase(), {
+          result: r,
+          expiresAt: Date.now() + 60_000
+        });
+      }
+    }
+
+    const combinedResults = domains.map((d: string) => {
+      const clean = String(d).trim().toLowerCase();
+      return cachedMap.get(clean) || enriched.find((r: any) => r.domain?.toLowerCase() === clean) || {
+        domain: clean,
+        available: false,
+        status: 'unknown'
+      };
+    });
+
+    return res.json({ success: true, data: combinedResults });
   } catch (error: any) {
     console.error('Domain check error:', error);
     return res.json({ success: false, error: error?.message || 'Internal server error' });
   }
 });
 
-domainRouter.post('/suggestions', async (req: any, res: Response) => {
+domainRouter.post('/suggestions', domainSearchLimiter, async (req: any, res: Response) => {
   try {
     const { domain } = req.body;
     if (!domain) return res.json({ success: false, error: 'domain is required' });
@@ -562,7 +638,7 @@ domainRouter.post('/register', async (req: any, res: Response) => {
   }
 });
 
-domainRouter.post('/whois', async (req: any, res: Response) => {
+domainRouter.post('/whois', domainWhoisLimiter, async (req: any, res: Response) => {
   try {
     const { domain } = req.body;
     if (!domain) return res.json({ success: false, error: 'domain is required' });

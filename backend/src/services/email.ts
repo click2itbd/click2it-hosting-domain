@@ -310,6 +310,21 @@ export async function sendEmail(options: EmailOptions, retries: number = 2): Pro
   return { success: false, error: lastError };
 }
 
+/**
+ * Non-blocking asynchronous email dispatcher.
+ * Queues and sends the email in the background without blocking HTTP request execution,
+ * preventing gateway timeouts (504) and hanging spinners when SMTP providers are slow.
+ */
+export function queueEmail(options: EmailOptions): void {
+  setImmediate(async () => {
+    try {
+      await sendEmail(options);
+    } catch (err: any) {
+      console.error('[Email Queue] Asynchronous background delivery error:', err?.message || err);
+    }
+  });
+}
+
 export function resetSmtpCache() {
   cachedSmtpProvider = null;
   lastSmtpConfigHash = '';

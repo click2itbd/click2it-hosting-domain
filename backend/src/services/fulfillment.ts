@@ -1,5 +1,5 @@
 import { getAdminDb, getAdminDocument, isUserAdmin } from '../firebase/admin.js';
-import { sendEmail } from './email.js';
+import { sendEmail, queueEmail } from './email.js';
 import { getDynamicTemplate } from './templateHelper.js';
 import { getDomainProvider, getHostingProvider } from '../providers/providerFactory.js';
 import { getDomainPricingSettings } from './domainPricing.js';
@@ -359,7 +359,7 @@ export async function fulfillOrder(orderId: string, actorUid: string): Promise<F
           <p>Please review and take appropriate action.</p>
         </div>
       `;
-      await sendEmail({ to: adminEmail, subject, html, orderId, customerEmail: adminEmail, category: 'system' });
+      queueEmail({ to: adminEmail, subject, html, orderId, customerEmail: adminEmail, category: 'system' });
     }
   }
 
@@ -1116,7 +1116,7 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
         </html>
       `;
 
-      await sendEmail({ to: contactEmail, subject: emailSubject, html: fullHtml, orderId: hostingData.orderId, customerEmail: contactEmail, category: 'hosting' });
+      queueEmail({ to: contactEmail, subject: emailSubject, html: fullHtml, orderId: hostingData.orderId, customerEmail: contactEmail, category: 'hosting' });
     }
 
     return {

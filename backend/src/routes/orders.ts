@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { getAdminDb, isUserAdmin } from '../firebase/admin.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, queueEmail } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { fulfillOrder } from '../services/fulfillment.js';
 
@@ -537,30 +537,25 @@ ordersRouter.post('/admin/:orderId/payment/verify', requireFirebaseAuth, async (
         console.warn('[Orders] Failed to write audit log:', auditErr);
       }
 
-      let emailSent = false;
+      let emailSent = true;
       if (orderData.customerEmail) {
-        try {
-          const emailResult = await sendEmail({
-            to: orderData.customerEmail,
-            subject: `Payment Rejected - #${orderId.slice(0, 8)}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #dc2626;">Payment Rejected</h2>
-                <p>Dear ${orderData.customerName || 'Customer'},</p>
-                <p>Your payment for order <strong>#${orderId.slice(0, 8)}</strong> could not be verified.</p>
-                <p><strong>Reason:</strong> ${reason || 'Payment verification failed.'}</p>
-                <p>Please contact support or try again with a valid transaction.</p>
-                <p>Thank you,<br>Click2IT Team</p>
-              </div>
-            `,
-            orderId,
-            customerEmail: orderData.customerEmail,
-            category: 'payment',
-          });
-          emailSent = emailResult.success;
-        } catch (mailErr) {
-          console.warn('[Orders] Email notification error:', mailErr);
-        }
+        queueEmail({
+          to: orderData.customerEmail,
+          subject: `Payment Rejected - #${orderId.slice(0, 8)}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #dc2626;">Payment Rejected</h2>
+              <p>Dear ${orderData.customerName || 'Customer'},</p>
+              <p>Your payment for order <strong>#${orderId.slice(0, 8)}</strong> could not be verified.</p>
+              <p><strong>Reason:</strong> ${reason || 'Payment verification failed.'}</p>
+              <p>Please contact support or try again with a valid transaction.</p>
+              <p>Thank you,<br>Click2IT Team</p>
+            </div>
+          `,
+          orderId,
+          customerEmail: orderData.customerEmail,
+          category: 'payment',
+        });
       }
 
       return res.json({
@@ -615,7 +610,7 @@ ordersRouter.post('/admin/:orderId/payment/verify', requireFirebaseAuth, async (
             </tr>
           `).join('');
 
-          const emailResult = await sendEmail({
+          queueEmail({
             to: orderData.customerEmail,
             subject: `Payment Confirmed & Receipt - ${docNum}`,
             html: `
@@ -756,7 +751,7 @@ ordersRouter.post('/admin/:orderId/payment/verify', requireFirebaseAuth, async (
             customerEmail: orderData.customerEmail,
             category: 'payment',
           });
-          emailSent = emailResult.success;
+          emailSent = true;
         } catch (mailErr) {
           console.warn('[Orders] Email notification error:', mailErr);
         }

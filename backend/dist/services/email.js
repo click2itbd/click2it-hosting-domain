@@ -255,6 +255,21 @@ export async function sendEmail(options, retries = 2) {
     await logEmailToFirestore(options, 'failed', lastError);
     return { success: false, error: lastError };
 }
+/**
+ * Non-blocking asynchronous email dispatcher.
+ * Queues and sends the email in the background without blocking HTTP request execution,
+ * preventing gateway timeouts (504) and hanging spinners when SMTP providers are slow.
+ */
+export function queueEmail(options) {
+    setImmediate(async () => {
+        try {
+            await sendEmail(options);
+        }
+        catch (err) {
+            console.error('[Email Queue] Asynchronous background delivery error:', err?.message || err);
+        }
+    });
+}
 export function resetSmtpCache() {
     cachedSmtpProvider = null;
     lastSmtpConfigHash = '';
