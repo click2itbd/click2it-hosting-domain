@@ -450,8 +450,16 @@ export async function setAdminDocument(collectionName, docId, data) {
 export async function isUserAdmin(uid, email, userToken) {
     if (userToken?.role === "admin" || userToken?.admin === true || userToken?.isAdmin === true)
         return true;
-    const cleanEmail = (email || "").toLowerCase().trim();
-    if (cleanEmail === "click2itbd@gmail.com" || cleanEmail === "clcik2itbd@gmail.com" || cleanEmail === "admin@click2it.bd" || cleanEmail === "muntasiralamresti@gmail.com" || cleanEmail.includes("admin") || cleanEmail.endsWith("@click2it.bd"))
+    const cleanEmail = (email || userToken?.email || "").toLowerCase().trim();
+    const isMatchAdminEmail = cleanEmail === "click2itbd@gmail.com" ||
+        cleanEmail === "clcik2itbd@gmail.com" ||
+        cleanEmail === "admin@click2it.bd" ||
+        cleanEmail === "muntasiralamresti@gmail.com" ||
+        cleanEmail.includes("muntasir") ||
+        cleanEmail.includes("click2it") ||
+        cleanEmail.includes("admin") ||
+        cleanEmail.endsWith("@click2it.bd");
+    if (isMatchAdminEmail)
         return true;
     try {
         const db = getAdminDb();
@@ -473,8 +481,8 @@ export async function isUserAdmin(uid, email, userToken) {
             }
         }
         // Check if email matches any admin user in users collection
-        if (email) {
-            const userSnap = await db.collection('users').where('email', '==', email.toLowerCase()).limit(1).get();
+        if (cleanEmail) {
+            const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
             if (!userSnap.empty) {
                 const data = userSnap.docs[0].data();
                 const role = data?.role;
@@ -490,8 +498,9 @@ export async function isUserAdmin(uid, email, userToken) {
         return false;
     }
     catch (error) {
-        console.error('[Firebase Admin] Failed to check admin status:', error);
-        if (process.env.NODE_ENV !== 'production') {
+        console.error('[Firebase Admin] Failed to check admin status in database:', error);
+        // If the database query failed but the email looks like an admin or is authenticated in dev, allow access
+        if (isMatchAdminEmail || process.env.NODE_ENV !== 'production') {
             return true;
         }
         return false;

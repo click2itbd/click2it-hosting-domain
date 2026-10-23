@@ -6,6 +6,7 @@ import "./backend/src/services/networkDns.js";
 import { createServer as createViteServer } from "vite";
 import { createApp } from "./backend/src/app.js";
 import { validateEnvironment } from "./backend/src/config/index.js";
+import { setupExpiryReminders } from "./backend/src/jobs/expiryReminders.js";
 import path from "path";
 import fs from "fs";
 import express from "express";
@@ -113,6 +114,7 @@ async function startDevServer() {
 
   const server = app.listen(port, "0.0.0.0", () => {
     console.log(`🚀 Hosting server running on http://0.0.0.0:${port} (${isProd ? "Production" : "Development"})`);
+    setupExpiryReminders();
   });
 
   server.on("error", (err: any) => {

@@ -20,7 +20,7 @@
       "indexes": "firestore.indexes.json"
     },
     {
-      "database": "ai-studio-422fbad2-d827-4e69-8599-aed85390d277",
+      "database": "ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a",
       "rules": "firestore.rules",
       "indexes": "firestore.indexes.json"
     }

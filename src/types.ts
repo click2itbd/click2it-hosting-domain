@@ -10,6 +10,10 @@ export interface UserProfile {
   role: UserRole;
   permissions?: UserPermission[];
   createdAt: string;
+  totpSecret?: string;
+  twoFactorEnabled?: boolean;
+  twoFactorSetupAt?: string;
+  backupCodes?: string[];
 }
 
 export interface SpecificationField {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Admin2FAChallenge } from './Admin2FAChallenge';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminOnly = false }) => {
-  const { user, canAccessAdmin, loading } = useAuth();
+  const { user, canAccessAdmin, is2faVerified, set2faVerified, loading } = useAuth();
 
   if (loading) {
     return (
@@ -24,6 +25,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminO
 
   if (adminOnly && !canAccessAdmin) {
     return <Navigate to="/" replace />;
+  }
+
+  // Enforce 2FA TOTP Verification for Admin Routes
+  if (adminOnly && canAccessAdmin && !is2faVerified) {
+    return (
+      <Admin2FAChallenge
+        onSuccess={() => set2faVerified(true)}
+      />
+    );
   }
 
   return <>{children}</>;

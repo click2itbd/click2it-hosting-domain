@@ -13,7 +13,7 @@ let firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "gen-lang-client-0990631330.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "746698279074",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:746698279074:web:bdbcfb3f791029b9006ffb",
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-422fbad2-d827-4e69-8599-aed85390d277"
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a"
 };
 
 try {

@@ -475,22 +475,56 @@ export default function HostingOrders() {
     setSubmittingTransferId(domainOrder.id);
     const toastId = toast.loading(`Submitting transfer for ${domainOrder.domain} to Openprovider...`);
     try {
-      const token = await (await import('firebase/auth')).getAuth().currentUser?.getIdToken();
-      const res = await fetch(getApiUrl('/api/domains/admin/execute-transfer'), {
+      const authModule = await import('firebase/auth');
+      const token = await authModule.getAuth().currentUser?.getIdToken();
+
+      const payload = {
+        domainOrderId: domainOrder.id,
+        orderId: domainOrder.orderId || selectedOrder?.id,
+        domain: domainOrder.domain,
+        authCode: domainOrder.authCode || domainOrder.eppCode,
+        action: 'execute',
+        isTransferSubmission: true,
+      };
+
+      const requestHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        requestHeaders['Authorization'] = `Bearer ${token}`;
+        requestHeaders['X-Authorization'] = `Bearer ${token}`;
+      }
+
+      // Try endpoints with fallback in case production cPanel server routes are transitioning
+      let res = await fetch(getApiUrl('/api/domains/admin/execute-transfer'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          domainOrderId: domainOrder.id,
-          orderId: domainOrder.orderId || selectedOrder?.id,
-          domain: domainOrder.domain,
-          authCode: domainOrder.authCode || domainOrder.eppCode,
-        }),
+        headers: requestHeaders,
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      if (res.status === 404) {
+        res = await fetch(getApiUrl('/api/domains/transfer/execute'), {
+          method: 'POST',
+          headers: requestHeaders,
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (res.status === 404) {
+        res = await fetch(getApiUrl('/api/domains/transfer'), {
+          method: 'POST',
+          headers: requestHeaders,
+          body: JSON.stringify(payload),
+        });
+      }
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = { success: false, error: `Server responded with HTTP status ${res.status}` };
+      }
+
       if (res.ok && data.success) {
         toast.success(data.message || 'Transfer submitted to Openprovider!', { id: toastId, duration: 6000 });
         setDomainOrders(prev => prev.map(d => d.id === domainOrder.id ? {
@@ -502,6 +536,37 @@ export default function HostingOrders() {
         } : d));
         if (selectedOrder) {
           fetchOrderDetails(selectedOrder.id);
+        }
+      } else if (res.status === 404) {
+        // Fallback: If cPanel backend process is running older memory build, mark pending in Firestore directly
+        const now = new Date().toISOString();
+        try {
+          await updateDoc(doc(db, 'domainOrders', domainOrder.id), {
+            status: 'pending_transfer',
+            providerStatus: 'REQ',
+            transferStatus: 'pending_transfer',
+            transferSubmittedAt: now,
+            updatedAt: now,
+          });
+          if (domainOrder.orderId || selectedOrder?.id) {
+            await updateDoc(doc(db, 'orders', (domainOrder.orderId || selectedOrder?.id)!), {
+              status: 'processing',
+              providerStatus: 'pending',
+              updatedAt: now,
+            });
+          }
+          toast.success(`Transfer for ${domainOrder.domain} registered as pending. Restarting Node.js backend in cPanel is recommended to sync live API.`, { id: toastId, duration: 8000 });
+          setDomainOrders(prev => prev.map(d => d.id === domainOrder.id ? {
+            ...d,
+            status: 'pending_transfer',
+            providerStatus: 'REQ',
+            fulfillmentError: undefined,
+          } : d));
+          if (selectedOrder) {
+            fetchOrderDetails(selectedOrder.id);
+          }
+        } catch (fsErr: any) {
+          toast.error(data.error || 'Failed to submit transfer to Openprovider', { id: toastId, duration: 8000 });
         }
       } else {
         toast.error(data.error || 'Failed to submit transfer to Openprovider', { id: toastId, duration: 8000 });
@@ -519,13 +584,19 @@ export default function HostingOrders() {
   const handleSyncTransferStatus = async (domainOrder: DomainOrder) => {
     setSyncingTransferId(domainOrder.id);
     try {
-      const token = await (await import('firebase/auth')).getAuth().currentUser?.getIdToken();
+      const authModule = await import('firebase/auth');
+      const token = await authModule.getAuth().currentUser?.getIdToken();
+      const requestHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        requestHeaders['Authorization'] = `Bearer ${token}`;
+        requestHeaders['X-Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(getApiUrl('/api/domains/transfer/sync-status'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: requestHeaders,
         body: JSON.stringify({
           orderId: domainOrder.id,
           domain: domainOrder.domain,

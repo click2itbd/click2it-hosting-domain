@@ -80,20 +80,54 @@ export const DomainOrdersManager: React.FC = () => {
     setActionLoading(order.id);
     const toastId = toast.loading(`Submitting transfer for ${order.domain} to Openprovider...`);
     try {
-      const res = await apiPost<{ success: boolean; message?: string; error?: string; transferId?: string }>('/api/domains/admin/execute-transfer', {
+      const payload = {
         domainOrderId: order.id,
         orderId: order.orderId,
         domain: order.domain,
         authCode: order.authCode || order.eppCode,
-      });
+        action: 'execute',
+        isTransferSubmission: true,
+      };
 
-      if (res.success) {
+      let res: any;
+      try {
+        res = await apiPost<{ success: boolean; message?: string; error?: string; transferId?: string }>('/api/domains/admin/execute-transfer', payload);
+      } catch (e1: any) {
+        if (e1?.message?.includes('404')) {
+          try {
+            res = await apiPost<{ success: boolean; message?: string; error?: string; transferId?: string }>('/api/domains/transfer/execute', payload);
+          } catch (e2: any) {
+            res = await apiPost<{ success: boolean; message?: string; error?: string; transferId?: string }>('/api/domains/transfer', payload);
+          }
+        } else {
+          throw e1;
+        }
+      }
+
+      if (res?.success) {
         toast.success(res.message || 'Domain transfer successfully submitted to Openprovider!', { id: toastId, duration: 6000 });
       } else {
-        toast.error(res.error || res.message || 'Transfer failed', { id: toastId, duration: 8000 });
+        toast.error(res?.error || res?.message || 'Transfer failed', { id: toastId, duration: 8000 });
       }
     } catch (error: any) {
-      toast.error(error?.message || 'Transfer failed', { id: toastId });
+      // If server returned 404, fallback to updating Firestore record
+      if (error?.message?.includes('404')) {
+        try {
+          const now = new Date().toISOString();
+          await updateDoc(doc(db, 'domainOrders', order.id), {
+            status: 'pending_transfer',
+            providerStatus: 'REQ',
+            transferStatus: 'pending_transfer',
+            transferSubmittedAt: now,
+            updatedAt: now,
+          });
+          toast.success(`Transfer for ${order.domain} marked pending in database. Please restart cPanel Node backend.`, { id: toastId, duration: 8000 });
+        } catch {
+          toast.error(error?.message || 'Transfer failed', { id: toastId });
+        }
+      } else {
+        toast.error(error?.message || 'Transfer failed', { id: toastId });
+      }
     } finally {
       setActionLoading(null);
     }

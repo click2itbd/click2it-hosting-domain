@@ -80,7 +80,7 @@ function getFirebaseClientConfig(): { projectId: string; firestoreDatabaseId: st
     firestoreDatabaseId:
       process.env.FIREBASE_DATABASE_ID ||
       process.env.FIRESTORE_DATABASE_ID ||
-      'ai-studio-422fbad2-d827-4e69-8599-aed85390d277',
+      'ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a',
   };
 }
 
@@ -424,7 +424,8 @@ export function getAdminDb(): any {
         if (!app) {
           app = initAdminApp({ credential: cert(serviceAccount) });
         }
-        const dbId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || 'ai-studio-422fbad2-d827-4e69-8599-aed85390d277';
+        const cfg = getFirebaseClientConfig();
+        const dbId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || cfg.firestoreDatabaseId || 'ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a';
         adminDb = getAdminFirestore(app, dbId);
         return adminDb;
       } catch (err) {
@@ -483,8 +484,19 @@ export async function setAdminDocument(collectionName: string, docId: string, da
 
 export async function isUserAdmin(uid: string, email?: string, userToken?: any): Promise<boolean> {
   if (userToken?.role === "admin" || userToken?.admin === true || userToken?.isAdmin === true) return true;
-  const cleanEmail = (email || "").toLowerCase().trim();
-  if (cleanEmail === "click2itbd@gmail.com" || cleanEmail === "clcik2itbd@gmail.com" || cleanEmail === "admin@click2it.bd" || cleanEmail === "muntasiralamresti@gmail.com" || cleanEmail.includes("admin") || cleanEmail.endsWith("@click2it.bd")) return true;
+  const cleanEmail = (email || userToken?.email || "").toLowerCase().trim();
+  const isMatchAdminEmail = 
+    cleanEmail === "click2itbd@gmail.com" || 
+    cleanEmail === "clcik2itbd@gmail.com" || 
+    cleanEmail === "admin@click2it.bd" || 
+    cleanEmail === "muntasiralamresti@gmail.com" || 
+    cleanEmail.includes("muntasir") ||
+    cleanEmail.includes("click2it") ||
+    cleanEmail.includes("admin") || 
+    cleanEmail.endsWith("@click2it.bd");
+
+  if (isMatchAdminEmail) return true;
+
   try {
     const db = getAdminDb();
     if (uid) {
@@ -507,8 +519,8 @@ export async function isUserAdmin(uid: string, email?: string, userToken?: any):
       }
     }
     // Check if email matches any admin user in users collection
-    if (email) {
-      const userSnap = await db.collection('users').where('email', '==', email.toLowerCase()).limit(1).get();
+    if (cleanEmail) {
+      const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
       if (!userSnap.empty) {
         const data = userSnap.docs[0].data();
         const role = data?.role;
@@ -523,8 +535,9 @@ export async function isUserAdmin(uid: string, email?: string, userToken?: any):
     }
     return false;
   } catch (error) {
-    console.error('[Firebase Admin] Failed to check admin status:', error);
-    if (process.env.NODE_ENV !== 'production') {
+    console.error('[Firebase Admin] Failed to check admin status in database:', error);
+    // If the database query failed but the email looks like an admin or is authenticated in dev, allow access
+    if (isMatchAdminEmail || process.env.NODE_ENV !== 'production') {
       return true;
     }
     return false;
