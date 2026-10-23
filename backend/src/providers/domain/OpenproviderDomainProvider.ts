@@ -28,26 +28,13 @@ export class OpenproviderDomainProvider implements IDomainProvider {
   private static consecutiveFailures: number = 0;
 
   constructor(username: string, passwordHash: string, isSandbox: boolean = false, defaultHandle: string = '') {
-    this.username = (username || '').trim();
-    this.passwordHash = (passwordHash || '').trim();
+    this.username = username;
+    this.passwordHash = passwordHash;
     // Default to production Openprovider API or official sandbox API
-    let rawUrl = isSandbox 
+    this.baseUrl = isSandbox 
       ? (process.env.OPENPROVIDER_SANDBOX_URL || 'https://api.sandbox.openprovider.nl/v1beta') 
       : (process.env.OPENPROVIDER_API_URL || 'https://api.openprovider.eu/v1');
-    
-    rawUrl = (rawUrl || '').trim().replace(/\/+$/, '');
-    // Automatically correct cp.openprovider.eu (web portal) to api.openprovider.eu (REST API)
-    if (rawUrl.includes('cp.openprovider.eu')) {
-      rawUrl = rawUrl.replace('cp.openprovider.eu', 'api.openprovider.eu');
-    }
-    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
-      rawUrl = `https://${rawUrl}`;
-    }
-    if (!rawUrl.endsWith('/v1') && !rawUrl.includes('/v1beta') && !rawUrl.endsWith('/v1beta')) {
-      rawUrl = `${rawUrl}/v1`;
-    }
-    this.baseUrl = rawUrl;
-    this.defaultHandle = (defaultHandle || process.env.OPENPROVIDER_DEFAULT_HANDLE || '').trim();
+    this.defaultHandle = defaultHandle || process.env.OPENPROVIDER_DEFAULT_HANDLE || '';
   }
 
   private async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 12000): Promise<Response> {

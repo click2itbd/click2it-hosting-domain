@@ -452,23 +452,4 @@ adminRouter.get('/connections-status', async (req, res) => {
         return res.status(500).json({ success: false, error: 'Failed to retrieve connection statuses' });
     }
 });
-adminRouter.post('/trigger-domain-expiry-check', async (req, res) => {
-    try {
-        const isAdmin = await isUserAdmin(req.user.uid, req.user.email);
-        if (!isAdmin) {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-        const { processExpiryReminders } = await import('../jobs/expiryReminders.js');
-        const summary = await processExpiryReminders();
-        return res.json({
-            success: true,
-            timestamp: new Date().toISOString(),
-            summary,
-        });
-    }
-    catch (error) {
-        console.error('Failed to trigger domain expiry check:', error);
-        return res.status(500).json({ success: false, error: error.message || 'Failed to trigger domain expiry check' });
-    }
-});
 export default adminRouter;

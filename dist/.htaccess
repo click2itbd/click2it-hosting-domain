@@ -1,0 +1,68 @@
+DirectoryIndex index.html
+Options -Indexes
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Ensure Authorization header is passed to backend through Apache/LiteSpeed proxy
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+  <IfModule mod_proxy.c>
+    # Forward /api requests to local Node.js backend on port 4001
+    RewriteRule ^/?api/(.*)$ http://127.0.0.1:4001/api/$1 [P,L,QSA,E=Cache-Control:no-cache]
+    RewriteRule ^/?api/?$ http://127.0.0.1:4001/api/ [P,L,QSA,E=Cache-Control:no-cache]
+  </IfModule>
+
+  # Route social media crawlers requesting /product/xxx to share.php (ONLY if share.php exists on server)
+  RewriteCond %{DOCUMENT_ROOT}/share.php -f
+  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|Facebot|WhatsApp|Twitterbot|Pinterest|LinkedInBot|TelegramBot|Slackbot|Discordbot|SkypeUriPreview|Viber|kakaotalk-scrap|vkShare) [NC]
+  RewriteRule ^product/([a-zA-Z0-9_.-]+)/?$ /share.php?id=$1 [L,QSA]
+
+  # Map any legacy hashed entry or chunk bundle (e.g. /assets/index-OkU3895N.js) to /assets/<name>.js
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{DOCUMENT_ROOT}/assets/$1.js -f
+  RewriteRule ^assets/([A-Za-z0-9_.-]+)-[A-Za-z0-9_-]{8}\.js$ /assets/$1.js [L,E=Cache-Control:no-cache]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{DOCUMENT_ROOT}/assets/index.css -f
+  RewriteRule ^assets/index-[A-Za-z0-9_-]{8}\.css$ /assets/index.css [L,E=Cache-Control:no-cache]
+
+  # Do not rewrite missing /assets/*.js or /assets/*.css to index.html (prevents text/html MIME error)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^assets/.*\.(js|mjs|css|wasm)$ - [R=404,L]
+
+  # Direct all other routes to React Single Page App (index.html)
+  RewriteRule ^index\.html$ - [L,E=Cache-Control:no-cache]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L,E=Cache-Control:no-cache]
+</IfModule>
+
+<IfModule mod_headers.c>
+  # Disable HTTP/3 QUIC on routes where UDP packets get dropped/truncated
+  Header always set Alt-Svc "clear"
+</IfModule>
+
+<FilesMatch "\.(woff2?|ttf|svg|png|jpe?g|webp|ico)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </IfModule>
+</FilesMatch>
+
+<FilesMatch "\.(js|css)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=0, must-revalidate"
+  </IfModule>
+</FilesMatch>
+
+<FilesMatch "^index\.html$">
+  <IfModule LiteSpeed>
+    CacheDisable public /index.html
+    CacheDisable private /index.html
+  </IfModule>
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </IfModule>
+</FilesMatch>
