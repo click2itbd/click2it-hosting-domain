@@ -29,6 +29,9 @@ interface AuthContextType {
   stopImpersonation: () => void;
   hasPermission: (permission: UserPermission) => boolean;
   logout: () => Promise<void>;
+  is2faVerified: boolean;
+  set2faVerified: (verified: boolean) => void;
+  refreshProfile: () => Promise<UserProfile | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +48,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [is2faVerified, setIs2faVerifiedState] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('admin_2fa_verified') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const set2faVerified = (verified: boolean) => {
+    setIs2faVerifiedState(verified);
+    try {
+      if (verified) {
+        sessionStorage.setItem('admin_2fa_verified', 'true');
+      } else {
+        sessionStorage.removeItem('admin_2fa_verified');
+      }
+    } catch (e) {
+      console.warn('Failed to persist 2fa state:', e);
+    }
+  };
+
+  const refreshProfile = async (): Promise<UserProfile | null> => {
+    const activeUid = user?.uid || auth.currentUser?.uid;
+    if (!activeUid) return null;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', activeUid));
+      if (userDoc.exists()) {
+        const data = userDoc.data() as UserProfile;
+        setProfile(data);
+        return data;
+      }
+    } catch (e) {
+      console.warn('Failed to refresh profile:', e);
+    }
+    return null;
+  };
   const [impersonatedCustomer, setImpersonatedCustomer] = useState<ImpersonatedCustomer | null>(() => {
     try {
       const saved = sessionStorage.getItem('impersonated_customer');
@@ -72,10 +111,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setProfile(null);
+    setIs2faVerifiedState(false);
     try {
       sessionStorage.removeItem('custom_auth_session');
       localStorage.removeItem('custom_auth_session');
       sessionStorage.removeItem('impersonated_customer');
+      sessionStorage.removeItem('admin_2fa_verified');
     } catch {
       // ignore
     }
@@ -223,6 +264,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         stopImpersonation,
         hasPermission,
         logout,
+        is2faVerified,
+        set2faVerified,
+        refreshProfile,
       }}
     >
       {children}

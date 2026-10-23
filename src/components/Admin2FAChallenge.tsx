@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Lock, Key, Copy, Check, QrCode, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
   generateTotpSecret,
@@ -94,17 +94,22 @@ export const Admin2FAChallenge: React.FC<Admin2FAChallengeProps> = ({ onSuccess,
         // Code valid! Save secret and backup codes to user's Firestore document
         if (user?.uid) {
           const userRef = doc(db, 'users', user.uid);
-          await updateDoc(userRef, {
+          await setDoc(userRef, {
             totpSecret: setupSecret,
             twoFactorEnabled: true,
             twoFactorSetupAt: new Date().toISOString(),
             backupCodes: setupBackupCodes,
-          });
-          await refreshProfile();
+          }, { merge: true });
+
+          if (typeof refreshProfile === 'function') {
+            await refreshProfile();
+          }
         }
 
         setSetupConfirmed(true);
-        set2faVerified(true);
+        if (typeof set2faVerified === 'function') {
+          set2faVerified(true);
+        }
         toast.success('Admin 2FA Security successfully configured!');
       } else {
         // Verification Mode
@@ -127,11 +132,15 @@ export const Admin2FAChallenge: React.FC<Admin2FAChallengeProps> = ({ onSuccess,
 
           if (user?.uid) {
             const userRef = doc(db, 'users', user.uid);
-            await updateDoc(userRef, { backupCodes: updatedCodes });
-            await refreshProfile();
+            await setDoc(userRef, { backupCodes: updatedCodes }, { merge: true });
+            if (typeof refreshProfile === 'function') {
+              await refreshProfile();
+            }
           }
 
-          set2faVerified(true);
+          if (typeof set2faVerified === 'function') {
+            set2faVerified(true);
+          }
           toast.success('Verified using recovery code');
           onSuccess();
         } else {
@@ -145,7 +154,9 @@ export const Admin2FAChallenge: React.FC<Admin2FAChallengeProps> = ({ onSuccess,
             return;
           }
 
-          set2faVerified(true);
+          if (typeof set2faVerified === 'function') {
+            set2faVerified(true);
+          }
           toast.success('Admin 2FA Verified');
           onSuccess();
         }
