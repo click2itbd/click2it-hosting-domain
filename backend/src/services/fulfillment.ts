@@ -203,6 +203,9 @@ export async function fulfillOrder(orderId: string, actorUid: string): Promise<F
               status: 'active',
               suspendedAt: null,
               suspensionReason: null,
+              reminderSent_30d: false,
+              reminderSent_7d: false,
+              reminderSent_1d: false,
               updatedAt: now,
             });
             await writeAuditLog(db, item.hostingAccountId, 'hosting_auto_unsuspended', actorUid, 'suspended', 'active', null, 'Auto-unsuspended upon renewal payment');
@@ -863,6 +866,9 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
       status: 'active',
       suspendedAt: null,
       suspensionReason: null,
+      reminderSent_30d: false,
+      reminderSent_7d: false,
+      reminderSent_1d: false,
       updatedAt: now,
     });
     await writeAuditLog(db, hostingAccountId, 'hosting_auto_unsuspended', actorUid, 'suspended', 'active', null, 'Auto-unsuspended upon order fulfillment');

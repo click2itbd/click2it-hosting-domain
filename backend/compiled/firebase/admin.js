@@ -67,7 +67,7 @@ function getFirebaseClientConfig() {
         projectId: process.env.GOOGLE_CLOUD_PROJECT || 'gen-lang-client-0990631330',
         firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID ||
             process.env.FIRESTORE_DATABASE_ID ||
-            'ai-studio-422fbad2-d827-4e69-8599-aed85390d277',
+            'ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a',
     };
 }
 function toFirestoreValue(val) {
@@ -357,10 +357,27 @@ export function getAdminDb() {
     if (!adminDb && !clientAdapterDb) {
         const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
         let serviceAccount = null;
-        if (serviceAccountKey) {
+        const envFileCandidates = [
+            path.resolve(process.cwd(), 'backend', 'firebase-service-account.json'),
+            path.resolve(process.cwd(), 'firebase-service-account.json'),
+            path.resolve(__dirname, '..', '..', 'firebase-service-account.json'),
+        ];
+        for (const p of envFileCandidates) {
+            if (fs.existsSync(p)) {
+                try {
+                    const fileContent = fs.readFileSync(p, 'utf8');
+                    serviceAccount = JSON.parse(fileContent);
+                    validateServiceAccountStructure(serviceAccount);
+                    break;
+                }
+                catch { }
+            }
+        }
+        if (!serviceAccount && serviceAccountKey) {
             if (serviceAccountKey.endsWith('.json') || serviceAccountKey.startsWith('.') || serviceAccountKey.includes('/') || serviceAccountKey.includes('\\')) {
                 const candidatePaths = [
                     path.isAbsolute(serviceAccountKey) ? serviceAccountKey : path.resolve(process.cwd(), serviceAccountKey),
+                    path.resolve(process.cwd(), 'backend', serviceAccountKey),
                     path.resolve(__dirname, '..', '..', serviceAccountKey),
                     path.resolve(__dirname, '..', '..', '..', serviceAccountKey),
                 ];
@@ -393,7 +410,8 @@ export function getAdminDb() {
                 if (!app) {
                     app = initAdminApp({ credential: cert(serviceAccount) });
                 }
-                const dbId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || 'ai-studio-422fbad2-d827-4e69-8599-aed85390d277';
+                const cfg = getFirebaseClientConfig();
+                const dbId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || cfg.firestoreDatabaseId || 'ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a';
                 adminDb = getAdminFirestore(app, dbId);
                 return adminDb;
             }

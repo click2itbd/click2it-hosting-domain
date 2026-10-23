@@ -139,46 +139,70 @@ export class CpanelHostingProvider implements IHostingProvider {
     }
 
     const normalizedBillingCycle = this.normalizeBillingCycle(billingCycle);
-    const username = this.generateUsername(domain);
-    const password = this.generatePassword();
+    const maxAttempts = 3;
+    let lastError = '';
 
-    try {
-      const result = await this.whmRequest('createacct', {
-        username,
-        password,
-        domain,
-        plan: planCode || 'default',
-        contactemail: contactEmail,
-        billingcycle: normalizedBillingCycle,
-      }, 60000);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const username = this.generateUsername(domain, attempt);
+      const password = this.generatePassword();
 
-      const isSuccess = result?.metadata?.result === 1 || result?.result?.[0]?.status === 1 || result?.status === 1;
-      const reason = result?.metadata?.reason || result?.result?.[0]?.statusmsg || result?.statusmsg;
+      try {
+        const result = await this.whmRequest('createacct', {
+          username,
+          password,
+          domain,
+          plan: planCode || 'default',
+          contactemail: contactEmail,
+          billingcycle: normalizedBillingCycle,
+        }, 60000);
 
-      if (!isSuccess) {
+        const isSuccess = result?.metadata?.result === 1 || result?.result?.[0]?.status === 1 || result?.status === 1;
+        const reason = result?.metadata?.reason || result?.result?.[0]?.statusmsg || result?.statusmsg || '';
+
+        if (!isSuccess) {
+          lastError = reason || 'Account creation returned error from WHM';
+          const lower = lastError.toLowerCase();
+          const isCollision = lower.includes('already exists') || (lower.includes('user') && lower.includes('exist')) || lower.includes('username');
+          if (isCollision && attempt < maxAttempts) {
+            console.warn(`[WHM] Username collision detected for "${username}", retrying with new username (attempt ${attempt}/${maxAttempts})...`);
+            continue;
+          }
+          return {
+            success: false,
+            error: lastError,
+          };
+        }
+
+        const accountData = result?.data || {};
+        const hostname = new URL(this.apiUrl).hostname;
+
+        return {
+          success: true,
+          providerAccountId: username,
+          password,
+          cPanelUrl: `https://${hostname}:2083`,
+          nameservers: accountData.nameservers || ['ns1.click2itbd.com', 'ns2.click2itbd.com'],
+          error: undefined,
+        };
+      } catch (error: any) {
+        lastError = error.message || 'Failed to create hosting account';
+        const lower = lastError.toLowerCase();
+        const isCollision = lower.includes('already exists') || (lower.includes('user') && lower.includes('exist'));
+        if (isCollision && attempt < maxAttempts) {
+          console.warn(`[WHM] Username collision caught for "${username}", retrying (attempt ${attempt}/${maxAttempts})...`);
+          continue;
+        }
         return {
           success: false,
-          error: reason || 'Account creation returned error from WHM',
+          error: lastError,
         };
       }
-
-      const accountData = result?.data || {};
-      const hostname = new URL(this.apiUrl).hostname;
-
-      return {
-        success: true,
-        providerAccountId: username,
-        password,
-        cPanelUrl: `https://${hostname}:2083`,
-        nameservers: accountData.nameservers || ['ns1.click2itbd.com', 'ns2.click2itbd.com'],
-        error: undefined,
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error.message || 'Failed to create hosting account',
-      };
     }
+
+    return {
+      success: false,
+      error: lastError || 'Failed to provision hosting account after multiple retries',
+    };
   }
 
   
@@ -284,10 +308,11 @@ export class CpanelHostingProvider implements IHostingProvider {
     }
   }
 
-  private generateUsername(domain: string): string {
+  private generateUsername(domain: string, attempt: number = 0): string {
     const cleanDomain = domain.replace(/[^a-z0-9]/gi, '').toLowerCase();
-    const base = cleanDomain.substring(0, 5) || 'user';
-    const rand = Math.floor(100 + Math.random() * 900);
+    const base = (cleanDomain.substring(0, 4) || 'user').padEnd(3, 'x');
+    // Generate fresh random 4-digit numeric/alphanumeric suffix on each attempt
+    const rand = Math.floor(1000 + Math.random() * 9000);
     return `${base}${rand}`.substring(0, 8);
   }
 

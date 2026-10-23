@@ -72,11 +72,15 @@ export async function processExpiryReminders() {
                 const expiryIsoPrefix = expiryDate.toISOString().split('T')[0];
                 const daysDiff = Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                 for (const target of targetDates) {
-                    const reminderField = `reminderSent_${target.days}d`;
+                    const reminderYear = expiryDate.getFullYear();
+                    const reminderField = `reminderSent_${target.days}d_${reminderYear}`;
                     const isTargetMatch = expiryIsoPrefix === target.dateStringPrefix || daysDiff === target.days;
                     if (isTargetMatch && !data[reminderField]) {
                         await sendReminderEmail(doc.id, 'domain', data, target.days, expiryDate);
-                        await doc.ref.update({ [reminderField]: true });
+                        await doc.ref.update({
+                            [reminderField]: true,
+                            lastReminderSentAt: now.toISOString()
+                        });
                         stats.domainRemindersSent++;
                     }
                 }
@@ -106,11 +110,15 @@ export async function processExpiryReminders() {
                 const daysDiff = Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                 // 2a. Pre-expiry reminders (30d, 7d, 1d)
                 for (const target of targetDates) {
-                    const reminderField = `reminderSent_${target.days}d`;
+                    const reminderYear = expiryDate.getFullYear();
+                    const reminderField = `reminderSent_${target.days}d_${reminderYear}`;
                     const isTargetMatch = expiryIsoPrefix === target.dateStringPrefix || daysDiff === target.days;
                     if (isTargetMatch && !data[reminderField]) {
                         await sendReminderEmail(doc.id, 'hosting', data, target.days, expiryDate);
-                        await doc.ref.update({ [reminderField]: true });
+                        await doc.ref.update({
+                            [reminderField]: true,
+                            lastReminderSentAt: now.toISOString()
+                        });
                         stats.hostingRemindersSent++;
                     }
                 }

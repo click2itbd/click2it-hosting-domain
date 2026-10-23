@@ -6,6 +6,7 @@ import { MessageSquare, X, Send, AlertCircle, Clock, CheckCircle, Search, Ticket
 import { toast } from 'react-hot-toast';
 import { cn } from '../../../lib/utils';
 import { Pagination } from '../../../components/common/Pagination';
+import { apiPost } from '../../../services/apiClient';
 
 interface TicketMessage {
   id?: string;
@@ -85,6 +86,19 @@ export default function SupportTickets() {
         status: 'answered',
         updatedAt: new Date().toISOString()
       });
+
+      // Dispatch reply email to customer
+      if (selectedTicket.customerEmail) {
+        apiPost('/api/email/ticket-reply', {
+          ticketId: selectedTicket.id,
+          ticketSubject: selectedTicket.subject,
+          customerEmail: selectedTicket.customerEmail,
+          customerName: selectedTicket.customerName,
+          staffName: currentUser?.displayName || currentUser?.name || 'Click2IT Technical Support',
+          replyMessage: replyMessage.trim(),
+          ticketUrl: typeof window !== 'undefined' ? `${window.location.origin}/account/tickets` : 'https://click2it.bd/account/tickets',
+        }).catch(err => console.warn('Could not dispatch ticket reply notification email:', err));
+      }
 
       setReplyMessage('');
       fetchTickets();

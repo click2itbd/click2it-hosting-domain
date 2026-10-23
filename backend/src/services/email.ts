@@ -40,20 +40,27 @@ export async function getSmtpProvider(forceReload = false): Promise<SmtpEmailPro
   try {
     const db = getAdminDb();
     if (db) {
-      const snap = await db.collection('settings').doc('site').get();
-      if (snap.exists) {
-        const data = snap.data() || {};
-        if (data.mailUsername && data.mailPassword) {
-          user = data.mailUsername.trim();
-          password = data.mailPassword.trim();
-          const isGmailUser = user.toLowerCase().endsWith('@gmail.com');
-          host = data.mailHost ? data.mailHost.trim() : (isGmailUser ? 'smtp.gmail.com' : '');
-          port = parseInt(data.mailPort) || (isGmailUser ? 465 : 587);
-          secure = data.mailEncryption === 'ssl' || String(port) === '465';
-          if (data.mailFromName) fromName = data.mailFromName.trim();
-          if (data.mailFromAddress) fromEmail = data.mailFromAddress.trim();
-          else if (user.includes('@')) fromEmail = user;
+      let data: any = null;
+      const configSnap = await db.collection('settings').doc('email_config').get();
+      if (configSnap.exists) {
+        data = configSnap.data() || {};
+      }
+      if (!data || !data.mailUsername) {
+        const siteSnap = await db.collection('settings').doc('site').get();
+        if (siteSnap.exists) {
+          data = siteSnap.data() || {};
         }
+      }
+      if (data && data.mailUsername && data.mailPassword) {
+        user = data.mailUsername.trim();
+        password = data.mailPassword.trim();
+        const isGmailUser = user.toLowerCase().endsWith('@gmail.com');
+        host = data.mailHost ? data.mailHost.trim() : (isGmailUser ? 'smtp.gmail.com' : '');
+        port = parseInt(data.mailPort) || (isGmailUser ? 465 : 587);
+        secure = data.mailEncryption === 'ssl' || String(port) === '465';
+        if (data.mailFromName) fromName = data.mailFromName.trim();
+        if (data.mailFromAddress) fromEmail = data.mailFromAddress.trim();
+        else if (user.includes('@')) fromEmail = user;
       }
     }
   } catch (err) {

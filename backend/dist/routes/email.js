@@ -3,6 +3,7 @@ import { sendEmail, EmailTemplates, verifySmtpConnection, sendTestEmail, resetSm
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { getDynamicTemplate } from '../services/templateHelper.js';
 import { getAdminDb } from '../firebase/admin.js';
+import { FieldValue } from 'firebase-admin/firestore';
 const emailRouter = Router();
 emailRouter.post('/send-email', requireFirebaseAuth, async (req, res) => {
     try {
@@ -114,8 +115,17 @@ emailRouter.post('/send-test-email', requireFirebaseAuth, async (req, res) => {
 emailRouter.get('/settings', requireFirebaseAuth, async (req, res) => {
     try {
         const db = getAdminDb();
-        const siteSnap = await db.collection('settings').doc('site').get();
-        const data = siteSnap.exists ? siteSnap.data() || {} : {};
+        let data = {};
+        const configSnap = await db.collection('settings').doc('email_config').get();
+        if (configSnap.exists) {
+            data = configSnap.data() || {};
+        }
+        else {
+            const siteSnap = await db.collection('settings').doc('site').get();
+            if (siteSnap.exists) {
+                data = siteSnap.data() || {};
+            }
+        }
         return res.status(200).json({
             success: true,
             settings: {
@@ -161,16 +171,114 @@ emailRouter.post('/settings', requireFirebaseAuth, async (req, res) => {
             payload.mailFromAddress = String(mailFromAddress).trim();
         if (resendApiKey !== undefined)
             payload.resendApiKey = String(resendApiKey).trim();
-        await db.collection('settings').doc('site').set(payload, { merge: true });
+        // Save to restricted email_config collection doc
+        await db.collection('settings').doc('email_config').set(payload, { merge: true });
+        // Clean sensitive credentials from public site document if they were stored there
+        try {
+            await db.collection('settings').doc('site').set({
+                mailPassword: FieldValue.delete(),
+                resendApiKey: FieldValue.delete(),
+            }, { merge: true });
+        }
+        catch (cleanupErr) {
+            console.warn('Could not clean old sensitive fields from settings/site:', cleanupErr);
+        }
         resetSmtpCache();
         return res.status(200).json({
             success: true,
-            message: 'Email & SMTP settings saved successfully.',
+            message: 'Email & SMTP settings saved securely.',
         });
     }
     catch (error) {
         console.error('Failed to save email settings:', error);
         return res.status(500).json({ success: false, error: error.message });
+    }
+});
+// --- Support Ticket Dual Email Notifications ---
+emailRouter.post('/ticket-reply', requireFirebaseAuth, async (req, res) => {
+    try {
+        const { ticketId, ticketSubject, customerEmail, customerName, staffName, replyMessage, ticketUrl } = req.body;
+        if (!ticketId || !customerEmail || !replyMessage) {
+            return res.status(400).json({ error: 'Missing required ticket fields' });
+        }
+        const defaultSubject = `Support Ticket Update: #${ticketId.slice(0, 8)} - ${ticketSubject || 'Inquiry'}`;
+        const defaultHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+        <div style="background: #2563eb; color: #ffffff; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 20px;">Support Ticket Response</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">Ticket #${ticketId.slice(0, 8)}</p>
+        </div>
+        <p>Dear <strong>${customerName || 'Valued Customer'}</strong>,</p>
+        <p>Our support team has replied to your ticket regarding <strong>${ticketSubject || 'Support Request'}</strong>:</p>
+        <div style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 16px; border-radius: 4px; margin: 20px 0; font-size: 14px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;">${replyMessage}</div>
+        <p style="font-size: 13px; color: #64748b;">Replied by: <strong>${staffName || 'Click2IT Technical Support'}</strong></p>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${ticketUrl || 'https://click2it.bd/account/tickets'}" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px;">View & Reply in Portal</a>
+        </div>
+        <p style="font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 14px; text-align: center;">Please do not reply directly to this automated email. Use the client portal link above.</p>
+      </div>
+    `;
+        const template = await getDynamicTemplate('ticket_reply', {
+            ticket_id: `#${ticketId.slice(0, 8)}`,
+            ticket_subject: ticketSubject || 'Support Request',
+            customer_name: customerName || 'Valued Customer',
+            staff_name: staffName || 'Click2IT Technical Support',
+            reply_message: replyMessage,
+            ticket_url: ticketUrl || 'https://click2it.bd/account/tickets',
+        }, defaultSubject, defaultHtml);
+        const result = await sendEmail({
+            to: customerEmail,
+            subject: template.subject,
+            html: template.html,
+            category: 'system',
+        });
+        if (!result.success)
+            return res.status(400).json({ error: result.error });
+        return res.status(200).json({ success: true, message: 'Customer notification email sent' });
+    }
+    catch (error) {
+        console.error('Error dispatching ticket reply email:', error);
+        return res.status(500).json({ error: error.message || 'Failed to send ticket email' });
+    }
+});
+emailRouter.post('/ticket-created-admin-notify', requireFirebaseAuth, async (req, res) => {
+    try {
+        const { ticketId, ticketSubject, customerEmail, customerName, priority, message, isCustomerReply } = req.body;
+        if (!ticketId || !message) {
+            return res.status(400).json({ error: 'Missing ticket information' });
+        }
+        const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM_EMAIL || 'support@click2it.bd';
+        const actionLabel = isCustomerReply ? 'Customer Replied to Ticket' : 'New Support Ticket Created';
+        const subject = `[SUPPORT] ${actionLabel}: #${ticketId.slice(0, 8)} - ${ticketSubject || 'Inquiry'}`;
+        const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+        <div style="background: #0f172a; color: #ffffff; padding: 18px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 18px;">${actionLabel}</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #94a3b8;">Ticket #${ticketId.slice(0, 8)} | Priority: ${priority || 'Normal'}</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px;">
+          <tr><td style="padding: 6px 0; color: #64748b; width: 30%;"><strong>Customer:</strong></td><td>${customerName || 'Customer'} (${customerEmail || 'No email'})</td></tr>
+          <tr><td style="padding: 6px 0; color: #64748b;"><strong>Subject:</strong></td><td>${ticketSubject || 'N/A'}</td></tr>
+          <tr><td style="padding: 6px 0; color: #64748b;"><strong>Priority:</strong></td><td style="text-transform: capitalize;">${priority || 'medium'}</td></tr>
+        </table>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${message}</div>
+        <div style="text-align: center; margin-top: 20px;">
+          <a href="https://click2it.bd/admin?tab=tickets" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 13px;">Open Ticket in Admin Desk</a>
+        </div>
+      </div>
+    `;
+        // Fire-and-forget email to admin desk
+        sendEmail({
+            to: adminEmail,
+            subject,
+            html,
+            category: 'system',
+        }).catch(e => console.warn('[Email] Ticket admin notify failed:', e.message));
+        return res.status(200).json({ success: true, message: 'Admin notification triggered' });
+    }
+    catch (error) {
+        console.error('Error dispatching ticket admin notify email:', error);
+        return res.status(500).json({ error: error.message });
     }
 });
 // --- Customer E-Commerce Emails ---

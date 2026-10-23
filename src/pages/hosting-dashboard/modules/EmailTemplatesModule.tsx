@@ -7,7 +7,7 @@ import {
 import { cn } from '../../../lib/utils';
 import { toast } from 'react-hot-toast';
 import {
-  collection, getDocs, setDoc, doc, getDoc, query, orderBy, limit, onSnapshot
+  collection, getDocs, setDoc, doc, getDoc, query, orderBy, limit, onSnapshot, deleteField
 } from 'firebase/firestore';
 import { db, auth } from '../../../firebase';
 import { Modal } from '../components/SharedUI';
@@ -322,14 +322,30 @@ export function EmailTemplatesModule() {
   const [logFilter, setLogFilter] = useState<'all' | 'sent' | 'failed'>('all');
   const [selectedLog, setSelectedLog] = useState<any | null>(null);
 
-  // 1. Fetch SMTP settings
+  // 1. Fetch SMTP settings (checks restricted settings/email_config first, fallbacks to site)
   useEffect(() => {
     const fetchSmtpSettings = async () => {
       try {
         setLoadingSmtp(true);
-        const snap = await getDoc(doc(db, 'settings', 'site'));
-        if (snap.exists()) {
-          const d = snap.data() || {};
+        let configData: any = null;
+        try {
+          const emailSnap = await getDoc(doc(db, 'settings', 'email_config'));
+          if (emailSnap.exists()) {
+            configData = emailSnap.data();
+          }
+        } catch {
+          // If restricted read error or document missing, fallback
+        }
+
+        if (!configData) {
+          const siteSnap = await getDoc(doc(db, 'settings', 'site'));
+          if (siteSnap.exists()) {
+            configData = siteSnap.data() || {};
+          }
+        }
+
+        if (configData) {
+          const d = configData;
           setSmtpForm({
             mailDriver: d.mailDriver || 'smtp',
             mailHost: d.mailHost || '',
@@ -446,7 +462,7 @@ export function EmailTemplatesModule() {
     }
   };
 
-  // Save SMTP Settings
+  // Save SMTP Settings securely into restricted settings/email_config
   const handleSaveSmtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingSmtp(true);
@@ -464,16 +480,27 @@ export function EmailTemplatesModule() {
         updatedAt: new Date().toISOString(),
       };
 
-      await setDoc(doc(db, 'settings', 'site'), payload, { merge: true });
+      // 1. Save to restricted email_config document
+      await setDoc(doc(db, 'settings', 'email_config'), payload, { merge: true });
 
-      // Notify backend to clear cache
+      // 2. Remove sensitive credentials from public settings/site if present
+      try {
+        await setDoc(doc(db, 'settings', 'site'), {
+          mailPassword: deleteField(),
+          resendApiKey: deleteField(),
+        }, { merge: true });
+      } catch (cleanErr) {
+        console.warn('Could not clean sensitive fields from settings/site:', cleanErr);
+      }
+
+      // 3. Notify backend to clear cache and persist securely
       try {
         await apiPost('/api/email/settings', payload);
       } catch (err) {
         // Backend persistence fallback
       }
 
-      toast.success('SMTP Settings saved successfully!');
+      toast.success('SMTP Settings saved securely!');
     } catch (err: any) {
       toast.error('Failed to save settings: ' + (err.message || 'Error'));
     } finally {

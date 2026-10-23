@@ -1639,7 +1639,12 @@ domainRouter.post('/fulfill', requireFirebaseAuth, async (req: any, res: Respons
     batch.update(orderRef, {
       status: newStatus,
       transferStatus: isPendingTransfer ? 'pending_transfer' : isSuccess ? 'completed' : 'failed',
-      ...(orderType === 'renewal' ? { renewalStatus: isSuccess ? 'renewed' : 'failed' } : {}),
+      ...(orderType === 'renewal' ? {
+        renewalStatus: isSuccess ? 'renewed' : 'failed',
+        reminderSent_30d: false,
+        reminderSent_7d: false,
+        reminderSent_1d: false,
+      } : {}),
       registrationId: result?.registrationId || result?.transferId || orderData.registrationId || null,
       transferId: result?.transferId || orderData.transferId || null,
       transferSubmittedAt: orderType === 'transfer' && isSuccess ? new Date() : (orderData.transferSubmittedAt || null),

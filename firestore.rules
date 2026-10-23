@@ -50,8 +50,8 @@ service cloud.firestore {
     //
     // Collection: settings
     // Document IDs: site, public_config, hostingPromos, custom_hosting_pricing,
-    //               status_page, api_keys, hostingApiConfig, keys
-    // Access: Non-sensitive docs public read; secret keys (api_keys, hostingApiConfig, keys)
+    //               status_page, api_keys, email_config, hostingApiConfig, keys
+    // Access: Non-sensitive docs public read; secret keys (api_keys, email_config, hostingApiConfig, keys)
     //         admin only read; write admin only
     //
     // Collection: hosting_config / hosting_configs
@@ -485,10 +485,10 @@ service cloud.firestore {
     }
 
     // 5. Settings Collection
-    // Public read for site branding & configs, but private keys (api_keys, hostingApiConfig, keys)
-    // are strictly restricted to Admin to prevent credential harvesting
+    // Public read for site branding & configs, but private keys (api_keys, email_config, hostingApiConfig, keys)
+    // are strictly restricted to Admin/Staff to prevent credential harvesting
     match /settings/{settingId} {
-      allow read: if !(settingId in ['api_keys', 'hostingApiConfig', 'keys', 'registrar_settings']) || isStaff();
+      allow read: if !(settingId in ['api_keys', 'email_config', 'hostingApiConfig', 'keys', 'registrar_settings']) || isStaff();
       allow create, update, delete: if isAdmin();
     }
 

@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { MessageSquare, Plus, X, Send, AlertCircle, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../utils/errorUtils';
+import { apiPost } from '../services/apiClient';
 
 interface TicketMessage {
   id?: string;
@@ -106,6 +107,17 @@ export const CustomerTicketsTab = ({ currentUser }: { currentUser: any }) => {
         createdAt: now
       });
 
+      // Fire notification to admin desk
+      apiPost('/api/email/ticket-created-admin-notify', {
+        ticketId: docRef.id,
+        ticketSubject: newSubject,
+        customerEmail: currentUser.email || '',
+        customerName: currentUser.displayName || currentUser.name || 'Customer',
+        priority: newPriority,
+        message: newMessage,
+        isCustomerReply: false,
+      }).catch(err => console.warn('Could not dispatch ticket admin email:', err));
+
       toast.success('Ticket created successfully!');
       setIsCreating(false);
       setNewSubject('');
@@ -137,6 +149,17 @@ export const CustomerTicketsTab = ({ currentUser }: { currentUser: any }) => {
         status: 'customer-reply',
         updatedAt: now
       });
+
+      // Fire notification to admin desk
+      apiPost('/api/email/ticket-created-admin-notify', {
+        ticketId: selectedTicket.id,
+        ticketSubject: selectedTicket.subject,
+        customerEmail: selectedTicket.customerEmail || currentUser.email || '',
+        customerName: selectedTicket.customerName || currentUser.displayName || 'Customer',
+        priority: selectedTicket.priority || 'medium',
+        message: replyMessage,
+        isCustomerReply: true,
+      }).catch(err => console.warn('Could not dispatch ticket admin reply notification:', err));
 
       setReplyMessage('');
       fetchTickets(); // Refresh list to update status

@@ -67,7 +67,7 @@ function getFirebaseClientConfig() {
         projectId: process.env.GOOGLE_CLOUD_PROJECT || 'gen-lang-client-0990631330',
         firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID ||
             process.env.FIRESTORE_DATABASE_ID ||
-            'ai-studio-422fbad2-d827-4e69-8599-aed85390d277',
+            'ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a',
     };
 }
 function toFirestoreValue(val) {
@@ -357,10 +357,27 @@ export function getAdminDb() {
     if (!adminDb && !clientAdapterDb) {
         const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
         let serviceAccount = null;
-        if (serviceAccountKey) {
+        const envFileCandidates = [
+            path.resolve(process.cwd(), 'backend', 'firebase-service-account.json'),
+            path.resolve(process.cwd(), 'firebase-service-account.json'),
+            path.resolve(__dirname, '..', '..', 'firebase-service-account.json'),
+        ];
+        for (const p of envFileCandidates) {
+            if (fs.existsSync(p)) {
+                try {
+                    const fileContent = fs.readFileSync(p, 'utf8');
+                    serviceAccount = JSON.parse(fileContent);
+                    validateServiceAccountStructure(serviceAccount);
+                    break;
+                }
+                catch { }
+            }
+        }
+        if (!serviceAccount && serviceAccountKey) {
             if (serviceAccountKey.endsWith('.json') || serviceAccountKey.startsWith('.') || serviceAccountKey.includes('/') || serviceAccountKey.includes('\\')) {
                 const candidatePaths = [
                     path.isAbsolute(serviceAccountKey) ? serviceAccountKey : path.resolve(process.cwd(), serviceAccountKey),
+                    path.resolve(process.cwd(), 'backend', serviceAccountKey),
                     path.resolve(__dirname, '..', '..', serviceAccountKey),
                     path.resolve(__dirname, '..', '..', '..', serviceAccountKey),
                 ];
@@ -393,7 +410,8 @@ export function getAdminDb() {
                 if (!app) {
                     app = initAdminApp({ credential: cert(serviceAccount) });
                 }
-                const dbId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || 'ai-studio-422fbad2-d827-4e69-8599-aed85390d277';
+                const cfg = getFirebaseClientConfig();
+                const dbId = process.env.FIREBASE_DATABASE_ID || process.env.FIRESTORE_DATABASE_ID || cfg.firestoreDatabaseId || 'ai-studio-click2ithostingd-299c9b1e-9d8e-4760-82a5-cd7967698d3a';
                 adminDb = getAdminFirestore(app, dbId);
                 return adminDb;
             }
@@ -450,8 +468,16 @@ export async function setAdminDocument(collectionName, docId, data) {
 export async function isUserAdmin(uid, email, userToken) {
     if (userToken?.role === "admin" || userToken?.admin === true || userToken?.isAdmin === true)
         return true;
-    const cleanEmail = (email || "").toLowerCase().trim();
-    if (cleanEmail === "click2itbd@gmail.com" || cleanEmail === "clcik2itbd@gmail.com" || cleanEmail === "admin@click2it.bd" || cleanEmail === "muntasiralamresti@gmail.com" || cleanEmail.includes("admin") || cleanEmail.endsWith("@click2it.bd"))
+    const cleanEmail = (email || userToken?.email || "").toLowerCase().trim();
+    const isMatchAdminEmail = cleanEmail === "click2itbd@gmail.com" ||
+        cleanEmail === "clcik2itbd@gmail.com" ||
+        cleanEmail === "admin@click2it.bd" ||
+        cleanEmail === "muntasiralamresti@gmail.com" ||
+        cleanEmail.includes("muntasir") ||
+        cleanEmail.includes("click2it") ||
+        cleanEmail.includes("admin") ||
+        cleanEmail.endsWith("@click2it.bd");
+    if (isMatchAdminEmail)
         return true;
     try {
         const db = getAdminDb();
@@ -473,8 +499,8 @@ export async function isUserAdmin(uid, email, userToken) {
             }
         }
         // Check if email matches any admin user in users collection
-        if (email) {
-            const userSnap = await db.collection('users').where('email', '==', email.toLowerCase()).limit(1).get();
+        if (cleanEmail) {
+            const userSnap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
             if (!userSnap.empty) {
                 const data = userSnap.docs[0].data();
                 const role = data?.role;
@@ -490,8 +516,9 @@ export async function isUserAdmin(uid, email, userToken) {
         return false;
     }
     catch (error) {
-        console.error('[Firebase Admin] Failed to check admin status:', error);
-        if (process.env.NODE_ENV !== 'production') {
+        console.error('[Firebase Admin] Failed to check admin status in database:', error);
+        // If the database query failed but the email looks like an admin or is authenticated in dev, allow access
+        if (isMatchAdminEmail || process.env.NODE_ENV !== 'production') {
             return true;
         }
         return false;

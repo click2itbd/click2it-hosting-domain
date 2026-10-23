@@ -390,10 +390,27 @@ export function getAdminDb(): any {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
     let serviceAccount: any = null;
 
-    if (serviceAccountKey) {
+    const envFileCandidates = [
+      path.resolve(process.cwd(), 'backend', 'firebase-service-account.json'),
+      path.resolve(process.cwd(), 'firebase-service-account.json'),
+      path.resolve(__dirname, '..', '..', 'firebase-service-account.json'),
+    ];
+    for (const p of envFileCandidates) {
+      if (fs.existsSync(p)) {
+        try {
+          const fileContent = fs.readFileSync(p, 'utf8');
+          serviceAccount = JSON.parse(fileContent);
+          validateServiceAccountStructure(serviceAccount);
+          break;
+        } catch {}
+      }
+    }
+
+    if (!serviceAccount && serviceAccountKey) {
       if (serviceAccountKey.endsWith('.json') || serviceAccountKey.startsWith('.') || serviceAccountKey.includes('/') || serviceAccountKey.includes('\\')) {
         const candidatePaths = [
           path.isAbsolute(serviceAccountKey) ? serviceAccountKey : path.resolve(process.cwd(), serviceAccountKey),
+          path.resolve(process.cwd(), 'backend', serviceAccountKey),
           path.resolve(__dirname, '..', '..', serviceAccountKey),
           path.resolve(__dirname, '..', '..', '..', serviceAccountKey),
         ];

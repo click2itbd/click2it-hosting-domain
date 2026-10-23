@@ -21,19 +21,29 @@ webhookRouter.get('/whatsapp', (req, res) => {
     }
 });
 webhookRouter.post('/whatsapp', async (req, res) => {
-    const body = req.body;
-    if (!body.object) {
-        return res.sendStatus(404);
+    try {
+        const body = req.body;
+        if (!body || !body.object) {
+            return res.sendStatus(404);
+        }
+        const entry = body.entry?.[0];
+        const change = entry?.changes?.[0];
+        const value = change?.value;
+        if (value?.messages && value.messages.length > 0) {
+            const message = value.messages[0];
+            const phoneNumber = value.contacts?.[0]?.wa_id || message?.from || 'unknown';
+            const msgBody = message?.text?.body || message?.interactive?.button_reply?.title || message?.type || 'non-text message';
+            console.log(`[WhatsApp Webhook] Received message from ${phoneNumber}: ${msgBody}`);
+        }
+        else if (value?.statuses && value.statuses.length > 0) {
+            const status = value.statuses[0];
+            console.log(`[WhatsApp Webhook] Status update for ${status.recipient_id}: ${status.status}`);
+        }
+        return res.sendStatus(200);
     }
-    if (body.entry &&
-        body.entry[0].changes &&
-        body.entry[0].changes[0] &&
-        body.entry[0].changes[0].value.messages &&
-        body.entry[0].changes[0].value.messages[0]) {
-        const phoneNumber = body.entry[0].changes[0].value.contacts[0].wa_id;
-        const msgBody = body.entry[0].changes[0].value.messages[0].text.body;
-        console.log(`Received WhatsApp message from ${phoneNumber}`);
+    catch (error) {
+        console.error('[WhatsApp Webhook] Processing error:', error?.message || error);
+        return res.sendStatus(200); // Always return 200 to WhatsApp to avoid repeated retries
     }
-    res.sendStatus(200);
 });
 export default webhookRouter;

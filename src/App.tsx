@@ -10,6 +10,7 @@ import { WebsitePopup } from './components/WebsitePopup';
 import { ChatWidget } from './components/ChatWidget';
 import { TrackingScripts } from './components/TrackingScripts';
 import { ReferralTracker } from './components/ReferralTracker';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
 
@@ -78,17 +79,18 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <HelmetProvider>
-      <ConfirmProvider>
-        <SettingsProvider>
-          <AuthProvider>
-            <CartProvider>
-              <Router>
-                <TrackingScripts />
-                <ReferralTracker />
-                <WebsitePopup />
-                <ChatWidget />
-                <Routes>
+    <ErrorBoundary>
+      <HelmetProvider>
+        <ConfirmProvider>
+          <SettingsProvider>
+            <AuthProvider>
+              <CartProvider>
+                <Router>
+                  <TrackingScripts />
+                  <ReferralTracker />
+                  <WebsitePopup />
+                  <ChatWidget />
+                  <Routes>
                   {/* --- AUTH & ACCOUNT --- */}
                   <Route path="/login" element={<LazyWrapper><Login /></LazyWrapper>} />
                   <Route path="/register" element={<LazyWrapper><Login /></LazyWrapper>} />
@@ -162,5 +164,6 @@ export default function App() {
         </SettingsProvider>
       </ConfirmProvider>
     </HelmetProvider>
-  );
+  </ErrorBoundary>
+);
 }
