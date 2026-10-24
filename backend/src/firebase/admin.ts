@@ -466,7 +466,21 @@ export function getAdminDb(): any {
 
 export function getAdminAuth() {
   if (!adminAuth) {
-    const app = getAdminApps()[0];
+    let app = getAdminApps()[0];
+    if (!app) {
+      try {
+        getAdminDb();
+        app = getAdminApps()[0];
+      } catch {}
+    }
+    if (!app) {
+      try {
+        const cfg = getFirebaseClientConfig();
+        app = initAdminApp({ projectId: cfg.projectId });
+      } catch {
+        app = getAdminApps()[0];
+      }
+    }
     if (app) {
       try {
         adminAuth = getAdminAuthSdk(app);
