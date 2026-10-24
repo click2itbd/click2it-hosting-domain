@@ -5,7 +5,8 @@ import {
   Shield, Globe, Zap, ChevronDown, Lock, Info, Activity,
   ExternalLink, Copy, Check, RefreshCw, Radio, Sparkles,
   Link2, Mail, LayoutDashboard, Terminal, CheckCircle, Percent,
-  Sliders, ShieldCheck, ArrowUpRight, HelpCircle
+  Sliders, ShieldCheck, ArrowUpRight, HelpCircle,
+  User, Key, Eye, EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useSettings } from '../../../context/SettingsContext';
