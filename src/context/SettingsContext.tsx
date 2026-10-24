@@ -82,16 +82,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             needsUpdate = true;
           }
 
-          if (needsUpdate) {
-            setDoc(settingsRef, updated, { merge: true }).catch((err) => {
-              console.warn('[SettingsContext] setDoc merge skipped:', err);
-            });
-          }
+          // In-memory fallback defaults without writing on every client load
           setSettings(updated);
         } else {
-          setDoc(settingsRef, defaultSettings).catch((err) => {
-            console.warn('[SettingsContext] setDoc default skipped:', err);
-          });
           setSettings(defaultSettings);
         }
         setLoading(false);
