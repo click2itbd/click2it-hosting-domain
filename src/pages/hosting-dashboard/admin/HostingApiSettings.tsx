@@ -50,11 +50,15 @@ export const HostingApiSettings = () => {
   const [config, setConfig] = useState({
     hostingApiType: 'dummy',
     hostingApiUrl: '',
+    whmUsername: 'root',
+    whmApiToken: '',
+    hasWhmToken: false,
     bundleDiscountPercent: 0,
     clnLogin: '',
     isSandboxMode: false,
     updatedAt: null as string | null,
   });
+  const [showWhmToken, setShowWhmToken] = useState(false);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -72,6 +76,9 @@ export const HostingApiSettings = () => {
           const loadedConfig = {
             hostingApiType: json.data.hostingApiType || 'dummy',
             hostingApiUrl: json.data.hostingApiUrl || '',
+            whmUsername: json.data.whmUsername || 'root',
+            whmApiToken: '',
+            hasWhmToken: Boolean(json.data.hasWhmToken),
             bundleDiscountPercent: json.data.bundleDiscountPercent || 0,
             clnLogin: json.data.clnLogin || '',
             isSandboxMode: json.data.isSandboxMode || false,
@@ -212,7 +219,12 @@ export const HostingApiSettings = () => {
         contactEmail: domainSettings.contactEmail,
       });
 
-      const newConfig = { ...config, updatedAt: new Date().toISOString() };
+      const newConfig = {
+        ...config,
+        hasWhmToken: config.whmApiToken ? true : config.hasWhmToken,
+        whmApiToken: '',
+        updatedAt: new Date().toISOString()
+      };
       setConfig(newConfig);
       setInitialState({ config: newConfig, domainSettings: { ...domainSettings } });
       toast.success('Hosting & domain settings saved successfully!');
@@ -239,6 +251,11 @@ export const HostingApiSettings = () => {
       const response = await fetch(getApiUrl('/api/admin/hosting/test-connection'), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hostingApiUrl: config.hostingApiUrl,
+          whmUsername: config.whmUsername,
+          whmApiToken: config.whmApiToken,
+        }),
       });
       const data = await response.json();
       if (data.success) {
@@ -860,6 +877,77 @@ export const HostingApiSettings = () => {
               <span>Public host URL used for admin health checks and generating direct customer cPanel redirect links.</span>
             </p>
           </div>
+
+          {/* WHM API Credentials: Username & Token */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+            
+            {/* WHM Username */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <User size={13} className="text-indigo-600" />
+                  <span>WHM API Username</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                  Default: root
+                </span>
+              </div>
+              <input
+                type="text"
+                value={config.whmUsername || ''}
+                onChange={(e) => setConfig({ ...config, whmUsername: e.target.value })}
+                placeholder="root"
+                className="w-full bg-white border-2 border-slate-200 rounded-2xl py-3 pl-4 pr-4 text-sm font-mono font-bold text-slate-800 placeholder:font-sans placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-2xs"
+              />
+              <p className="text-[11px] text-slate-400 pl-1">
+                The WHM administrator username (usually <code className="font-mono text-slate-600">root</code>).
+              </p>
+            </div>
+
+            {/* WHM API Token */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Key size={13} className="text-indigo-600" />
+                  <span>WHM API Token</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <span className={cn(
+                  "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                  config.hasWhmToken
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-rose-50 text-rose-700 border-rose-200"
+                )}>
+                  {config.hasWhmToken ? '✓ Active Token Configured' : 'Missing Token'}
+                </span>
+              </div>
+
+              <div className="relative flex items-center">
+                <input
+                  type={showWhmToken ? 'text' : 'password'}
+                  value={config.whmApiToken || ''}
+                  onChange={(e) => setConfig({ ...config, whmApiToken: e.target.value })}
+                  placeholder={config.hasWhmToken ? '•••••••••••••••••••••••• (Leave blank to keep existing)' : 'Paste your WHM API Token here'}
+                  autoComplete="new-password"
+                  className="w-full bg-white border-2 border-slate-200 rounded-2xl py-3 pl-4 pr-11 text-sm font-mono font-bold text-slate-800 placeholder:font-sans placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-2xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowWhmToken(!showWhmToken)}
+                  className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                  title={showWhmToken ? 'Hide token' : 'Show token'}
+                >
+                  {showWhmToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-400 pl-1">
+                Generate in WHM &gt; <strong className="text-slate-600">Development</strong> &gt; <strong className="text-slate-600">Manage API Tokens</strong> with Full Access.
+              </p>
+            </div>
+          </div>
+
 
           {/* Automation & Discount Settings Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">

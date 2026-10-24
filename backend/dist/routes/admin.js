@@ -75,6 +75,8 @@ adminRouter.get('/hosting-config', async (req, res) => {
             webmailUrl: data.webmailUrl || 'https://webmail.click2it.bd',
             clientAreaUrl: data.clientAreaUrl || 'https://click2it.bd/client-area',
             contactEmail: data.contactEmail || 'info@click2it.bd',
+            whmUsername: data.whmUsername || data.hostingApiUsername || process.env.WHM_USERNAME || 'root',
+            hasWhmToken: Boolean(data.whmApiToken || data.hostingApiKey || process.env.WHM_API_TOKEN),
         };
         for (const [key, value] of Object.entries(data)) {
             if (FORBIDDEN_SECRET_FIELDS.has(key)) {
@@ -99,6 +101,20 @@ adminRouter.post('/hosting-config', async (req, res) => {
         const existing = result.data || {};
         const payload = { ...existing };
         for (const [key, value] of Object.entries(req.body)) {
+            if (key === 'whmApiToken') {
+                if (typeof value === 'string' && value.trim()) {
+                    payload.whmApiToken = value.trim();
+                    payload.hostingApiKey = value.trim();
+                }
+                continue;
+            }
+            if (key === 'whmUsername') {
+                if (typeof value === 'string' && value.trim()) {
+                    payload.whmUsername = value.trim();
+                    payload.hostingApiUsername = value.trim();
+                }
+                continue;
+            }
             if (FORBIDDEN_SECRET_FIELDS.has(key)) {
                 continue;
             }
@@ -146,8 +162,10 @@ adminRouter.post('/hosting/test-connection', async (req, res) => {
             return res.status(403).json({ error: 'Admin access required' });
         }
         const dbConfig = await getAdminDocument('settings', 'hostingApiConfig');
-        const hostingUrl = dbConfig.data?.hostingApiUrl || process.env.WHM_URL || process.env.WHM_API_URL;
-        const provider = new CpanelHostingProvider((process.env.WHM_API_TOKEN || process.env.WHM_API_KEY || '').trim(), hostingUrl, (process.env.WHM_USERNAME || 'root').trim(), parseInt(process.env.WHM_TIMEOUT_MS || '15000', 10));
+        const hostingUrl = req.body?.hostingApiUrl || dbConfig.data?.hostingApiUrl || process.env.WHM_URL || process.env.WHM_API_URL;
+        const whmToken = (req.body?.whmApiToken || dbConfig.data?.whmApiToken || dbConfig.data?.hostingApiKey || process.env.WHM_API_TOKEN || process.env.WHM_API_KEY || '').trim();
+        const whmUsername = (req.body?.whmUsername || dbConfig.data?.whmUsername || dbConfig.data?.hostingApiUsername || process.env.WHM_USERNAME || 'root').trim();
+        const provider = new CpanelHostingProvider(whmToken, hostingUrl, whmUsername, parseInt(process.env.WHM_TIMEOUT_MS || '15000', 10));
         const result = await provider.testConnection();
         return res.json(result);
     }

@@ -6,24 +6,25 @@ export async function getHostingSettings() {
     let hostingApiUrl = process.env.WHM_URL || process.env.WHM_API_URL || config.secrets.whmApiUrl || '';
     let hostingApiKey = process.env.WHM_API_TOKEN || process.env.WHM_API_KEY || config.secrets.whmApiToken || config.secrets.whmApiKey || '';
     let hostingApiUsername = (process.env.WHM_USERNAME || config.secrets.whmUsername || 'root').trim();
-    if (!hostingApiKey || !hostingApiUrl) {
-        try {
-            const { getAdminDocument } = await import('../firebase/admin.js');
-            const hostingDoc = await getAdminDocument('settings', 'hostingApiConfig');
-            if (hostingDoc.exists && hostingDoc.data) {
-                if (!hostingApiKey && hostingDoc.data.hostingApiKey)
-                    hostingApiKey = hostingDoc.data.hostingApiKey;
-                if (!hostingApiUrl && hostingDoc.data.hostingApiUrl)
-                    hostingApiUrl = hostingDoc.data.hostingApiUrl;
-                if (hostingDoc.data.hostingApiType)
-                    hostingApiType = hostingDoc.data.hostingApiType;
-                if (hostingDoc.data.hostingApiUsername)
-                    hostingApiUsername = hostingDoc.data.hostingApiUsername;
+    try {
+        const { getAdminDocument } = await import('../firebase/admin.js');
+        const hostingDoc = await getAdminDocument('settings', 'hostingApiConfig');
+        if (hostingDoc.exists && hostingDoc.data) {
+            if (hostingDoc.data.whmApiToken || hostingDoc.data.hostingApiKey) {
+                hostingApiKey = hostingDoc.data.whmApiToken || hostingDoc.data.hostingApiKey;
+            }
+            if (hostingDoc.data.hostingApiUrl || hostingDoc.data.whmUrl) {
+                hostingApiUrl = hostingDoc.data.hostingApiUrl || hostingDoc.data.whmUrl;
+            }
+            if (hostingDoc.data.hostingApiType)
+                hostingApiType = hostingDoc.data.hostingApiType;
+            if (hostingDoc.data.whmUsername || hostingDoc.data.hostingApiUsername) {
+                hostingApiUsername = hostingDoc.data.whmUsername || hostingDoc.data.hostingApiUsername;
             }
         }
-        catch (e) {
-            console.warn('Error reading hostingApiConfig in hosting.ts:', e);
-        }
+    }
+    catch (e) {
+        console.warn('Error reading hostingApiConfig in hosting.ts:', e);
     }
     return {
         hostingApiType,
