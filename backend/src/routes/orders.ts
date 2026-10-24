@@ -355,6 +355,29 @@ ordersRouter.post('/create', requireFirebaseAuth, async (req: any, res: Response
       });
     }
 
+    // Process CloudLinux and other digital software licenses
+    const licenseItems = validatedItems.filter((i: any) => i.itemType === 'license' || String(i.category || '').toLowerCase().includes('cloudlinux') || String(i.id || '').startsWith('cloudlinux_'));
+    for (const lItem of licenseItems) {
+      const serverIp = (lItem.serverIp || lItem.ip || (orderData as any).serverIp || '').trim();
+      const licenseDocRef = db.collection('hostingAccounts').doc();
+      batch.set(licenseDocRef, {
+        userId: targetUserId,
+        orderId,
+        planId: lItem.id || lItem.slug || 'cloudlinux_shared_pro',
+        planName: lItem.name || 'CloudLinux OS License',
+        domain: serverIp || 'CloudLinux License',
+        serverIp,
+        provider: 'cloudlinux',
+        type: 'license',
+        status: 'pending',
+        provisioningStatus: 'pending',
+        billingCycle: lItem.billingCycle || 'monthly',
+        price: lItem.price || lItem.overridePrice || 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     // Execute atomic batch commit
     await batch.commit();
 

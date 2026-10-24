@@ -192,19 +192,41 @@ export default function CloudLinuxLicenseSection() {
     loadPlans();
   }, []);
 
+  const [selectedPkgForIp, setSelectedPkgForIp] = useState(null);
+  const [inputIp, setInputIp] = useState('');
+  const [ipError, setIpError] = useState('');
+
   const handleOrder = (pkg) => {
+    setSelectedPkgForIp(pkg);
+    setInputIp('');
+    setIpError('');
+  };
+
+  const confirmAddToCart = (skip = false) => {
+    if (!selectedPkgForIp) return;
+    let validIp = '';
+    if (!skip && inputIp.trim()) {
+      const ipv4Regex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+      if (!ipv4Regex.test(inputIp.trim())) {
+        setIpError('Please enter a valid IPv4 address (e.g. 103.145.12.34)');
+        return;
+      }
+      validIp = inputIp.trim();
+    }
     addItem({
-      id: pkg.id,
-      name: pkg.name,
-      price: pkg.price || pkg.overridePrice || 1100,
+      id: selectedPkgForIp.id,
+      name: selectedPkgForIp.name,
+      price: selectedPkgForIp.price || selectedPkgForIp.overridePrice || 1100,
       quantity: 1,
       category: 'Hosting & Domains',
       image: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=200',
       billingCycle: 'monthly',
       itemType: 'license',
+      serverIp: validIp,
       isDigital: true
     });
-    toast.success(`${pkg.name} added to cart!`);
+    toast.success(`${selectedPkgForIp.name} added to cart!`);
+    setSelectedPkgForIp(null);
     navigate('/hosting/cart');
   };
 
@@ -401,6 +423,77 @@ export default function CloudLinuxLicenseSection() {
           </div>
         </div>
       </div>
+
+      {/* Target Server IP Modal */}
+      {selectedPkgForIp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 text-white shadow-2xl relative">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <Server className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-white">Target Server IPv4</h3>
+                <p className="text-xs text-slate-400">Assign {selectedPkgForIp.name} to your server</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-4 leading-relaxed">
+              CloudLinux licenses are bound directly to your server's Public IP address. Enter your server's public IPv4 below for instant activation.
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                Server IP Address
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={inputIp}
+                onChange={(e) => {
+                  setInputIp(e.target.value);
+                  setIpError('');
+                }}
+                placeholder="e.g. 103.145.12.34"
+                className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') confirmAddToCart(false);
+                }}
+              />
+              {ipError && (
+                <p className="text-xs text-rose-400 mt-1.5 font-medium">{ipError}</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => confirmAddToCart(true)}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors underline"
+              >
+                I'll provide IP later
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPkgForIp(null)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmAddToCart(false)}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                >
+                  <span>Continue to Cart</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -1401,9 +1401,97 @@ export const MyServices: React.FC = () => {
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {filteredHosting.map(account => {
-                              const isVps = isVpsAccount(account);
+                              const isLicense = account.type === 'license' || account.provider === 'cloudlinux';
+                              const isVps = !isLicense && isVpsAccount(account);
                               const vps = account.vpsDetails || {};
                               const hostname = vps.hostname || account.domain || account.planId || 'Cloud VPS Instance';
+
+                              if (isLicense) {
+                                const licenseIp = account.serverIp || (account.domain !== 'CloudLinux License' ? account.domain : '') || '';
+                                return (
+                                  <tr key={account.id} className="hover:bg-indigo-50/30 transition-colors bg-indigo-50/5">
+                                    <td className="px-6 py-4">
+                                      <div className="flex items-start gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                                          <Shield size={18} />
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-bold text-slate-900 text-sm">{account.planName || account.planId || 'CloudLinux OS License'}</span>
+                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase tracking-wide">
+                                              OS License
+                                            </span>
+                                          </div>
+                                          <p className="text-xs text-indigo-950 font-semibold mt-0.5">
+                                            {licenseIp ? `Bound to IP: ${licenseIp}` : 'Server IP not attached'}
+                                          </p>
+                                          <p className="text-[11px] text-slate-400 mt-0.5">
+                                            Command: <code className="text-indigo-600 bg-indigo-50 px-1 rounded">cldiag --check-license</code>
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </td>
+
+                                    <td className="px-6 py-4">
+                                      <div className="flex flex-col gap-1.5">
+                                        <div>{getStatusBadge(account.status)}</div>
+                                        {licenseIp ? (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                              {licenseIp}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => copyToClipboard(licenseIp, 'IP Address')}
+                                              className="text-slate-400 hover:text-indigo-600 transition"
+                                              title="Copy IP"
+                                            >
+                                              <Copy size={13} />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                                            <Clock size={12} /> Pending IP Submission
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    <td className="px-6 py-4">
+                                      <div className="space-y-1 text-xs">
+                                        <div className="font-semibold text-slate-800">
+                                          {account.billingCycle === 'annually' ? 'Annual Subscription' : 'Monthly License'}
+                                        </div>
+                                        <div className="text-slate-500 font-medium">
+                                          {account.price ? `৳${account.price.toLocaleString()}` : 'Standard Rate'}
+                                        </div>
+                                      </div>
+                                    </td>
+
+                                    <td className="px-6 py-4">
+                                      <div className="space-y-1 text-xs">
+                                        <div className="font-semibold text-slate-800">
+                                          {formatExpiryDate(account.expiryDate || account.nextRenewalDate || account.createdAt)}
+                                        </div>
+                                        <div className="text-[11px] text-slate-500">Auto-renews</div>
+                                      </div>
+                                    </td>
+
+                                    <td className="px-6 py-4 text-right">
+                                      <div className="flex items-center justify-end gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => copyToClipboard('cldiag --check-license', 'Activation command')}
+                                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition shadow-2xs"
+                                          title="Copy SSH Activation Command"
+                                        >
+                                          <Copy size={12} /> Copy Activation Command
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              }
 
                               if (isVps) {
                                 return (

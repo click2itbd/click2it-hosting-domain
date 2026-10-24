@@ -1,6 +1,7 @@
 import React from 'react';
 import { HostingApiSettings } from '../admin/HostingApiSettings';
 import { EpsPaymentSettings } from '../admin/EpsPaymentSettings';
+import { CloudLinuxApiSettings } from '../admin/CloudLinuxApiSettings';
 import { SystemConnectionStatus } from '../components/SystemConnectionStatus';
 
 export function ApiSettingsTab({ state }) {
@@ -11,6 +12,7 @@ export function ApiSettingsTab({ state }) {
       <SystemConnectionStatus onNavigateTab={state.setActiveTab} currentTab={state.activeTab} />
       <EpsPaymentSettings />
       <HostingApiSettings />
+      <CloudLinuxApiSettings />
     </div>
   );
 }

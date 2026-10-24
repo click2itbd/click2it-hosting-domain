@@ -1680,6 +1680,7 @@ export const HostingCheckout: React.FC = () => {
                     {items.map((item) => {
                       const itemIsVps = isVpsItem(item);
                       const itemIsTransfer = item.category === 'domain_transfer' || item.itemType === 'domain_transfer';
+                      const itemIsLicense = item.itemType === 'license' || String(item.category || '').toLowerCase().includes('cloudlinux') || String(item.id || '').startsWith('cloudlinux_');
                       const resolvedAuthCode = itemIsTransfer ? getResolvedTransferCode(item) : '';
                       return (
                         <div key={item.id} className="flex justify-between items-start text-sm pb-2.5 border-b border-gray-50 last:border-0">
@@ -1697,6 +1698,11 @@ export const HostingCheckout: React.FC = () => {
                                     KVM VPS
                                   </span>
                                 )}
+                                {itemIsLicense && (
+                                  <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold text-[10px]">
+                                    OS License
+                                  </span>
+                                )}
                                 {itemIsTransfer && resolvedAuthCode && (
                                   <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold text-[10px]">
                                     ✓ Auth/EPP Code Attached
@@ -1704,6 +1710,21 @@ export const HostingCheckout: React.FC = () => {
                                 )}
                                 <span>{item.description || ''}</span>
                               </div>
+                              {itemIsLicense && (
+                                <div className="mt-1.5">
+                                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 mb-1">
+                                    <span>Target Server IPv4:</span>
+                                    {item.serverIp && <span className="text-emerald-600 font-mono text-[10px]">Attached</span>}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. 103.145.12.34 (or leave blank to assign later)"
+                                    value={item.serverIp || ''}
+                                    onChange={(e) => updateCartItem(item.id, { serverIp: e.target.value.trim() })}
+                                    className="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder:text-slate-400"
+                                  />
+                                </div>
+                              )}
                               {itemIsTransfer && !resolvedAuthCode && (
                                 <div className="mt-1.5">
                                   <input

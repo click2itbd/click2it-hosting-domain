@@ -909,6 +909,10 @@ async function fulfillHostingAccount(hostingAccountId, hostingData, actorUid) {
             error: undefined,
         };
     }
+    // Handle CloudLinux OS Licenses
+    if (hostingData.provider === 'cloudlinux' || hostingData.type === 'license') {
+        return await fulfillCloudLinuxLicense(hostingAccountId, hostingData, actorUid, contactEmail, customerName, db, now);
+    }
     const { provider } = await getHostingProviderWithSettings();
     try {
         const result = await provider.provisionAccount({
@@ -1080,6 +1084,168 @@ async function fulfillHostingAccount(hostingAccountId, hostingData, actorUid) {
             errorCode: classified.code,
         };
     }
+}
+async function fulfillCloudLinuxLicense(hostingAccountId, hostingData, actorUid, contactEmail, customerName, db, now) {
+    const { getCloudLinuxConfig, getCloudLinuxProviderWithSettings, resolveCloudLinuxType } = await import('./cloudlinuxConfig.js');
+    const cfg = await getCloudLinuxConfig();
+    const serverIp = (hostingData.serverIp || hostingData.domain || '').trim();
+    const planName = hostingData.planName || hostingData.name || 'CloudLinux OS License';
+    if (!serverIp || serverIp === 'CloudLinux License') {
+        await db.collection('hostingAccounts').doc(hostingAccountId).update({
+            status: 'pending',
+            provisioningStatus: 'awaiting_ip',
+            contactEmail,
+            customerEmail: contactEmail,
+            updatedAt: now,
+        });
+        if (contactEmail) {
+            await sendEmail({
+                to: contactEmail,
+                subject: `⚠️ Server IP Required for ${planName} Activation`,
+                html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #2563eb;">Action Required: Submit Your Server IP</h2>
+            <p>Dear <strong>${customerName || 'Valued Customer'}</strong>,</p>
+            <p>Thank you for ordering <strong>${planName}</strong>! Your payment has been confirmed.</p>
+            <p>To activate your license, please provide your server's Public IPv4 Address by replying to this email or visiting your <a href="https://click2it.bd/account/services">Services Dashboard</a>.</p>
+          </div>
+        `,
+                orderId: hostingData.orderId,
+                customerEmail: contactEmail,
+                category: 'hosting'
+            }).catch(() => { });
+        }
+        return {
+            itemId: hostingAccountId,
+            type: 'hosting',
+            action: 'provision',
+            success: false,
+            status: 'pending',
+            error: 'Awaiting server IP address',
+        };
+    }
+    // If live mode is configured and enabled, call CloudLinux Partner API
+    if (cfg.enabled && cfg.mode === 'live' && cfg.apiToken) {
+        try {
+            const provider = await getCloudLinuxProviderWithSettings();
+            const licenseType = resolveCloudLinuxType(hostingData.planId || hostingData.slug || '');
+            const result = await provider.addLicense(serverIp, licenseType);
+            if (result.success) {
+                await db.collection('hostingAccounts').doc(hostingAccountId).update({
+                    status: 'active',
+                    provisioningStatus: 'completed',
+                    licenseId: result.licenseId || null,
+                    contactEmail,
+                    customerEmail: contactEmail,
+                    updatedAt: now,
+                });
+                await writeAuditLog(db, hostingAccountId, 'cloudlinux_license_activated', actorUid, hostingData.status, 'active', null, `License active on IP: ${serverIp}`);
+                if (contactEmail) {
+                    await sendEmail({
+                        to: contactEmail,
+                        subject: `🚀 Your ${planName} is Active! (IP: ${serverIp})`,
+                        html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                <h2 style="color: #16a34a;">CloudLinux License Activated</h2>
+                <p>Dear <strong>${customerName || 'Valued Customer'}</strong>,</p>
+                <p>Your license for <strong>${planName}</strong> has been bound to your server IP: <code>${serverIp}</code>.</p>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                  <p style="margin: 0 0 8px 0; font-weight: 700; color: #0f172a;">How to activate on your server:</p>
+                  <p style="margin: 0 0 6px 0; font-size: 13px; color: #475569;">1. Log in to your server via SSH as <strong>root</strong>.</p>
+                  <p style="margin: 0 0 6px 0; font-size: 13px; color: #475569;">2. Run the following command:</p>
+                  <pre style="background: #0f172a; color: #38bdf8; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 14px;">cldiag --check-license</pre>
+                  <p style="margin: 6px 0 0 0; font-size: 12px; color: #64748b;">(Or if newly converted: <code>clnreg_ks --force</code>)</p>
+                </div>
+                <p>Manage your services anytime at <a href="https://click2it.bd/account/services">Click2IT Dashboard</a>.</p>
+              </div>
+            `,
+                        orderId: hostingData.orderId,
+                        customerEmail: contactEmail,
+                        category: 'hosting'
+                    }).catch(() => { });
+                }
+                return {
+                    itemId: hostingAccountId,
+                    type: 'hosting',
+                    action: 'provision',
+                    success: true,
+                    status: 'active',
+                };
+            }
+            else {
+                await db.collection('hostingAccounts').doc(hostingAccountId).update({
+                    status: 'manual_review',
+                    provisioningStatus: 'failed',
+                    error: result.error,
+                    contactEmail,
+                    customerEmail: contactEmail,
+                    updatedAt: now,
+                });
+                return {
+                    itemId: hostingAccountId,
+                    type: 'hosting',
+                    action: 'provision',
+                    success: false,
+                    status: 'manual_review',
+                    error: result.error,
+                };
+            }
+        }
+        catch (err) {
+            await db.collection('hostingAccounts').doc(hostingAccountId).update({
+                status: 'manual_review',
+                provisioningStatus: 'failed',
+                error: err.message,
+                contactEmail,
+                customerEmail: contactEmail,
+                updatedAt: now,
+            });
+            return {
+                itemId: hostingAccountId,
+                type: 'hosting',
+                action: 'provision',
+                success: false,
+                status: 'manual_review',
+                error: err.message,
+            };
+        }
+    }
+    // Manual fulfillment mode (standard when partner API credentials are not yet entered)
+    await db.collection('hostingAccounts').doc(hostingAccountId).update({
+        status: 'active',
+        provisioningStatus: 'manual_pending',
+        contactEmail,
+        customerEmail: contactEmail,
+        updatedAt: now,
+    });
+    await writeAuditLog(db, hostingAccountId, 'cloudlinux_manual_queued', actorUid, hostingData.status, 'manual_pending', null, `CloudLinux license order acknowledged for IP: ${serverIp}. Pending admin wholesale activation.`);
+    if (contactEmail) {
+        await sendEmail({
+            to: contactEmail,
+            subject: `Order Confirmed: ${planName} (IP: ${serverIp})`,
+            html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #2563eb;">CloudLinux License Processing</h2>
+          <p>Dear <strong>${customerName || 'Valued Customer'}</strong>,</p>
+          <p>Thank you for ordering <strong>${planName}</strong>! Your payment has been verified.</p>
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 0 0 6px 0;"><strong>Target Server IP:</strong> <code>${serverIp}</code></p>
+            <p style="margin: 0; color: #475569; font-size: 13px;">Our provisioning team is assigning your license on the CloudLinux network. You will receive a confirmation shortly.</p>
+          </div>
+        </div>
+      `,
+            orderId: hostingData.orderId,
+            customerEmail: contactEmail,
+            category: 'hosting'
+        }).catch(() => { });
+    }
+    return {
+        itemId: hostingAccountId,
+        type: 'hosting',
+        action: 'provision',
+        success: true,
+        status: 'manual_pending',
+    };
 }
 async function getSiteName() {
     try {

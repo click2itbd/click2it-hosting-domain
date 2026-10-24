@@ -333,10 +333,50 @@ hostingRouter.post('/retry', requireFirebaseAuth, async (req: any, res: Response
   }
 });
 
+hostingRouter.get('/admin/cloudlinux-config', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const adminCheck = await isUserAdmin(req.user.uid, req.user.email);
+    if (!adminCheck) return res.status(403).json({ success: false, error: 'Admin access required' });
+    const { getCloudLinuxConfig, maskCloudLinuxConfig } = await import('../services/cloudlinuxConfig.js');
+    const cfg = await getCloudLinuxConfig();
+    return res.json({ success: true, config: maskCloudLinuxConfig(cfg) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error?.message || 'Failed to fetch CloudLinux config' });
+  }
+});
+
+hostingRouter.post('/admin/cloudlinux-config', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const adminCheck = await isUserAdmin(req.user.uid, req.user.email);
+    if (!adminCheck) return res.status(403).json({ success: false, error: 'Admin access required' });
+    const { saveCloudLinuxConfig, getCloudLinuxConfig, maskCloudLinuxConfig } = await import('../services/cloudlinuxConfig.js');
+    await saveCloudLinuxConfig(req.body || {});
+    const cfg = await getCloudLinuxConfig();
+    return res.json({ success: true, message: 'CloudLinux configuration saved successfully', config: maskCloudLinuxConfig(cfg) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error?.message || 'Failed to save CloudLinux config' });
+  }
+});
+
+hostingRouter.post('/admin/cloudlinux-test', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const adminCheck = await isUserAdmin(req.user.uid, req.user.email);
+    if (!adminCheck) return res.status(403).json({ success: false, error: 'Admin access required' });
+    const { getCloudLinuxProviderWithSettings } = await import('../services/cloudlinuxConfig.js');
+    const provider = await getCloudLinuxProviderWithSettings(req.body || {});
+    const result = await provider.testConnection();
+    return res.json(result);
+  } catch (error: any) {
+    return res.json({ success: false, code: 'CLOUDLINUX_ERROR', message: error?.message || 'Connection test failed' });
+  }
+});
+
 hostingRouter.post('/cloudlinux/license', requireFirebaseAuth, async (req: any, res: Response) => {
   try {
-    if (config.cloudlinux.enabled !== 'true') {
-      return res.status(400).json({ success: false, error: 'CloudLinux integration is not enabled.' });
+    const { getCloudLinuxConfig, getCloudLinuxProviderWithSettings } = await import('../services/cloudlinuxConfig.js');
+    const cfg = await getCloudLinuxConfig();
+    if (!cfg.enabled) {
+      return res.status(400).json({ success: false, error: 'CloudLinux integration is disabled in settings.' });
     }
 
     const { ip, type } = req.body;
@@ -344,8 +384,7 @@ hostingRouter.post('/cloudlinux/license', requireFirebaseAuth, async (req: any, 
       return res.status(400).json({ success: false, error: 'ip and type are required' });
     }
 
-    const { getCloudLinuxProvider } = await import('../providers/cloudlinux/CloudLinuxProvider');
-    const provider = getCloudLinuxProvider();
+    const provider = await getCloudLinuxProviderWithSettings();
     const result = await provider.addLicense(ip, type);
     return res.json({ success: true, data: result });
   } catch (error: any) {
@@ -356,8 +395,10 @@ hostingRouter.post('/cloudlinux/license', requireFirebaseAuth, async (req: any, 
 
 hostingRouter.delete('/cloudlinux/license', requireFirebaseAuth, async (req: any, res: Response) => {
   try {
-    if (config.cloudlinux.enabled !== 'true') {
-      return res.status(400).json({ success: false, error: 'CloudLinux integration is not enabled.' });
+    const { getCloudLinuxConfig, getCloudLinuxProviderWithSettings } = await import('../services/cloudlinuxConfig.js');
+    const cfg = await getCloudLinuxConfig();
+    if (!cfg.enabled) {
+      return res.status(400).json({ success: false, error: 'CloudLinux integration is disabled in settings.' });
     }
 
     const { ip, type } = req.body;
@@ -365,8 +406,7 @@ hostingRouter.delete('/cloudlinux/license', requireFirebaseAuth, async (req: any
       return res.status(400).json({ success: false, error: 'ip and type are required' });
     }
 
-    const { getCloudLinuxProvider } = await import('../providers/cloudlinux/CloudLinuxProvider');
-    const provider = getCloudLinuxProvider();
+    const provider = await getCloudLinuxProviderWithSettings();
     const result = await provider.removeLicense(ip, type);
     return res.json({ success: true, data: result });
   } catch (error: any) {
