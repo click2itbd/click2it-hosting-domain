@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import './services/networkDns.js';
 import { createApp } from './app.js';
 import { config, validateEnvironment } from './config/index.js';
@@ -15,18 +15,51 @@ validateEnvironment();
 const app = createApp();
 
 const isPassenger = typeof (globalThis as any).PhusionPassenger !== 'undefined' || process.env.PORT === 'passenger';
-const listenTarget: any = isPassenger ? 'passenger' : (process.env.PORT || process.env.BACKEND_PORT || config.port || 4001);
+const tcpPort = parseInt(process.env.BACKEND_PORT || (process.env.PORT !== 'passenger' ? (process.env.PORT || '') : '') || String(config.port || 4001), 10) || 4001;
 
-const server = app.listen(listenTarget, () => {
-  console.log(`Backend API running ${isPassenger ? "under Phusion Passenger" : `on port ${listenTarget}`}`);
-  
-  // Initialize Background Jobs
+let server: any;
+
+if (isPassenger) {
+  // Bind to Phusion Passenger socket
+  server = app.listen('passenger', () => {
+    console.log('Backend API running under Phusion Passenger');
+    
+    // Initialize Background Jobs
+    try {
+      setupExpiryReminders();
+    } catch (cronErr) {
+      console.error('Failed to setup expiry reminders cron:', cronErr);
+    }
+  });
+
+  // ALSO bind to TCP port 4001 on localhost so Apache/LiteSpeed .htaccess mod_proxy can forward to it!
   try {
-    setupExpiryReminders();
-  } catch (cronErr) {
-    console.error('Failed to setup expiry reminders cron:', cronErr);
+    const tcpServer = app.listen(tcpPort, '127.0.0.1', () => {
+      console.log(`Backend API also listening on http://127.0.0.1:${tcpPort} for reverse proxy`);
+    });
+    tcpServer.on('error', (err: any) => {
+      if (err?.code === 'EADDRINUSE') {
+        console.log(`[TCP Server] Port ${tcpPort} is already bound, reusing existing socket.`);
+      } else {
+        console.error(`[TCP Server Error] ${err?.message || err}`);
+      }
+    });
+  } catch (err: any) {
+    console.warn(`[TCP Server] Could not bind port ${tcpPort}:`, err?.message || err);
   }
-});
+} else {
+  // Standalone mode (PM2 / Node / Dev)
+  server = app.listen(tcpPort, () => {
+    console.log(`Backend API running on port ${tcpPort}`);
+    
+    // Initialize Background Jobs
+    try {
+      setupExpiryReminders();
+    } catch (cronErr) {
+      console.error('Failed to setup expiry reminders cron:', cronErr);
+    }
+  });
+}
 
 server.on('error', (err: any) => {
   console.error(`[Server Error] ${err?.message || err}`);

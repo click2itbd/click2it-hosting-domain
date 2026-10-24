@@ -33,11 +33,27 @@ if [ -n "$FRONTEND_SRC" ]; then
   # Copy all pre-built files into public_html/
   /bin/cp -Rf "$FRONTEND_SRC"/. "$DEST/"
 
-  # Ensure .htaccess is copied for SPA routing & /api proxy
+  # Ensure .htaccess is copied for SPA routing & /api proxy, preserving any CloudLinux Passenger config
+  HTACCESS_SRC=""
   if [ -f "public/.htaccess" ]; then
-    /bin/cp -f "public/.htaccess" "$DEST/.htaccess"
+    HTACCESS_SRC="public/.htaccess"
   elif [ -f ".htaccess" ]; then
-    /bin/cp -f ".htaccess" "$DEST/.htaccess"
+    HTACCESS_SRC=".htaccess"
+  fi
+
+  if [ -n "$HTACCESS_SRC" ]; then
+    PASSENGER_CONFIG=""
+    if [ -f "$DEST/.htaccess" ]; then
+      PASSENGER_CONFIG=$(sed -n '/# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN/,/# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END/p' "$DEST/.htaccess" 2>/dev/null || true)
+    fi
+
+    /bin/cp -f "$HTACCESS_SRC" "$DEST/.htaccess"
+
+    if [ -n "$PASSENGER_CONFIG" ]; then
+      echo "" >> "$DEST/.htaccess"
+      echo "$PASSENGER_CONFIG" >> "$DEST/.htaccess"
+      echo "  (Preserved CloudLinux Passenger configuration in .htaccess)"
+    fi
   fi
 
   # Copy auxiliary PHP scripts if present
@@ -79,7 +95,13 @@ if [ -d "backend" ]; then
     /bin/cp -f "$BACKEND_DEST/.env.example" "$BACKEND_DEST/.env"
   fi
 
-  # Restart cPanel Phusion Passenger / PM2 Node.js App
+  # Ensure dependencies are installed if missing
+  if [ ! -d "$BACKEND_DEST/node_modules" ]; then
+    echo "📦 Installing production dependencies in $BACKEND_DEST..."
+    (cd "$BACKEND_DEST" && npm install --omit=dev --no-audit --no-fund 2>/dev/null || true)
+  fi
+
+  # Restart cPanel Phusion Passenger
   /bin/mkdir -p "$BACKEND_DEST/tmp"
   touch "$BACKEND_DEST/tmp/restart.txt" 2>/dev/null || true
   /bin/mkdir -p "${HOME_DIR}/click2it.bd/tmp"
@@ -87,12 +109,24 @@ if [ -d "backend" ]; then
   /bin/mkdir -p "${DEST}/tmp"
   touch "${DEST}/tmp/restart.txt" 2>/dev/null || true
 
-  # Ensure PM2 reloads the updated backend code
-  if command -v npx >/dev/null 2>&1; then
-    (cd "$BACKEND_DEST" && npx pm2 reload click2it-api 2>/dev/null || npx pm2 restart all 2>/dev/null || true)
+  # Ensure PM2 reloads if available
+  if command -v pm2 >/dev/null 2>&1; then
+    (cd "$BACKEND_DEST" && pm2 reload click2it-api 2>/dev/null || pm2 restart click2it-api 2>/dev/null || pm2 start server.js --name click2it-api 2>/dev/null || true)
+  elif command -v npx >/dev/null 2>&1; then
+    (cd "$BACKEND_DEST" && npx pm2 reload click2it-api 2>/dev/null || npx pm2 restart click2it-api 2>/dev/null || true)
   fi
 
-  echo "✅ Backend deployed and restarted (Passenger & PM2)"
+  # Fallback: If port 4001 is not answering, spawn standalone server on port 4001
+  if ! curl -s --max-time 2 http://127.0.0.1:4001/api/health >/dev/null 2>&1; then
+    NODE_BIN="$(command -v node 2>/dev/null || find "$HOME_DIR/nodevenv" -name node -type f -print -quit 2>/dev/null || echo "")"
+    if [ -n "$NODE_BIN" ]; then
+      echo "🚀 Spawning backend on port 4001 using $NODE_BIN..."
+      (cd "$BACKEND_DEST" && NODE_ENV=production PORT=4001 nohup "$NODE_BIN" server.js > "$BACKEND_DEST/backend.log" 2>&1 &)
+      sleep 1
+    fi
+  fi
+
+  echo "✅ Backend deployed and restarted (Passenger & 4001 listener)"
 fi
 
 echo "=================================================="
