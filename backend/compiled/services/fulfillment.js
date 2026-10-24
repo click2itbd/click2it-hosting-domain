@@ -1,10 +1,9 @@
 import { getAdminDb, getAdminDocument } from '../firebase/admin.js';
 import { sendEmail, queueEmail } from './email.js';
 import { getDynamicTemplate } from './templateHelper.js';
-import { getHostingProvider } from '../providers/providerFactory.js';
 import { resolveDomainProvider } from './btclConfig.js';
 import { ProviderError } from '../providers/domain/DomainProviderError.js';
-import { classifyHostingError, changeHostingPlan, unsuspendHostingAccount } from './hosting.js';
+import { classifyHostingError, changeHostingPlan, unsuspendHostingAccount, getHostingProviderWithSettings } from './hosting.js';
 import { config } from '../config/index.js';
 import { getDomainProviderConfig } from './domainProviderConfig.js';
 export async function fulfillOrder(orderId, actorUid) {
@@ -1081,43 +1080,6 @@ async function fulfillHostingAccount(hostingAccountId, hostingData, actorUid) {
             errorCode: classified.code,
         };
     }
-}
-async function getHostingProviderWithSettings() {
-    let hostingApiType = process.env.WHM_API_TYPE || config.secrets.whmApiType || 'cpanel';
-    let hostingApiKey = process.env.WHM_API_TOKEN || process.env.WHM_API_KEY || config.secrets.whmApiToken || config.secrets.whmApiKey || '';
-    let hostingApiUrl = process.env.WHM_URL || process.env.WHM_API_URL || config.secrets.whmApiUrl || '';
-    let hostingApiUsername = (process.env.WHM_USERNAME || config.secrets.whmUsername || 'root').trim();
-    if (!hostingApiKey || !hostingApiUrl) {
-        try {
-            const hostingDoc = await getAdminDocument('settings', 'hostingApiConfig');
-            if (hostingDoc.exists && hostingDoc.data) {
-                if (!hostingApiKey && hostingDoc.data.hostingApiKey)
-                    hostingApiKey = hostingDoc.data.hostingApiKey;
-                if (!hostingApiUrl && hostingDoc.data.hostingApiUrl)
-                    hostingApiUrl = hostingDoc.data.hostingApiUrl;
-                if (hostingDoc.data.hostingApiType)
-                    hostingApiType = hostingDoc.data.hostingApiType;
-                if (hostingDoc.data.hostingApiUsername)
-                    hostingApiUsername = hostingDoc.data.hostingApiUsername;
-            }
-        }
-        catch (e) {
-            console.warn('[Fulfillment] Error reading hostingApiConfig from Firestore:', e);
-        }
-    }
-    if (!hostingApiKey) {
-        throw new Error('No WHM API token configured. Set in Admin Hosting API Settings or backend/.env');
-    }
-    if (!hostingApiUrl) {
-        throw new Error('No WHM API URL configured. Set in Admin Hosting API Settings or backend/.env');
-    }
-    const provider = getHostingProvider({
-        hostingApiType,
-        hostingApiKey,
-        hostingApiUrl,
-        hostingApiUsername,
-    });
-    return { provider };
 }
 async function getSiteName() {
     try {
