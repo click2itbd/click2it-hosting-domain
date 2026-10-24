@@ -29,6 +29,7 @@ import { updateProfile, updatePassword, sendPasswordResetEmail } from 'firebase/
 import { toast } from 'react-hot-toast';
 
 const SETTINGS_MODULES = [
+  { label: '💳 Payment Gateway (EPS)', id: 'payment-settings' },
   { label: '✉️ Email & SMTP Settings', id: 'email-templates' },
   { label: '💬 WhatsApp / SMS Alerts', id: 'whatsapp-sms' },
   { label: '📄 Pages Editor', id: 'pages-editor' },
@@ -247,6 +248,7 @@ export function TopNavbar({ state }: { state: any }) {
           { id: 'tickets', label: 'Tickets', count: tickets?.length || 0 },
           { id: 'financial', label: 'Financial' },
           { id: 'api-settings', label: 'API Settings' },
+          { id: 'payment-settings', label: 'Payment Gateway' },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${activeTab === tab.id ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>

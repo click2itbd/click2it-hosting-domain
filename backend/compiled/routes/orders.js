@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getAdminDb, isUserAdmin } from '../firebase/admin.js';
-import { sendEmail, queueEmail } from '../services/email.js';
+import { sendEmail, queueEmail, notifyAdmins } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { fulfillOrder } from '../services/fulfillment.js';
 import { extractClientIp } from '../services/securityAudit.js';
@@ -317,13 +317,25 @@ ordersRouter.post('/create', requireFirebaseAuth, async (req, res) => {
         // Execute atomic batch commit
         await batch.commit();
         // Async notify admin email (fire & forget, does not block order completion)
-        sendEmail({
-            to: 'info@click2it.bd',
-            subject: `New Order Placed - ${docNumber} (৳${grandTotal})`,
-            html: `<p>New order <strong>${docNumber}</strong> placed by ${orderData.customerName} (${orderData.customerEmail}). Total: ৳${grandTotal}. Payment: ${paymentMethod}</p>`,
+        const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const itemLines = validatedItems.map((i) => `<li>${esc(i.name || i.domain || i.id)} &times; ${i.quantity} &mdash; ৳${Number(i.total).toLocaleString()}</li>`).join('');
+        notifyAdmins({
+            subject: `🛒 New Order ${docNumber} - ৳${grandTotal.toLocaleString()} (${esc(orderData.customerName)})`,
+            html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <h2 style="color:#2563eb;">New Order Received</h2>
+          <p><strong>Invoice:</strong> ${docNumber}<br>
+          <strong>Customer:</strong> ${esc(orderData.customerName)}<br>
+          <strong>Email:</strong> ${esc(orderData.customerEmail)}<br>
+          <strong>Phone:</strong> ${esc(fullPhone)}<br>
+          <strong>Payment:</strong> ${esc(paymentMethod)} (${orderData.paymentStatus})${orderData.transactionId ? `<br><strong>TrxID:</strong> ${esc(orderData.transactionId)}` : ''}<br>
+          <strong>Total:</strong> ৳${grandTotal.toLocaleString()}</p>
+          <ul>${itemLines}</ul>
+          <p>Please review it in the Admin Dashboard.</p>
+        </div>`,
             orderId,
             category: 'order'
-        }).catch(mailErr => console.warn('[Orders Create] Admin notification mail error:', mailErr));
+        });
         return res.status(201).json({
             success: true,
             orderId,
@@ -378,6 +390,12 @@ ordersRouter.post('/:orderId/payment/manual-bkash', requireFirebaseAuth, async (
             paymentMethod: 'manual_bkash',
             paymentSubmittedAt: now,
             updatedAt: now,
+        });
+        notifyAdmins({
+            subject: `💰 Payment Submitted - #${orderId.slice(0, 8)} (৳${orderData.total})`,
+            html: `<p>Customer <strong>${orderData.customerName || ''}</strong> (${orderData.customerEmail}) submitted a manual bKash payment.<br><strong>TrxID:</strong> ${trimmedTx}<br><strong>Amount:</strong> ৳${orderData.total}<br>Please verify it in the Admin Dashboard.</p>`,
+            orderId,
+            category: 'payment'
         });
         const emailResult = await sendEmail({
             to: orderData.customerEmail,

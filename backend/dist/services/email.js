@@ -718,3 +718,25 @@ export const EmailTemplates = {
     `,
     }),
 };
+/**
+ * Resolve admin notification recipients: ADMIN_EMAIL env (comma separated) -> settings/site.contactEmail -> default.
+ */
+export async function getAdminNotificationEmails() {
+    let raw = process.env.ADMIN_EMAIL || '';
+    if (!raw) {
+        try {
+            const snap = await getAdminDb().collection('settings').doc('site').get();
+            raw = (snap.exists && (snap.data()?.adminNotificationEmail || snap.data()?.contactEmail)) || '';
+        }
+        catch { }
+    }
+    if (!raw)
+        raw = 'click2itbd@gmail.com';
+    return raw.split(',').map((e) => e.trim()).filter(Boolean);
+}
+/** Fire-and-forget email to every admin recipient (never blocks or throws). */
+export function notifyAdmins(options) {
+    getAdminNotificationEmails()
+        .then((list) => list.forEach((to) => queueEmail({ ...options, to })))
+        .catch((e) => console.warn('[notifyAdmins] failed:', e));
+}

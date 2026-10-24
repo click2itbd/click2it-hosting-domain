@@ -57,12 +57,37 @@ export async function fulfillOrder(orderId: string, actorUid: string): Promise<F
     return { success: false, orderId, status: 'failed', domainResults: [], hostingResults: [], error: 'Order is already being processed' };
   }
 
-  await orderRef.update({
-    status: 'processing',
-    providerStatus: 'processing',
-    updatedAt: now,
+  // Atomic short-lived lock: prevents double fulfillment from concurrent triggers
+  // (admin double-click, gateway webhook retries, manual + webhook race).
+  const LOCK_TTL_MS = 2 * 60 * 1000;
+  const locked = await db.runTransaction(async (tx: FirebaseFirestore.Transaction) => {
+    const fresh: any = await tx.get(orderRef as any);
+    const f = fresh.data() || {};
+    const lockAt = f.fulfillmentLockAt ? new Date(f.fulfillmentLockAt).getTime() : 0;
+    if (f.status === 'completed' || (lockAt && Date.now() - lockAt < LOCK_TTL_MS)) {
+      return false;
+    }
+    tx.update(orderRef, {
+      status: 'processing',
+      providerStatus: 'processing',
+      fulfillmentLockAt: now,
+      updatedAt: now,
+    });
+    return true;
   });
 
+  if (!locked) {
+    return { success: false, orderId, status: 'pending', domainResults: [], hostingResults: [], error: 'Fulfillment is already in progress for this order' };
+  }
+
+  try {
+    return await runFulfillment(orderId, actorUid, orderData, orderRef, db, now);
+  } finally {
+    await orderRef.update({ fulfillmentLockAt: null }).catch(() => {});
+  }
+}
+
+async function runFulfillment(orderId: string, actorUid: string, orderData: any, orderRef: FirebaseFirestore.DocumentReference, db: FirebaseFirestore.Firestore, now: string): Promise<FulfillmentResult> {
   await writeAuditLog(db, orderId, 'fulfillment_started', actorUid, orderData.status, 'processing', null, null);
 
   const domainResults: FulfillmentItemResult[] = [];

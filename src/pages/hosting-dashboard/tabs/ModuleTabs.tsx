@@ -9,6 +9,7 @@ import { formatCurrency, cn } from '../../../lib/utils';
 import SupportTickets from '../admin/SupportTickets';
 import HostingPlans from '../admin/HostingPlans';
 import { DomainPricingManager } from '../admin/DomainPricingManager';
+import { EpsPaymentSettings } from '../admin/EpsPaymentSettings';
 import {
   PagesEditorModule, CategoriesModule, ExtraServicesModule, 
   AddonPackagesModule, PromoCodesModule, ServersModule, DomainRegistrarsModule,
@@ -43,6 +44,7 @@ export function ModuleTabs({ state }) {
             {activeTab === 'servers' && <ServersModule />}
             {activeTab === 'domain-pricing' && <DomainPricingManager setActiveTab={setActiveTab} />}
             {activeTab === 'domain-registrars' && <DomainRegistrarsModule />}
+            {activeTab === 'payment-settings' && <EpsPaymentSettings />}
             {activeTab === 'email-templates' && <EmailTemplatesModule />}
             {activeTab === 'whatsapp-sms' && <WhatsAppSmsModule />}
     </>

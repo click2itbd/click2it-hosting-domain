@@ -64,6 +64,7 @@ const ContactUs = lazyWithRetry(() => import('./pages/ContactUs'));
 const DomainTransferPage = lazyWithRetry(() => import('./pages/hosting/DomainTransferPage'));
 const PaymentSimulation = lazyWithRetry(() => import('./pages/PaymentSimulation'));
 const PaymentCallback = lazyWithRetry(() => import('./pages/PaymentCallback'));
+const PaymentEpsReturn = lazyWithRetry(() => import('./pages/PaymentEpsReturn'));
 const PaymentReturn = lazyWithRetry(() => import('./pages/PaymentReturn').then(m => ({ default: m.default || m.PaymentReturn })));
 
 const HostingCart = lazyWithRetry(() => import('./pages/hosting/HostingCart').then(m => ({ default: m.HostingCart })));
@@ -140,6 +141,7 @@ export default function App() {
                   {/* --- PAYMENTS --- */}
                   <Route path="/payment/simulate" element={<LazyWrapper><PaymentSimulation /></LazyWrapper>} />
                   <Route path="/payment/callback" element={<LazyWrapper><PaymentCallback /></LazyWrapper>} />
+        <Route path="/payment/eps-return" element={<LazyWrapper><PaymentEpsReturn /></LazyWrapper>} />
                   <Route path="/payment/return" element={<LazyWrapper><PaymentReturn /></LazyWrapper>} />
 
                   {/* --- SUPPORT & INFO --- */}

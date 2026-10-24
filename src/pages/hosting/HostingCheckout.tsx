@@ -17,7 +17,7 @@ import { createCustomerAccountByAdmin, generateCustomerPassword } from '../../ut
 
 export const HostingCheckout: React.FC = () => {
   const { user, effectiveUser, canAccessAdmin, isImpersonating, impersonatedCustomer, loading: authLoading } = useAuth();
-  const { items: allItems, total, clearCart } = useCart();
+  const { items: allItems, total, clearCart, updateCartItem } = useCart();
   const { settings } = useSettings();
   const navigate = useNavigate();
   
@@ -232,6 +232,15 @@ export const HostingCheckout: React.FC = () => {
     }
   });
   const [bkashNumber, setBkashNumber] = useState('');
+  const [epsEnabled, setEpsEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(getApiUrl('/api/payments/methods'))
+      .then((r) => r.json())
+      .then((j) => { if (!cancelled) setEpsEnabled(Boolean(j?.data?.eps?.enabled)); })
+      .catch(() => { /* EPS stays hidden */ });
+    return () => { cancelled = true; };
+  }, []);
   const [copiedNumber, setCopiedNumber] = useState(false);
 
   const getResolvedTransferCode = (item: any): string => {
@@ -783,6 +792,13 @@ export const HostingCheckout: React.FC = () => {
         clearCart();
         navigate(`/order-success/${orderId}`);
         return;
+      } else if (formData.paymentMethod === 'eps') {
+        const epsRes = await apiPost<{ success: boolean; redirectUrl?: string; error?: string }>('/api/payments/eps/initiate', { orderId });
+        if (epsRes.success && epsRes.redirectUrl) {
+          window.location.href = epsRes.redirectUrl;
+          return;
+        }
+        throw new Error(epsRes.error || 'Failed to start online payment. Your order is saved; you can retry from your dashboard.');
       } else if (formData.paymentMethod === 'card') {
         const res = await initiateSSLCommerzPayment(
           orderId, 
@@ -1417,6 +1433,15 @@ export const HostingCheckout: React.FC = () => {
                       </div>
                     </label>
 
+                    {epsEnabled ? (
+                      <label className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.paymentMethod === 'eps' ? 'border-blue-600 bg-blue-50/50' : 'border-gray-100 hover:border-gray-200'}`}>
+                        <input type="radio" name="paymentMethod" value="eps" checked={formData.paymentMethod === 'eps'} onChange={handleChange} className="sr-only" />
+                        <CreditCard className={`w-8 h-8 mb-2 ${formData.paymentMethod === 'eps' ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <span className={`text-sm font-bold ${formData.paymentMethod === 'eps' ? 'text-blue-900' : 'text-gray-700'}`}>Pay Online</span>
+                        <span className="text-[10px] text-gray-500 mt-0.5 text-center">Card, bKash, Nagad, Rocket (EPS)</span>
+                        {formData.paymentMethod === 'eps' && <div className="absolute top-2 right-2"><CheckCircle className="w-4 h-4 text-blue-600" /></div>}
+                      </label>
+                    ) : (
                     <label className="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed">
                       <input type="radio" name="paymentMethod" value="card" disabled className="sr-only" />
                       <CreditCard className="w-8 h-8 mb-2 text-gray-400" />
@@ -1426,6 +1451,7 @@ export const HostingCheckout: React.FC = () => {
                         <span className="bg-gray-800 text-white text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap">Coming Soon</span>
                       </div>
                     </label>
+                    )}
 
                     <label className="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed">
                       <input type="radio" name="paymentMethod" value="bank" disabled className="sr-only" />
