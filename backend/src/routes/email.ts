@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { sendEmail, EmailTemplates, verifySmtpConnection, sendTestEmail, resetSmtpCache } from '../services/email.js';
+import { sendEmail, notifyAdmins, EmailTemplates, verifySmtpConnection, sendTestEmail, resetSmtpCache } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { getDynamicTemplate } from '../services/templateHelper.js';
 import { getAdminDb } from '../firebase/admin.js';
@@ -298,13 +298,12 @@ emailRouter.post('/ticket-created-admin-notify', requireFirebaseAuth, async (req
       </div>
     `;
 
-    // Fire-and-forget email to admin desk
-    sendEmail({
-      to: adminEmail,
+    // Dispatch notification to all configured administrators
+    notifyAdmins({
       subject,
       html,
       category: 'system',
-    }).catch(e => console.warn('[Email] Ticket admin notify failed:', e.message));
+    });
 
     return res.status(200).json({ success: true, message: 'Admin notification triggered' });
   } catch (error: any) {

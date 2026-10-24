@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, orderBy, getDocs, doc, updateDoc, addDoc, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { MessageSquare, X, Send, AlertCircle, Clock, Plus, Tag } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { cn } from '../../lib/utils';
+import { apiPost } from '../../services/apiClient';
 
 interface TicketMessage {
   id?: string;
@@ -34,10 +35,15 @@ export const SupportTicketsClient: React.FC = () => {
   const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [replyMessage, setReplyMessage] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // New ticket form
   const [isCreating, setIsCreating] = useState(false);
   const [newTicket, setNewTicket] = useState({ subject: '', priority: 'medium' as 'low'|'medium'|'high', message: '' });
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   useEffect(() => {
     if (!user) return;
@@ -79,6 +85,17 @@ export const SupportTicketsClient: React.FC = () => {
         updatedAt: new Date().toISOString()
       });
 
+      // Dispatch alert to admin support desk
+      apiPost('/api/email/ticket-created-admin-notify', {
+        ticketId: selectedTicket.id,
+        ticketSubject: selectedTicket.subject,
+        customerEmail: user.email || selectedTicket.customerEmail || '',
+        customerName: user.displayName || selectedTicket.customerName || 'Customer',
+        priority: selectedTicket.priority || 'medium',
+        message: replyMessage.trim(),
+        isCustomerReply: true,
+      }).catch(err => console.warn('Could not dispatch ticket admin reply alert:', err));
+
       setReplyMessage('');
     } catch (error) {
       console.error('Error sending reply:', error);
@@ -112,6 +129,17 @@ export const SupportTicketsClient: React.FC = () => {
         message: newTicket.message.trim(),
         createdAt: new Date().toISOString()
       });
+
+      // Dispatch alert to admin support desk
+      apiPost('/api/email/ticket-created-admin-notify', {
+        ticketId: docRef.id,
+        ticketSubject: newTicket.subject.trim(),
+        customerEmail: user.email || '',
+        customerName: user.displayName || 'Customer',
+        priority: newTicket.priority,
+        message: newTicket.message.trim(),
+        isCustomerReply: false,
+      }).catch(err => console.warn('Could not dispatch new ticket admin alert:', err));
 
       setIsCreating(false);
       setNewTicket({ subject: '', priority: 'medium', message: '' });

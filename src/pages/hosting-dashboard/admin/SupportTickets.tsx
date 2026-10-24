@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, orderBy, getDocs, doc, updateDoc, addDoc, onSnapshot, limit, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { useAuth } from '../../../context/AuthContext';
-import { MessageSquare, X, Send, AlertCircle, Clock, CheckCircle, Search, Ticket as TicketIcon, User, Trash2 } from 'lucide-react';
+import { MessageSquare, X, Send, AlertCircle, Clock, CheckCircle, Search, Ticket as TicketIcon, User, Trash2, RotateCcw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { cn } from '../../../lib/utils';
 import { Pagination } from '../../../components/common/Pagination';
@@ -39,25 +39,23 @@ export default function SupportTickets() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
   const [searchTerm, setSearchTerm] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchTickets();
+    const q = query(collection(db, 'tickets'), orderBy('updatedAt', 'desc'), limit(300));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ticket[]);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error listening to tickets:', error);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  const fetchTickets = async () => {
-    try {
-      const q = query(collection(db, 'tickets'), orderBy('updatedAt', 'desc'));
-      const snap = await getDocs(q);
-      setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ticket[]);
-    } catch (error) {
-      console.error('Error fetching tickets:', error);
-      if (!import.meta.env.DEV) {
-        toast.error('Failed to load tickets');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleViewTicket = async (ticket: Ticket) => {
     setSelectedTicket(ticket);
@@ -87,6 +85,8 @@ export default function SupportTickets() {
         updatedAt: new Date().toISOString()
       });
 
+      setSelectedTicket(prev => prev ? { ...prev, status: 'answered' } : null);
+
       // Dispatch reply email to customer
       if (selectedTicket.customerEmail) {
         apiPost('/api/email/ticket-reply', {
@@ -94,14 +94,13 @@ export default function SupportTickets() {
           ticketSubject: selectedTicket.subject,
           customerEmail: selectedTicket.customerEmail,
           customerName: selectedTicket.customerName,
-          staffName: currentUser?.displayName || currentUser?.name || 'Click2IT Technical Support',
+          staffName: user?.displayName || (user as any)?.name || 'Click2IT Technical Support',
           replyMessage: replyMessage.trim(),
           ticketUrl: typeof window !== 'undefined' ? `${window.location.origin}/account/tickets` : 'https://click2it.bd/account/tickets',
         }).catch(err => console.warn('Could not dispatch ticket reply notification email:', err));
       }
 
       setReplyMessage('');
-      fetchTickets();
       toast.success('Reply sent successfully');
     } catch (error) {
       console.error('Error sending reply:', error);
@@ -118,12 +117,26 @@ export default function SupportTickets() {
         status: 'closed',
         updatedAt: new Date().toISOString()
       });
-      setSelectedTicket(null);
-      fetchTickets();
+      setSelectedTicket(prev => prev ? { ...prev, status: 'closed' } : null);
       toast.success('Ticket closed');
     } catch (error) {
       console.error('Error closing ticket:', error);
       toast.error('Failed to close ticket');
+    }
+  };
+
+  const handleReopenTicket = async () => {
+    if (!selectedTicket) return;
+    try {
+      await updateDoc(doc(db, 'tickets', selectedTicket.id), {
+        status: 'open',
+        updatedAt: new Date().toISOString()
+      });
+      setSelectedTicket(prev => prev ? { ...prev, status: 'open' } : null);
+      toast.success('Ticket reopened');
+    } catch (error) {
+      console.error('Error reopening ticket:', error);
+      toast.error('Failed to reopen ticket');
     }
   };
 
@@ -337,6 +350,7 @@ export default function SupportTickets() {
                   </div>
                 ))
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Reply Box */}
@@ -361,9 +375,18 @@ export default function SupportTickets() {
                 </div>
               </div>
             ) : (
-              <div className="p-5 bg-slate-100 border-t border-slate-200 text-center text-sm font-bold text-slate-500 flex justify-center items-center gap-2">
-                <CheckCircle size={16} className="text-emerald-500" />
-                This ticket has been marked as resolved and closed.
+              <div className="p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                  <CheckCircle size={16} className="text-emerald-500" />
+                  This ticket has been marked as resolved and closed.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleReopenTicket}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                >
+                  <RotateCcw size={14} /> Reopen Ticket
+                </button>
               </div>
             )}
             
