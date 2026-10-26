@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
   const [impersonatedCustomer, setImpersonatedCustomer] = useState<ImpersonatedCustomer | null>(() => {
     try {
-      const saved = sessionStorage.getItem('impersonated_customer');
+      const saved = sessionStorage.getItem('impersonated_customer') || localStorage.getItem('impersonated_customer');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -116,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem('custom_auth_session');
       localStorage.removeItem('custom_auth_session');
       sessionStorage.removeItem('impersonated_customer');
+      localStorage.removeItem('impersonated_customer');
       sessionStorage.removeItem('admin_2fa_verified');
     } catch {
       // ignore
@@ -125,7 +126,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const startImpersonation = (cust: ImpersonatedCustomer) => {
     setImpersonatedCustomer(cust);
     try {
-      sessionStorage.setItem('impersonated_customer', JSON.stringify(cust));
+      const serialized = JSON.stringify(cust);
+      sessionStorage.setItem('impersonated_customer', serialized);
+      localStorage.setItem('impersonated_customer', serialized);
     } catch (e) {
       console.warn('Failed to save impersonated customer:', e);
     }
@@ -135,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setImpersonatedCustomer(null);
     try {
       sessionStorage.removeItem('impersonated_customer');
+      localStorage.removeItem('impersonated_customer');
     } catch (e) {
       console.warn('Failed to clear impersonation:', e);
     }

@@ -55,11 +55,17 @@ export async function createCustomerAccountByAdmin(input: CreateCustomerInput): 
     throw new Error('Customer password must be at least 6 characters long.');
   }
 
-  const digits = input.phone.replace(/\D/g, '').replace(/^(?:880|88)?0?/, '');
-  if (!/^1[3-9]\d{8}$/.test(digits)) {
-    throw new Error('Please enter a valid 10-digit Bangladeshi phone number starting with 1 (e.g. 17XXXXXXXX).');
+  let formattedPhone = input.phone.trim();
+  const digits = formattedPhone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('01')) {
+    formattedPhone = `+880${digits.slice(1)}`;
+  } else if (digits.length === 10 && digits.startsWith('1')) {
+    formattedPhone = `+880${digits}`;
+  } else if (digits.length >= 7) {
+    formattedPhone = formattedPhone.startsWith('+') ? formattedPhone : `+${digits}`;
+  } else {
+    formattedPhone = formattedPhone || '+8801700000000';
   }
-  const formattedPhone = `+880${digits}`;
 
   // 1. Try Backend Admin Endpoint first
   try {
@@ -85,11 +91,17 @@ export async function createCustomerAccountByAdmin(input: CreateCustomerInput): 
       return res.data.customer;
     }
   } catch (apiErr: any) {
-    const backendError = apiErr?.response?.data?.error;
-    if (backendError && backendError.toLowerCase().includes('already exists')) {
-      throw new Error(backendError);
+    const backendError = apiErr?.response?.data?.error || apiErr?.message;
+    if (backendError) {
+      const lower = String(backendError).toLowerCase();
+      if (lower.includes('already exists') || lower.includes('email-already-in-use') || lower.includes('email_exists')) {
+        throw new Error('A customer account with this email address already exists.');
+      }
+      if (lower.includes('valid customer email') || lower.includes('password must be')) {
+        throw new Error(backendError);
+      }
     }
-    console.warn('Backend /api/customers/admin/create unreachable, using direct Firebase Auth + Firestore fallback:', apiErr);
+    console.warn('Backend /api/customers/admin/create returned error, checking direct fallback:', apiErr?.message);
   }
 
   // 2. Direct Firebase Identity Toolkit REST + Firestore Fallback (never logs out current admin!)

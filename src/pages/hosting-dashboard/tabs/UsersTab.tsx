@@ -155,7 +155,7 @@ export function UsersTab({ state }: { state: any }) {
   }, [activeTab]);
 
   // Launch Customer Portal with Impersonation Session
-  const handleLaunchCustomerPortal = (userObj: any) => {
+  const handleLaunchCustomerPortal = (userObj: any, openInNewTab: boolean = true) => {
     if (!userObj) return;
     const targetUid = userObj.id || userObj.uid || userObj._id;
     if (!targetUid) {
@@ -176,7 +176,11 @@ export function UsersTab({ state }: { state: any }) {
     });
     
     toast.success(`Opening Customer Portal for ${customerName}`);
-    navigate('/profile');
+    if (openInNewTab) {
+      window.open('/profile', '_blank');
+    } else {
+      navigate('/profile');
+    }
   };
 
   // Fetch Full Customer Details (Openprovider & Hosting & Transactions & Profile)
@@ -2406,19 +2410,22 @@ export function UsersTab({ state }: { state: any }) {
                     <button
                       type="button"
                       onClick={() => {
-                        setIsAddCustomerModalOpen(false);
-                        handleLaunchCustomerPortal(createdCustomerResult);
+                        handleLaunchCustomerPortal(createdCustomerResult, true);
                       }}
-                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1.5"
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1.5"
+                      title="Open client area in a new browser tab without leaving admin panel"
                     >
-                      <LogIn size={15} /> Open Customer Portal / Order as Customer
+                      <ExternalLink size={14} /> Open Customer Portal (New Tab)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsAddCustomerModalOpen(false)}
-                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white"
+                      onClick={() => {
+                        setIsAddCustomerModalOpen(false);
+                        setCreatedCustomerResult(null);
+                      }}
+                      className="px-6 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200 flex items-center gap-1.5 cursor-pointer"
                     >
-                      Done
+                      <Check size={15} /> Done (Stay in Admin)
                     </button>
                   </div>
                 </div>

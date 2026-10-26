@@ -150,7 +150,8 @@ export function Sidebar({ state }) {
                     customerId: selected.customerId
                   });
                   toast.success(`Opening Customer Portal for ${selected.displayName || selected.name || selected.email}`);
-                  navigate('/profile');
+                  window.open('/profile', '_blank');
+                  setLoginAsUserId('');
                 }
               }
             }}
