@@ -20,8 +20,10 @@ export function UsersTab({ state }: { state: any }) {
   const { startImpersonation } = useAuth();
   const {
     activeTab, userSearch, setUserSearch, filteredUsers, userRoleEdits, setUserRoleEdits,
-    saveUserRole, savingUserRole, users, setUsers, setLoginAsUserId
+    saveUserRole, savingUserRole, users, setUsers, setLoginAsUserId, refetchUsers
   } = state;
+
+  const [isRefreshingUsers, setIsRefreshingUsers] = useState(false);
 
   const [subTab, setSubTab] = useState<'users' | 'deposits'>('users');
   const [roleFilter, setRoleFilter] = useState<'all' | 'customer' | 'admin'>('all');
@@ -105,19 +107,38 @@ export function UsersTab({ state }: { state: any }) {
     setIsAddCustomerModalOpen(true);
   };
 
+  const handleManualRefreshUsers = async () => {
+    setIsRefreshingUsers(true);
+    try {
+      if (typeof refetchUsers === 'function') {
+        const fresh = await refetchUsers();
+        toast.success(`Customer list updated (${fresh?.length ?? users?.length ?? 0} customers)`);
+      }
+    } catch {
+      toast.error('Failed to refresh customer list');
+    } finally {
+      setIsRefreshingUsers(false);
+    }
+  };
+
   const handleCreateNewCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreatingCustomer(true);
     try {
       const created = await createCustomerAccountByAdmin(newCustomerForm);
-      setUsers((prev: any[]) => [created, ...prev.filter(u => u.id !== created.id && u.uid !== created.uid)]);
+      if (typeof setUsers === 'function') {
+        setUsers((prev: any[]) => [created, ...(prev || []).filter((u: any) => u.id !== created.id && u.uid !== created.uid)]);
+      }
+      if (typeof refetchUsers === 'function') {
+        refetchUsers().catch(() => null);
+      }
       setCreatedCustomerResult({
         ...created,
         plainPassword: newCustomerForm.password,
       });
-      toast.success(`Customer account created for ${created.displayName || created.email}!`);
+      toast.success(`Customer account created for ${created.displayName || created.email}!`, { duration: 5000 });
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to create customer account');
+      toast.error(err?.message || 'Failed to create customer account', { duration: 5000 });
     } finally {
       setCreatingCustomer(false);
     }
@@ -742,6 +763,16 @@ export function UsersTab({ state }: { state: any }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleManualRefreshUsers}
+            disabled={isRefreshingUsers}
+            className="bg-white hover:bg-slate-100 text-slate-700 font-bold px-3.5 py-2.5 rounded-2xl text-xs flex items-center gap-2 border border-slate-200 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            title="Refresh customer list from database"
+          >
+            <RefreshCw size={14} className={isRefreshingUsers ? 'animate-spin text-blue-600' : 'text-slate-500'} />
+            Refresh
+          </button>
+
           <button
             onClick={handleOpenAddCustomerModal}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-2xl text-xs flex items-center gap-2 shadow-sm transition-all hover:scale-105 cursor-pointer"

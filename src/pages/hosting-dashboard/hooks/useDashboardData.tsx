@@ -16,39 +16,52 @@ export function useDashboardData() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchAll = async () => {
+    try {
+      const [ordSnap, domOrdSnap, haSnap, tickSnap, usersSnap] = await Promise.all([
+        getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(500))),
+        getDocs(query(collection(db, 'domainOrders'), orderBy('createdAt', 'desc'), limit(200))),
+        getDocs(query(collection(db, 'hostingAccounts'), orderBy('createdAt', 'desc'), limit(200))),
+        getDocs(query(collection(db, 'tickets'), orderBy('updatedAt', 'desc'), limit(100))),
+        getDocs(collection(db, 'users')),
+      ]);
+
+      let fetchedOrders = ordSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+      fetchedOrders = fetchedOrders.filter(order => 
+        order.items && order.items.some(item => 
+          item.itemType === 'domain' || 
+          item.itemType === 'hosting' || 
+          item.category === 'Hosting & Domains' ||
+          item.isDigital
+        )
+      );
+
+      setOrders(fetchedOrders);
+      setDomainOrders(domOrdSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setHostingAccounts(haSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setTickets(tickSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error('Failed to load dashboard data', err);
+      toast.error('Some data failed to load');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refetchUsers = async () => {
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const freshUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUsers(freshUsers);
+      return freshUsers;
+    } catch (err) {
+      console.error('Failed to reload users:', err);
+      return [];
+    }
+  };
+
   useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [ordSnap, domOrdSnap, haSnap, tickSnap, usersSnap] = await Promise.all([
-          getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(500))),
-          getDocs(query(collection(db, 'domainOrders'), orderBy('createdAt', 'desc'), limit(200))),
-          getDocs(query(collection(db, 'hostingAccounts'), orderBy('createdAt', 'desc'), limit(200))),
-          getDocs(query(collection(db, 'tickets'), orderBy('updatedAt', 'desc'), limit(100))),
-          getDocs(collection(db, 'users')),
-        ]);
-
-        let fetchedOrders = ordSnap.docs.map(d => ({ id: d.id, ...d.data() } as Order));
-        fetchedOrders = fetchedOrders.filter(order => 
-          order.items && order.items.some(item => 
-            item.itemType === 'domain' || 
-            item.itemType === 'hosting' || 
-            item.category === 'Hosting & Domains' ||
-            item.isDigital
-          )
-        );
-
-        setOrders(fetchedOrders);
-        setDomainOrders(domOrdSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setHostingAccounts(haSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setTickets(tickSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (err) {
-        console.error('Failed to load dashboard data', err);
-        toast.error('Some data failed to load');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchAll();
   }, []);
 
@@ -58,6 +71,8 @@ export function useDashboardData() {
     hostingAccounts, setHostingAccounts,
     tickets, setTickets,
     users, setUsers,
-    loading
+    loading,
+    refetchUsers,
+    refetchAll: fetchAll
   };
 }

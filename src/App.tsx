@@ -13,6 +13,7 @@ import { ReferralTracker } from './components/ReferralTracker';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
+import { Toaster } from 'react-hot-toast';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<{ default: T }>
@@ -87,6 +88,7 @@ export default function App() {
             <AuthProvider>
               <CartProvider>
                 <Router>
+                  <Toaster position="top-right" toastOptions={{ duration: 4500, style: { zIndex: 999999 } }} />
                   <TrackingScripts />
                   <ReferralTracker />
                   <WebsitePopup />

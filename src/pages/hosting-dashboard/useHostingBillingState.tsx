@@ -60,7 +60,9 @@ export function useHostingBillingState() {
     hostingAccounts, setHostingAccounts,
     tickets, setTickets,
     users, setUsers,
-    loading
+    loading,
+    refetchUsers,
+    refetchAll
   } = useDashboardData();
 
   // 2. Feature Hooks
@@ -111,7 +113,14 @@ export function useHostingBillingState() {
     selectedYear, setSelectedYear, yearOptions,
     settingsFormData, setSettingsFormData, saveSettings: handleSaveSettings,
     
-    orders, domainOrders, hostingAccounts, tickets, users, loading,
+    orders, setOrders,
+    domainOrders, setDomainOrders,
+    hostingAccounts, setHostingAccounts,
+    tickets, setTickets,
+    users, setUsers,
+    loading,
+    refetchUsers,
+    refetchAll,
     
     unpaidInvoicesCount, activeTicketsCount, totalOutstanding, totalPaid,
     pendingDomainCount, pendingHostingCount, dynamicPieData,
