@@ -8,6 +8,11 @@ interface ProtectedRouteProps {
   adminOnly?: boolean;
 }
 
+// TOGGLE 2FA FOR ADMIN PANEL:
+// Set to true to re-enable Two-Factor Authentication (TOTP) for Admin Panel
+// Set to false to temporarily disable 2FA challenge
+export const ENABLE_ADMIN_2FA = false;
+
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminOnly = false }) => {
   const { user, canAccessAdmin, is2faVerified, set2faVerified, loading } = useAuth();
 
@@ -27,8 +32,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminO
     return <Navigate to="/" replace />;
   }
 
-  // Enforce 2FA TOTP Verification for Admin Routes
-  if (adminOnly && canAccessAdmin && !is2faVerified) {
+  // Enforce 2FA TOTP Verification for Admin Routes (Temporarily disabled via ENABLE_ADMIN_2FA toggle)
+  if (ENABLE_ADMIN_2FA && adminOnly && canAccessAdmin && !is2faVerified) {
     return (
       <Admin2FAChallenge
         onSuccess={() => set2faVerified(true)}
