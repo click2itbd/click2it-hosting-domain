@@ -29,8 +29,9 @@ export async function getSmtpProvider(forceReload = false) {
                 user = data.mailUsername.trim();
                 password = data.mailPassword.trim();
                 const isGmailUser = user.toLowerCase().endsWith('@gmail.com');
-                host = data.mailHost ? data.mailHost.trim() : (isGmailUser ? 'smtp.gmail.com' : '');
-                port = parseInt(data.mailPort) || (isGmailUser ? 465 : 587);
+                const userDomain = user.includes('@') ? user.split('@')[1] : '';
+                host = data.mailHost ? data.mailHost.trim() : (isGmailUser ? 'smtp.gmail.com' : (userDomain ? `mail.${userDomain}` : ''));
+                port = parseInt(data.mailPort) || (isGmailUser ? 465 : (data.mailEncryption === 'ssl' ? 465 : 587));
                 secure = data.mailEncryption === 'ssl' || String(port) === '465';
                 if (data.mailFromName)
                     fromName = data.mailFromName.trim();
@@ -133,12 +134,13 @@ export async function getResendConfig() {
     try {
         const db = getAdminDb();
         if (db) {
-            const [siteSnap, hostingSnap, keysSnap] = await Promise.all([
+            const [emailSnap, siteSnap, hostingSnap, keysSnap] = await Promise.all([
+                db.collection('settings').doc('email_config').get().catch(() => null),
                 db.collection('settings').doc('site').get().catch(() => null),
                 db.collection('settings').doc('hostingApiConfig').get().catch(() => null),
                 db.collection('settings').doc('api_keys').get().catch(() => null),
             ]);
-            for (const snap of [keysSnap, hostingSnap, siteSnap]) {
+            for (const snap of [emailSnap, keysSnap, hostingSnap, siteSnap]) {
                 if (snap && snap.exists) {
                     const data = snap.data() || {};
                     if (data.resendApiKey && String(data.resendApiKey).trim()) {

@@ -136,7 +136,13 @@ export function UsersTab({ state }: { state: any }) {
         ...created,
         plainPassword: newCustomerForm.password,
       });
-      toast.success(`Customer account created for ${created.displayName || created.email}!`, { duration: 5000 });
+      if (created.emailStatus === 'sent') {
+        toast.success(`Customer created & Welcome Email delivered to ${created.email}!`, { duration: 5000 });
+      } else if (created.emailStatus === 'failed') {
+        toast.success(`Customer created! (Note: Welcome email could not be sent: ${created.emailError || 'SMTP unconfigured'})`, { duration: 6000 });
+      } else {
+        toast.success(`Customer account created for ${created.displayName || created.email}!`, { duration: 5000 });
+      }
     } catch (err: any) {
       toast.error(err?.message || 'Failed to create customer account', { duration: 5000 });
     } finally {
@@ -415,25 +421,67 @@ export function UsersTab({ state }: { state: any }) {
     setEditForm((prev: any) => ({ ...prev, status: newStatus }));
   };
 
-  // Delete Customer Account
-  const handleDeleteCustomerAccount = async () => {
-    if (!selectedCustomer) return;
-    const targetUid = selectedCustomer.id || selectedCustomer.uid;
+  // Delete Customer Account (Used by both Table Rows and Drawer)
+  const handleDeleteCustomerDirect = async (userObj: any) => {
+    if (!userObj) return;
+    const targetUid = userObj.id || userObj.uid;
+    const targetEmail = userObj.email || 'this customer';
+    const targetName = userObj.displayName || userObj.name || targetEmail;
 
-    if (!confirm(`CRITICAL WARNING: Are you sure you want to PERMANENTLY DELETE customer account ${selectedCustomer.email}? This action cannot be undone.`)) {
+    if (!window.confirm(`CRITICAL WARNING: Are you sure you want to PERMANENTLY DELETE customer account ${targetName} (${targetEmail})?\n\nThis will remove their profile and free up the email. This action cannot be undone.`)) {
       return;
     }
 
+    const toastId = toast.loading(`Deleting customer ${targetName}...`);
     try {
-      await apiClient.post(`/api/customers/admin/${targetUid}/status`, { status: 'deleted' });
-      toast.success('Customer account deleted successfully');
-    } catch (err) {
-      await deleteDoc(doc(db, 'users', targetUid));
-      toast.success('Customer account deleted successfully');
-    }
+      try {
+        await apiClient.delete(`/api/customers/admin/${targetUid}`);
+      } catch {
+        await apiClient.post(`/api/customers/admin/${targetUid}/status`, { status: 'deleted' });
+      }
+      try {
+        await deleteDoc(doc(db, 'users', targetUid));
+      } catch {
+        // rules fallback
+      }
 
-    setUsers((prev: any[]) => prev.filter(u => (u.id !== targetUid && u.uid !== targetUid)));
-    setSelectedCustomer(null);
+      if (typeof setUsers === 'function') {
+        setUsers((prev: any[]) => (prev || []).filter((u: any) => u.id !== targetUid && u.uid !== targetUid));
+      }
+      if (typeof refetchUsers === 'function') {
+        refetchUsers().catch(() => null);
+      }
+      if (selectedCustomer && (selectedCustomer.id === targetUid || selectedCustomer.uid === targetUid)) {
+        setSelectedCustomer(null);
+      }
+      toast.success(`Customer ${targetName} deleted successfully.`, { id: toastId });
+    } catch (err: any) {
+      toast.error(`Failed to delete customer: ${err?.message || 'Error occurred'}`, { id: toastId });
+    }
+  };
+
+  const handleDeleteCustomerAccount = () => {
+    if (selectedCustomer) handleDeleteCustomerDirect(selectedCustomer);
+  };
+
+  // Send / Resend Welcome Email with Portal Details
+  const handleResendWelcomeEmail = async (userObj: any, customPass?: string) => {
+    if (!userObj) return;
+    const targetUid = userObj.id || userObj.uid;
+    const targetEmail = userObj.email;
+    const toastId = toast.loading(`Sending welcome email to ${targetEmail}...`);
+    try {
+      const res = await apiClient.post(`/api/customers/admin/${targetUid}/send-welcome-email`, {
+        password: customPass
+      });
+      if (res.data?.success) {
+        toast.success(`Welcome email sent successfully to ${targetEmail}!`, { id: toastId });
+      } else {
+        toast.error(`Failed to send email: ${res.data?.error || 'Unknown error'}`, { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error(`Failed to send email: ${err?.response?.data?.error || err.message || 'Error occurred'}`, { id: toastId });
+    }
   };
 
   // Send Password Reset Email
@@ -972,6 +1020,15 @@ export function UsersTab({ state }: { state: any }) {
                                 <LogIn size={15} />
                               </button>
 
+                              {/* Delete Customer Button */}
+                              <button
+                                onClick={() => handleDeleteCustomerDirect(user)}
+                                className="bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border border-rose-200 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition-all hover:-translate-y-0.5 cursor-pointer"
+                                title="Permanently Delete Customer"
+                              >
+                                <Trash2 size={13} /> Delete
+                              </button>
+
                               {userRoleEdits[user.id || user.uid] && userRoleEdits[user.id || user.uid] !== user.role && (
                                 <button
                                   onClick={() => saveUserRole(user.id || user.uid)}
@@ -1206,6 +1263,15 @@ export function UsersTab({ state }: { state: any }) {
                   className="px-3 py-1.5 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 rounded text-xs font-bold transition-all shadow-2xs"
                 >
                   Send Password
+                </button>
+
+                {/* Send Welcome Email */}
+                <button
+                  onClick={() => handleResendWelcomeEmail(selectedCustomer)}
+                  className="px-3 py-1.5 border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded text-xs font-bold transition-all shadow-2xs flex items-center gap-1"
+                  title="Send Welcome Email with Portal Details"
+                >
+                  <Mail size={13} /> Send Welcome Email
                 </button>
 
                 {/* Login to Panel */}
@@ -2428,6 +2494,28 @@ export function UsersTab({ state }: { state: any }) {
                     </div>
                   </div>
                 </div>
+
+                {/* Welcome Email Delivery Status Box */}
+                {createdCustomerResult.emailStatus === 'sent' ? (
+                  <div className="flex items-center gap-2 p-3 bg-emerald-100/70 border border-emerald-300 text-emerald-800 text-xs rounded-xl font-medium">
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                    <span>Welcome email with login details was delivered to <strong>{createdCustomerResult.email}</strong>.</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                      <span>Welcome email not delivered yet {createdCustomerResult.emailError ? `(${createdCustomerResult.emailError})` : '(SMTP not configured)'}.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleResendWelcomeEmail(createdCustomerResult, createdCustomerResult.plainPassword)}
+                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shrink-0 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Send size={12} /> Send Welcome Email
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
                   <button

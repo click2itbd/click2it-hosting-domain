@@ -716,6 +716,15 @@ customersRouter.post('/admin/:userId/status', requireFirebaseAuth, async (req, r
         }
         const now = new Date().toISOString();
         if (status === 'deleted') {
+            try {
+                const authSdk = getAdminAuth();
+                if (authSdk) {
+                    await authSdk.deleteUser(userId);
+                }
+            }
+            catch (authErr) {
+                console.warn('[Admin Delete Customer] Auth deleteUser skipped/failed:', authErr?.message);
+            }
             await userRef.delete();
             return res.json({
                 success: true,
@@ -735,6 +744,98 @@ customersRouter.post('/admin/:userId/status', requireFirebaseAuth, async (req, r
     catch (error) {
         console.error('Failed to change customer status:', error);
         return res.status(500).json({ error: error.message || 'Failed to change customer status.' });
+    }
+});
+/**
+ * DELETE /api/customers/admin/:userId
+ * Permanently Delete Customer from Firestore and Firebase Auth
+ */
+customersRouter.delete('/admin/:userId', requireFirebaseAuth, async (req, res) => {
+    const adminUid = req.user?.uid;
+    const { userId } = req.params;
+    const isAdmin = await isUserAdmin(adminUid, req.user?.email).catch(() => false);
+    if (!isAdmin) {
+        return res.status(403).json({ error: 'Admin authorization required.' });
+    }
+    try {
+        const db = getAdminDb();
+        const userRef = db.collection('users').doc(userId);
+        try {
+            const authSdk = getAdminAuth();
+            if (authSdk) {
+                await authSdk.deleteUser(userId);
+            }
+        }
+        catch (authErr) {
+            console.warn('[Admin Delete Customer] Auth deleteUser skipped/failed:', authErr?.message);
+        }
+        await userRef.delete();
+        return res.json({
+            success: true,
+            message: 'Customer account deleted successfully.'
+        });
+    }
+    catch (error) {
+        console.error('Failed to delete customer:', error);
+        return res.status(500).json({ error: error.message || 'Failed to delete customer.' });
+    }
+});
+/**
+ * POST /api/customers/admin/:userId/send-welcome-email
+ * Resend Welcome Email with Portal Details to Customer
+ */
+customersRouter.post('/admin/:userId/send-welcome-email', requireFirebaseAuth, async (req, res) => {
+    const adminUid = req.user?.uid;
+    const { userId } = req.params;
+    const { password } = req.body || {};
+    const isAdmin = await isUserAdmin(adminUid, req.user?.email).catch(() => false);
+    if (!isAdmin) {
+        return res.status(403).json({ error: 'Admin authorization required.' });
+    }
+    try {
+        const db = getAdminDb();
+        const userSnap = await db.collection('users').doc(userId).get();
+        if (!userSnap.exists) {
+            return res.status(404).json({ error: 'Customer account not found.' });
+        }
+        const userData = userSnap.data() || {};
+        const email = userData.email;
+        const fullName = userData.displayName || userData.name || 'Customer';
+        const customerId = userData.customerId || userId.slice(0, 8);
+        if (!email) {
+            return res.status(400).json({ error: 'Customer has no valid email address.' });
+        }
+        const sendRes = await sendEmail({
+            to: email,
+            subject: 'Welcome to Click2IT — Your Account Login Details',
+            html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px;">
+          <h2 style="color: #2563eb; margin-top: 0;">Welcome to Click2IT!</h2>
+          <p>Dear <strong>${fullName}</strong>,</p>
+          <p>Your customer account details at Click2IT are provided below. You can log in anytime to view and manage your domains, hosting services, and invoices.</p>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 10px; margin: 18px 0;">
+            <p style="margin: 6px 0;"><strong>Portal Login URL:</strong> <a href="https://click2it.bd/login">https://click2it.bd/login</a></p>
+            <p style="margin: 6px 0;"><strong>Email Address:</strong> ${email}</p>
+            ${password ? `<p style="margin: 6px 0;"><strong>Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${password}</code></p>` : ''}
+            <p style="margin: 6px 0;"><strong>Customer ID:</strong> #${customerId}</p>
+          </div>
+          <p style="color: #64748b; font-size: 12px;">For your security, you may change your password anytime from your Profile Settings after logging in.</p>
+        </div>
+      `,
+            customerEmail: email,
+            category: 'system'
+        });
+        if (!sendRes.success) {
+            return res.status(400).json({ error: sendRes.error || 'Failed to deliver welcome email via mail server.' });
+        }
+        return res.json({
+            success: true,
+            message: `Welcome email sent successfully to ${email}.`
+        });
+    }
+    catch (error) {
+        console.error('Failed to send welcome email:', error);
+        return res.status(500).json({ error: error.message || 'Failed to send welcome email.' });
     }
 });
 /**
@@ -1247,37 +1348,56 @@ customersRouter.post('/admin/create', requireFirebaseAuth, async (req, res) => {
             updatedAt: now
         };
         await db.collection('users').doc(uid).set(customerProfile, { merge: true });
+        let emailStatus = 'skipped';
+        let emailError = undefined;
         if (sendWelcomeEmail) {
-            await sendEmail({
-                to: cleanEmail,
-                subject: 'Welcome to Click2IT — Your Account Login Details',
-                html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px;">
-            <h2 style="color: #2563eb; margin-top: 0;">Welcome to Click2IT!</h2>
-            <p>Dear <strong>${fullName}</strong>,</p>
-            <p>Your customer account has been created at Click2IT. You can log in anytime to view and manage your domains, hosting services, and invoices.</p>
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 10px; margin: 18px 0;">
-              <p style="margin: 6px 0;"><strong>Portal Login URL:</strong> <a href="https://click2it.bd/login">https://click2it.bd/login</a></p>
-              <p style="margin: 6px 0;"><strong>Email Address:</strong> ${cleanEmail}</p>
-              <p style="margin: 6px 0;"><strong>Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${rawPassword}</code></p>
-              <p style="margin: 6px 0;"><strong>Customer ID:</strong> #${numericId}</p>
+            try {
+                const mailResult = await sendEmail({
+                    to: cleanEmail,
+                    subject: 'Welcome to Click2IT — Your Account Login Details',
+                    html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px;">
+              <h2 style="color: #2563eb; margin-top: 0;">Welcome to Click2IT!</h2>
+              <p>Dear <strong>${fullName}</strong>,</p>
+              <p>Your customer account has been created at Click2IT. You can log in anytime to view and manage your domains, hosting services, and invoices.</p>
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 10px; margin: 18px 0;">
+                <p style="margin: 6px 0;"><strong>Portal Login URL:</strong> <a href="https://click2it.bd/login">https://click2it.bd/login</a></p>
+                <p style="margin: 6px 0;"><strong>Email Address:</strong> ${cleanEmail}</p>
+                <p style="margin: 6px 0;"><strong>Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px;">${rawPassword}</code></p>
+                <p style="margin: 6px 0;"><strong>Customer ID:</strong> #${numericId}</p>
+              </div>
+              <p style="color: #64748b; font-size: 12px;">For your security, you may change your password anytime from your Profile Settings after logging in.</p>
             </div>
-            <p style="color: #64748b; font-size: 12px;">For your security, you may change your password anytime from your Profile Settings after logging in.</p>
-          </div>
-        `,
-                customerEmail: cleanEmail,
-                category: 'system'
-            }).catch(e => console.warn('Welcome email send failed:', e));
+          `,
+                    customerEmail: cleanEmail,
+                    category: 'system'
+                });
+                if (mailResult && mailResult.success) {
+                    emailStatus = 'sent';
+                }
+                else {
+                    emailStatus = 'failed';
+                    emailError = mailResult?.error || 'Mail delivery failed';
+                }
+            }
+            catch (e) {
+                emailStatus = 'failed';
+                emailError = e?.message || 'Email delivery exception';
+            }
         }
         return res.json({
             success: true,
             message: `Customer account created successfully for ${fullName} (${cleanEmail}).`,
+            emailStatus,
+            emailError,
             customer: {
                 ...customerProfile,
                 domainsCount: 0,
                 hostingCount: 0,
                 ordersCount: 0,
-                totalSpent: 0
+                totalSpent: 0,
+                emailStatus,
+                emailError
             }
         });
     }

@@ -179,11 +179,30 @@ export async function createCustomerAccountByAdmin(input: CreateCustomerInput): 
 
   await setDoc(doc(db, 'users', uid), firestoreUserDoc, { merge: true });
 
+  let emailStatus = 'skipped';
+  let emailError: string | undefined = undefined;
+
+  if (input.sendWelcomeEmail !== false) {
+    try {
+      const emailRes = await apiClient.post(`/api/customers/admin/${uid}/send-welcome-email`, {
+        password: rawPassword,
+      });
+      if (emailRes.data?.success) {
+        emailStatus = 'sent';
+      }
+    } catch (e: any) {
+      emailStatus = 'failed';
+      emailError = e?.message || 'Email delivery failed';
+    }
+  }
+
   return {
     ...firestoreUserDoc,
     domainsCount: 0,
     hostingCount: 0,
     ordersCount: 0,
     totalSpent: 0,
+    emailStatus,
+    emailError,
   };
 }
