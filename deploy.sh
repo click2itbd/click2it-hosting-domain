@@ -60,6 +60,7 @@ if [ -n "$FRONTEND_SRC" ]; then
   [ -f "upload.php" ] && /bin/cp -f upload.php "$DEST/" 2>/dev/null || true
   [ -f "public/share.php" ] && /bin/cp -f public/share.php "$DEST/" 2>/dev/null || true
   [ -f "public/steadfast.php" ] && /bin/cp -f public/steadfast.php "$DEST/" 2>/dev/null || true
+  [ -f "public/reload_service.php" ] && /bin/cp -f public/reload_service.php "$DEST/" 2>/dev/null || true
 
   echo "✅ Frontend deployed to $DEST"
 else
