@@ -78,13 +78,20 @@ export function CloudLinuxApiSettings() {
     setTesting(true);
     setTestResult(null);
     try {
-      if (form.apiToken || form.secretKey || form.partnerLogin) {
+      if (form.apiToken || form.secretKey) {
         const saveRes = await apiPost<{ success: boolean; message: string; config: any }>('/api/hosting/admin/cloudlinux-config', form);
         if (saveRes.success && saveRes.config) {
           apply(saveRes.config);
         }
       }
-      const r = await apiPost<{ success: boolean; message: string }>('/api/hosting/admin/cloudlinux-test', form);
+
+      const payload: Record<string, any> = {};
+      if (form.apiUrl && form.apiUrl.trim()) payload.apiUrl = form.apiUrl.trim();
+      if (form.partnerLogin && form.partnerLogin.trim()) payload.partnerLogin = form.partnerLogin.trim();
+      if (form.apiToken && form.apiToken.trim()) payload.apiToken = form.apiToken.trim();
+      if (form.secretKey && form.secretKey.trim()) payload.secretKey = form.secretKey.trim();
+
+      const r = await apiPost<{ success: boolean; message: string }>('/api/hosting/admin/cloudlinux-test', payload);
       setTestResult(r);
       r.success ? toast.success(r.message || 'CloudLinux connected successfully') : toast.error(r.message || 'Connection failed');
     } catch (e: any) {
