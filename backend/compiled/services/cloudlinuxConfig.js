@@ -70,7 +70,15 @@ export function maskCloudLinuxConfig(cfg) {
 }
 export async function getCloudLinuxProviderWithSettings(override) {
     const cfg = await getCloudLinuxConfig();
-    const active = { ...cfg, ...(override || {}) };
+    const cleanOverride = {};
+    if (override) {
+        for (const [k, v] of Object.entries(override)) {
+            if (typeof v === 'string' && v.trim().length === 0)
+                continue;
+            cleanOverride[k] = v;
+        }
+    }
+    const active = { ...cfg, ...cleanOverride };
     return new CloudLinuxProvider(active.apiUrl, active.apiToken, active.partnerLogin, active.secretKey);
 }
 export function resolveCloudLinuxType(planSlugOrId) {

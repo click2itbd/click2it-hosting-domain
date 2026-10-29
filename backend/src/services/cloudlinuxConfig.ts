@@ -85,7 +85,14 @@ export function maskCloudLinuxConfig(cfg: CloudLinuxConfig) {
 
 export async function getCloudLinuxProviderWithSettings(override?: Partial<CloudLinuxConfig>) {
   const cfg = await getCloudLinuxConfig();
-  const active = { ...cfg, ...(override || {}) };
+  const cleanOverride: Record<string, any> = {};
+  if (override) {
+    for (const [k, v] of Object.entries(override)) {
+      if (typeof v === 'string' && v.trim().length === 0) continue;
+      cleanOverride[k] = v;
+    }
+  }
+  const active = { ...cfg, ...cleanOverride };
   return new CloudLinuxProvider(
     active.apiUrl,
     active.apiToken,

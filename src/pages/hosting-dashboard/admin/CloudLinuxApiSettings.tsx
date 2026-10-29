@@ -78,10 +78,15 @@ export function CloudLinuxApiSettings() {
     setTesting(true);
     setTestResult(null);
     try {
-      await apiPost('/api/hosting/admin/cloudlinux-config', form);
-      const r = await apiPost<{ success: boolean; message: string }>('/api/hosting/admin/cloudlinux-test', {});
+      if (form.apiToken || form.secretKey || form.partnerLogin) {
+        const saveRes = await apiPost<{ success: boolean; message: string; config: any }>('/api/hosting/admin/cloudlinux-config', form);
+        if (saveRes.success && saveRes.config) {
+          apply(saveRes.config);
+        }
+      }
+      const r = await apiPost<{ success: boolean; message: string }>('/api/hosting/admin/cloudlinux-test', form);
       setTestResult(r);
-      r.success ? toast.success(r.message || 'CloudLinux connected') : toast.error(r.message || 'Connection failed');
+      r.success ? toast.success(r.message || 'CloudLinux connected successfully') : toast.error(r.message || 'Connection failed');
     } catch (e: any) {
       const msg = e?.message || 'CloudLinux connection test failed';
       setTestResult({ success: false, message: msg });
@@ -190,7 +195,9 @@ export function CloudLinuxApiSettings() {
               <label className={labelCls}>
                 API Token (Bearer Token)
                 {hasApiToken && (
-                  <span className="ml-2 normal-case font-normal text-emerald-600 text-[11px]">(stored on server)</span>
+                  <span className="ml-2 normal-case font-semibold text-emerald-600 text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    ✓ Saved &amp; Active on server
+                  </span>
                 )}
               </label>
               <button
@@ -208,7 +215,7 @@ export function CloudLinuxApiSettings() {
                 type={showSecrets ? 'text' : 'password'}
                 value={form.apiToken}
                 onChange={(e) => set('apiToken', e.target.value)}
-                placeholder={hasApiToken ? '••••••••  (leave blank to keep current)' : 'CLN Bearer API Token'}
+                placeholder={hasApiToken ? '••••••••••••••••  (Token is saved on server. Type here only to change)' : 'CLN Bearer API Token'}
                 className={`${inputCls} pl-9`}
               />
             </div>

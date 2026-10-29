@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { ICloudLinuxProvider, CloudLinuxLicensePayload, CloudLinuxLicenseResult } from './ICloudLinuxProvider.js';
 import { config } from '../../config/index.js';
 
@@ -27,8 +28,40 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
     this.requestTimeout = requestTimeout;
   }
 
+  private getCleanBaseUrl(): string {
+    let url = (this.apiUrl || 'https://cln.cloudlinux.com/api').trim().replace(/\/+$/, '');
+    if (url.endsWith('/cln/api')) {
+      url = url.replace(/\/cln\/api$/, '/api');
+    }
+    return url;
+  }
+
+  private getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    const secret = (this.apiToken || this.secretKey || '').trim();
+    const login = (this.partnerLogin || '').trim();
+
+    if (login && secret) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const hash = crypto.createHash('sha1').update(secret + timestamp).digest('hex');
+      const token = `${login}|${timestamp}|${hash}`;
+      headers['X-Api-Token'] = token;
+    } else if (secret) {
+      headers['Authorization'] = `Bearer ${secret}`;
+    }
+
+    if (this.secretKey) {
+      headers['X-Secret-Key'] = this.secretKey;
+    }
+
+    return headers;
+  }
+
   async addLicense(ip: string, type: number): Promise<CloudLinuxLicenseResult> {
-    if (!this.apiUrl || !this.apiToken) {
+    if (!this.apiUrl || (!this.apiToken && !this.secretKey)) {
       throw new CloudLinuxProviderError('not_configured', 'CloudLinux API is not configured.');
     }
 
@@ -36,14 +69,11 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
     const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
 
     try {
-      const response = await fetch(`${this.apiUrl}/v2/ip-license/licenses`, {
+      const baseUrl = this.getCleanBaseUrl();
+      const headers = this.getAuthHeaders();
+      const response = await fetch(`${baseUrl}/v2/ip-license/licenses`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiToken}`,
-          'X-Partner-Login': this.partnerLogin,
-          'X-Secret-Key': this.secretKey,
-        },
+        headers,
         body: JSON.stringify({ ip, type }),
         signal: controller.signal,
       });
@@ -81,7 +111,7 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
   }
 
   async testConnection(): Promise<{ success: boolean; code: string; message: string }> {
-    if (!this.apiUrl || !this.apiToken) {
+    if (!this.apiUrl || (!this.apiToken && !this.secretKey)) {
       return {
         success: false,
         code: 'NOT_CONFIGURED',
@@ -93,14 +123,11 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
     const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
 
     try {
-      const response = await fetch(`${this.apiUrl}/v2/ip-license/licenses`, {
+      const baseUrl = this.getCleanBaseUrl();
+      const headers = this.getAuthHeaders();
+      const response = await fetch(`${baseUrl}/v2/ip-license/licenses`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiToken}`,
-          'X-Partner-Login': this.partnerLogin,
-          'X-Secret-Key': this.secretKey,
-        },
+        headers,
         signal: controller.signal,
       });
 
@@ -137,7 +164,7 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
         const code = error.code.toUpperCase();
         let message = error.message;
         if (code === 'INVALID_RESPONSE') message = 'CloudLinux provider returned an invalid response.';
-        if (code === 'PROVIDER_ERROR') message = 'CloudLinux API error.';
+        if (code === 'PROVIDER_ERROR') message = error.message || 'CloudLinux API error.';
         return {
           success: false,
           code,
@@ -153,7 +180,7 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
   }
 
   async removeLicense(ip: string, type: number): Promise<CloudLinuxLicenseResult> {
-    if (!this.apiUrl || !this.apiToken) {
+    if (!this.apiUrl || (!this.apiToken && !this.secretKey)) {
       throw new CloudLinuxProviderError('not_configured', 'CloudLinux API is not configured.');
     }
 
@@ -161,17 +188,15 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
     const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
 
     try {
-      const url = new URL(`${this.apiUrl}/v2/ip-license/licenses`);
+      const baseUrl = this.getCleanBaseUrl();
+      const headers = this.getAuthHeaders();
+      const url = new URL(`${baseUrl}/v2/ip-license/licenses`);
       url.searchParams.set('ip', ip);
       url.searchParams.set('type', type.toString());
 
       const response = await fetch(url.toString(), {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.apiToken}`,
-          'X-Partner-Login': this.partnerLogin,
-          'X-Secret-Key': this.secretKey,
-        },
+        headers,
         signal: controller.signal,
       });
 
