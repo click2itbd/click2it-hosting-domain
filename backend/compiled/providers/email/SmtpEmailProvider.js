@@ -3,7 +3,7 @@ export class SmtpEmailProvider {
     config;
     transporter = null;
     requestTimeout;
-    constructor(config, requestTimeout = 10000) {
+    constructor(config, requestTimeout = 30000) {
         this.config = config;
         this.requestTimeout = requestTimeout;
     }

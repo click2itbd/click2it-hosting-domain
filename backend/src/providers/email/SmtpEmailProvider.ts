@@ -20,7 +20,7 @@ export class SmtpEmailProvider {
   private transporter: Transporter | null = null;
   private requestTimeout: number;
 
-  constructor(config: SmtpConfig, requestTimeout: number = 10000) {
+  constructor(config: SmtpConfig, requestTimeout: number = 30000) {
     this.config = config;
     this.requestTimeout = requestTimeout;
   }
