@@ -6,29 +6,12 @@ const POPULAR_TLDS = ['.com', '.net', '.org', '.com.bd', '.xyz', '.store', '.onl
 
 export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
   const [query, setQuery] = useState('');
-  const [selectedTld, setSelectedTld] = useState('.com');
   const navigate = useNavigate();
 
   const handleSearch = () => {
-    if (!query.trim()) return;
-    let finalQuery = query.trim();
-    if (!finalQuery.includes('.')) {
-      finalQuery += selectedTld;
-    }
-    navigate(`/domain/search?q=${encodeURIComponent(finalQuery)}`);
-  };
-
-  const handlePillClick = (tld) => {
-    setSelectedTld(tld);
-    if (query.trim()) {
-      let finalQuery = query.trim();
-      if (finalQuery.includes('.')) {
-        finalQuery = finalQuery.substring(0, finalQuery.lastIndexOf('.')) + tld;
-      } else {
-        finalQuery += tld;
-      }
-      navigate(`/domain/search?q=${encodeURIComponent(finalQuery)}`);
-    }
+    const clean = query.trim();
+    if (!clean) return;
+    navigate(`/domain/search?q=${encodeURIComponent(clean)}`);
   };
 
   return (
@@ -111,24 +94,21 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
             </div>
           </div>
 
-          {/* TLD selector pills */}
+          {/* Static popular TLD badges */}
           <div className="flex flex-wrap justify-center gap-2 mb-6">
-            {POPULAR_TLDS.slice(0, 7).map((tld, i) => {
-              const selected = selectedTld === tld;
-              return (
-                <span
-                  key={i}
-                  onClick={() => handlePillClick(tld)}
-                  className="cursor-pointer select-none px-4 py-1.5 rounded-full text-sm font-semibold transition-all border hover:border-blue-400"
-                  style={selected
-                    ? { background: 'rgba(255,255,255,0.15)', color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }
-                    : { background: 'rgba(255,255,255,0.04)', color: '#94a3b8', borderColor: 'rgba(255,255,255,0.1)' }
-                  }
-                >
-                  <span className="font-bold">{tld}</span>
-                </span>
-              );
-            })}
+            {POPULAR_TLDS.slice(0, 7).map((tld, i) => (
+              <span
+                key={i}
+                className="select-none px-4 py-1.5 rounded-full text-sm font-semibold transition-all border"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#94a3b8',
+                  borderColor: 'rgba(255,255,255,0.12)'
+                }}
+              >
+                <span className="font-bold">{tld}</span>
+              </span>
+            ))}
           </div>
 
           {/* Trust strip */}

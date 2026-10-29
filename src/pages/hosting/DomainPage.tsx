@@ -17,7 +17,6 @@ const DomainPage = () => {
   const preselectedTld = searchParams.get('tld') || '';
   
   const [searchQuery, setSearchQuery] = useState(preselectedTld ? `.${preselectedTld.replace(/^\./, '')}` : '');
-  const [selectedTld, setSelectedTld] = useState('.com');
   const [isSearching, setIsSearching] = useState(false);
 
   const POPULAR_TLDS = ['.com', '.net', '.org', '.com.bd', '.xyz', '.store', '.online'];
@@ -31,14 +30,10 @@ const DomainPage = () => {
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    let query = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
     if (!query) {
       toast.error('Please enter a domain name');
       return;
-    }
-    
-    if (!query.includes('.')) {
-      query += selectedTld;
     }
     
     navigate(`/domain/search?q=${encodeURIComponent(query)}`);

@@ -145,7 +145,7 @@ export default function DomainSearchResults() {
 
     const lastDot = raw.lastIndexOf('.');
     const hasExt = lastDot > 0 && lastDot < raw.length - 1;
-    const finalDomain = hasExt ? raw : `${raw}.com`;
+    const finalDomain = raw;
 
     navigate(`/domain/search?q=${encodeURIComponent(finalDomain)}`);
   };
