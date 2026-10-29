@@ -757,12 +757,18 @@ export class OpenproviderDomainProvider {
         const email = String(contact.email || '').trim().toLowerCase();
         if (email) {
             try {
-                const query = new URLSearchParams({ email, limit: '1' });
+                const query = new URLSearchParams({ email_pattern: email, limit: '10' });
                 const searchRes = await this.fetchApi(`/customers?${query.toString()}`);
-                const existingHandle = searchRes?.data?.results?.[0]?.handle || searchRes?.data?.[0]?.handle;
-                if (existingHandle) {
-                    console.info(`[Openprovider] Reusing existing customer handle for ${email}: ${existingHandle}`);
-                    return existingHandle;
+                const results = searchRes?.data?.results || searchRes?.data || [];
+                if (Array.isArray(results) && results.length > 0) {
+                    const matched = results.find((c) => c &&
+                        c.handle &&
+                        c.handle !== this.defaultHandle &&
+                        String(c.email || '').trim().toLowerCase() === email);
+                    if (matched?.handle) {
+                        console.info(`[Openprovider] Reusing existing customer handle for ${email}: ${matched.handle}`);
+                        return matched.handle;
+                    }
                 }
             }
             catch (err) {
