@@ -116,14 +116,14 @@ if [ -d "backend" ]; then
     (cd "$BACKEND_DEST" && npx pm2 reload click2it-api 2>/dev/null || npx pm2 restart click2it-api 2>/dev/null || true)
   fi
 
-  # Fallback: If port 4001 is not answering, spawn standalone server on port 4001
-  if ! curl -s --max-time 2 http://127.0.0.1:4001/api/health >/dev/null 2>&1; then
-    NODE_BIN="$(command -v node 2>/dev/null || find "$HOME_DIR/nodevenv" -name node -type f -print -quit 2>/dev/null || echo "")"
-    if [ -n "$NODE_BIN" ]; then
-      echo "🚀 Spawning backend on port 4001 using $NODE_BIN..."
-      (cd "$BACKEND_DEST" && NODE_ENV=production PORT=4001 nohup "$NODE_BIN" server.js > "$BACKEND_DEST/backend.log" 2>&1 &)
-      sleep 1
-    fi
+  # Always refresh standalone server on port 4001 so new backend code takes effect immediately
+  NODE_BIN="$(command -v node 2>/dev/null || find "$HOME_DIR/nodevenv" -name node -type f -print -quit 2>/dev/null || echo "")"
+  if [ -n "$NODE_BIN" ]; then
+    echo "🔄 Refreshing standalone backend process on port 4001..."
+    pkill -f "$BACKEND_DEST/server.js" 2>/dev/null || pkill -f "node.*server.js" 2>/dev/null || fuser -k 4001/tcp 2>/dev/null || true
+    sleep 1
+    (cd "$BACKEND_DEST" && NODE_ENV=production PORT=4001 nohup "$NODE_BIN" server.js > "$BACKEND_DEST/backend.log" 2>&1 &)
+    sleep 1
   fi
 
   echo "✅ Backend deployed and restarted (Passenger & 4001 listener)"

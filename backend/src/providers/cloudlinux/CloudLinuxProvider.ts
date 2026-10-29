@@ -26,6 +26,9 @@ export class CloudLinuxProvider implements ICloudLinuxProvider {
     this.partnerLogin = partnerLogin || config.cloudlinux.partnerLogin || '';
     this.secretKey = secretKey || config.cloudlinux.secretKey || '';
     this.requestTimeout = requestTimeout;
+    if (this.apiToken || this.secretKey) {
+      cloudLinuxProviderInstance = this;
+    }
   }
 
   private getCleanBaseUrl(): string {

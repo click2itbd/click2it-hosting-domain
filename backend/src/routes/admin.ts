@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { getAdminDocument, setAdminDocument, isUserAdmin } from '../firebase/admin.js';
 import { CpanelHostingProvider } from '../providers/hosting/CpanelHostingProvider.js';
 import { OpenproviderDomainProvider } from '../providers/domain/OpenproviderDomainProvider.js';
-import { getCloudLinuxProvider } from '../providers/cloudlinux/CloudLinuxProvider.js';
+import { getCloudLinuxProviderWithSettings } from '../services/cloudlinuxConfig.js';
 import { verifySmtpConnection } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { getDomainProviderConfig } from '../services/domainProviderConfig.js';
@@ -252,7 +252,7 @@ adminRouter.post('/hosting/cloudlinux/test-connection', async (req: any, res: Re
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const provider = getCloudLinuxProvider();
+    const provider = await getCloudLinuxProviderWithSettings(req.body || {});
     const result = await provider.testConnection();
     return res.json(result);
   } catch (error: any) {
@@ -437,7 +437,7 @@ adminRouter.get('/connections-status', async (req: any, res: Response) => {
     const checkCloudLinux = async () => {
       const start = Date.now();
       try {
-        const provider = getCloudLinuxProvider();
+        const provider = await getCloudLinuxProviderWithSettings();
         const testRes = await provider.testConnection();
         const isSuccess = !!testRes.success;
 

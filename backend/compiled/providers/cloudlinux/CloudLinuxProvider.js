@@ -22,6 +22,9 @@ export class CloudLinuxProvider {
         this.partnerLogin = partnerLogin || config.cloudlinux.partnerLogin || '';
         this.secretKey = secretKey || config.cloudlinux.secretKey || '';
         this.requestTimeout = requestTimeout;
+        if (this.apiToken || this.secretKey) {
+            cloudLinuxProviderInstance = this;
+        }
     }
     getCleanBaseUrl() {
         let url = (this.apiUrl || 'https://cln.cloudlinux.com/api').trim().replace(/\/+$/, '');
