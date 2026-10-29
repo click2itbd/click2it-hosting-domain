@@ -18,3 +18,4 @@ export * from './WhatsAppCrmTab';
 export * from './MetaCampaignsTab';
 export * from './StaffHostsTab';
 export * from './HostingCrmTab';
+export * from './WebsiteSettingsTab';

@@ -56,31 +56,31 @@ export const Footer: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold mb-4 uppercase tracking-wider">Support</h3>
             <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
+              <a href={`tel:${(settings.contactPhone || '+8809640887777').replace(/\s+/g, '')}`} className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
                 <div className="h-10 w-10 rounded-full border border-gray-700 flex items-center justify-center">
                   <Phone size={18} />
                 </div>
                 <div>
                   <p className="text-xs">Contact Us</p>
-                  <p className="font-bold" style={{ color: settings.accentColor }}>+8809640887777</p>
+                  <p className="font-bold" style={{ color: settings.accentColor }}>{settings.contactPhone || '+8809640887777'}</p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
+              </a>
+              <a href={`mailto:${settings.contactEmail || 'support@click2it.bd'}`} className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
                 <div className="h-10 w-10 rounded-full border border-gray-700 flex items-center justify-center">
                   <Mail size={18} />
                 </div>
                 <div>
                   <p className="text-xs">Email Support</p>
-                  <p className="font-bold">{settings.contactEmail}</p>
+                  <p className="font-bold">{settings.contactEmail || 'support@click2it.bd'}</p>
                 </div>
-              </div>
+              </a>
               <div className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
                 <div className="h-10 w-10 rounded-full border border-gray-700 flex items-center justify-center">
                   <MapPin size={18} />
                 </div>
                 <div>
                   <p className="text-xs">Store Locator</p>
-                  <p className="font-bold">{settings.address}</p>
+                  <p className="font-bold">{settings.address || 'Dhaka, Bangladesh'}</p>
                 </div>
               </div>
             </div>
@@ -137,15 +137,37 @@ export const Footer: React.FC = () => {
             </form>
 
             <div className="flex gap-4">
-              <a href="https://web.facebook.com/CLICK2ITBD" className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all" style={{ backgroundColor: settings.secondaryColor }}>
+              <a 
+                href={settings.facebookUrl || "https://web.facebook.com/CLICK2ITBD"} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all bg-slate-800 text-white" 
+                title="Facebook"
+              >
                 <Facebook size={20} />
               </a>
-              <a href="#" className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all" style={{ backgroundColor: settings.secondaryColor }}>
-                <Instagram size={20} />
-              </a>
-              <a href="#" className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all" style={{ backgroundColor: settings.secondaryColor }}>
-                <Youtube size={20} />
-              </a>
+              {settings.instagramUrl ? (
+                <a 
+                  href={settings.instagramUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all bg-slate-800 text-white" 
+                  title="Instagram"
+                >
+                  <Instagram size={20} />
+                </a>
+              ) : null}
+              {settings.youtubeUrl ? (
+                <a 
+                  href={settings.youtubeUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all bg-slate-800 text-white" 
+                  title="YouTube"
+                >
+                  <Youtube size={20} />
+                </a>
+              ) : null}
             </div>
           </div>
         </div>

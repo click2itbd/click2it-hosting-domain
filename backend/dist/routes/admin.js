@@ -470,4 +470,62 @@ adminRouter.get('/connections-status', async (req, res) => {
         return res.status(500).json({ success: false, error: 'Failed to retrieve connection statuses' });
     }
 });
+adminRouter.get('/site-settings', async (req, res) => {
+    try {
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
+        if (!isAdmin) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+        const result = await getAdminDocument('settings', 'site');
+        return res.json({ success: true, data: result.data || {} });
+    }
+    catch (error) {
+        console.error('Failed to get site settings:', error);
+        return res.status(500).json({ success: false, error: error?.message || 'Failed to retrieve site settings' });
+    }
+});
+adminRouter.post('/site-settings', async (req, res) => {
+    try {
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
+        if (!isAdmin) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+        const body = req.body || {};
+        const allowedFields = [
+            'brandName',
+            'brandShortName',
+            'website',
+            'primaryDomain',
+            'hostingDomain',
+            'contactPhone',
+            'whatsappNumber',
+            'contactEmail',
+            'billingEmail',
+            'address',
+            'facebookUrl',
+            'instagramUrl',
+            'youtubeUrl',
+            'linkedinUrl',
+            'twitterUrl',
+            'footerText',
+            'primaryColor',
+            'secondaryColor',
+            'accentColor'
+        ];
+        const payload = {
+            updatedAt: new Date().toISOString()
+        };
+        for (const field of allowedFields) {
+            if (body[field] !== undefined) {
+                payload[field] = typeof body[field] === 'string' ? body[field].trim() : body[field];
+            }
+        }
+        await setAdminDocument('settings', 'site', payload);
+        return res.json({ success: true, message: 'Website & Contact settings updated successfully', data: payload });
+    }
+    catch (error) {
+        console.error('Failed to save site settings:', error);
+        return res.status(500).json({ success: false, error: error?.message || 'Failed to update site settings' });
+    }
+});
 export default adminRouter;

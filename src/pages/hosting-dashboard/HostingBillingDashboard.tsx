@@ -25,6 +25,7 @@ const WhatsAppCrmTab = lazy(() => import('./tabs/WhatsAppCrmTab').then(m => ({ d
 const MetaCampaignsTab = lazy(() => import('./tabs/MetaCampaignsTab').then(m => ({ default: m.MetaCampaignsTab })));
 const StaffHostsTab = lazy(() => import('./tabs/StaffHostsTab').then(m => ({ default: m.StaffHostsTab })));
 const HostingCrmTab = lazy(() => import('./tabs/HostingCrmTab').then(m => ({ default: m.HostingCrmTab })));
+const WebsiteSettingsTab = lazy(() => import('./tabs/WebsiteSettingsTab').then(m => ({ default: m.WebsiteSettingsTab })));
 
 export function HostingBillingDashboard() {
   const state = useHostingBillingState();
@@ -61,6 +62,7 @@ export function HostingBillingDashboard() {
               <FinancialTab state={state} />
               <SalesTab state={state} />
               <ApiSettingsTab state={state} />
+              {state.activeTab === 'website-settings' && <WebsiteSettingsTab state={state} />}
               <ModuleTabs state={state} />
               {state.activeTab === 'whatsapp-crm' && <WhatsAppCrmTab state={state} />}
               {state.activeTab === 'meta-campaigns' && <MetaCampaignsTab state={state} />}
