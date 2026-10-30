@@ -37,6 +37,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const BOOTSTRAP_ADMIN_EMAILS = ['click2itbd@gmail.com', 'clcik2itbd@gmail.com', 'admin@click2it.bd', 'muntasiralamresti@gmail.com'];
+const SESSION_MAX_AGE_DAYS = 15;
+const SESSION_MAX_AGE_MS = SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+const SESSION_TIMESTAMP_KEY = 'click2it_session_login_time';
 
 export function isBootstrapAdminEmail(email?: string | null): boolean {
   if (!email) return false;
@@ -113,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(null);
     setIs2faVerifiedState(false);
     try {
+      localStorage.removeItem(SESSION_TIMESTAMP_KEY);
       sessionStorage.removeItem('custom_auth_session');
       localStorage.removeItem('custom_auth_session');
       sessionStorage.removeItem('impersonated_customer');
@@ -163,6 +167,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         try {
           if (firebaseUser) {
+            // Check 15-day session expiration
+            try {
+              const now = Date.now();
+              const storedLoginTime = localStorage.getItem(`${SESSION_TIMESTAMP_KEY}_${firebaseUser.uid}`) || localStorage.getItem(SESSION_TIMESTAMP_KEY);
+              if (storedLoginTime) {
+                const loginTimestamp = parseInt(storedLoginTime, 10);
+                if (Number.isFinite(loginTimestamp) && now - loginTimestamp > SESSION_MAX_AGE_MS) {
+                  // Session expired (older than 15 days) -> sign out user automatically
+                  console.info('[Auth] User session exceeded 15 days. Signing out for security.');
+                  localStorage.removeItem(`${SESSION_TIMESTAMP_KEY}_${firebaseUser.uid}`);
+                  localStorage.removeItem(SESSION_TIMESTAMP_KEY);
+                  await signOut(auth).catch(() => null);
+                  setUser(null);
+                  setProfile(null);
+                  setLoading(false);
+                  return;
+                }
+              } else {
+                // Initialize session timestamp if not set
+                localStorage.setItem(`${SESSION_TIMESTAMP_KEY}_${firebaseUser.uid}`, String(now));
+                localStorage.setItem(SESSION_TIMESTAMP_KEY, String(now));
+              }
+            } catch (sessErr) {
+              console.warn('[Auth] Session check warning:', sessErr);
+            }
+
             setUser(firebaseUser);
 
             // Record security audit login event once per browser session
