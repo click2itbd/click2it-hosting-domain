@@ -387,6 +387,22 @@ domainRouter.post('/check', domainSearchLimiter, async (req, res) => {
             const parts = r.domain.split('.');
             const tld = parts.length > 1 ? parts.slice(1).join('.').toLowerCase() : '';
             const formattedTld = `.${tld}`;
+            // FAST PATH: Lookup pre-cached catalog prices instantly without blocking outbound HTTP round-trips
+            const match = fullPricing.find(p => p.tld.toLowerCase() === formattedTld)
+                || fullPricing.find(p => p.tld.toLowerCase().replace(/^\./, '') === tld);
+            if (match && match.registerPrice > 0) {
+                const priceBdt = match.registerPrice;
+                const renewalPriceBdt = match.renewPrice;
+                return {
+                    ...r,
+                    price: priceBdt,
+                    priceBdt: priceBdt,
+                    renewalPrice: renewalPriceBdt,
+                    currency: 'BDT',
+                    error: undefined,
+                };
+            }
+            // SLOW FALLBACK ONLY: If the TLD is not yet in our pre-cached catalog, fetch live quote
             if (tld && typeof provider.getTldPricing === 'function') {
                 let pricingPromise = pricingByTld.get(tld);
                 if (!pricingPromise) {
@@ -410,22 +426,8 @@ domainRouter.post('/check', domainSearchLimiter, async (req, res) => {
                     }
                 }
                 catch (quoteErr) {
-                    // If quote fetch threw or failed, fallback to fullPricing below
+                    // If quote fetch threw or failed, continue to fallback below
                 }
-            }
-            const match = fullPricing.find(p => p.tld.toLowerCase() === formattedTld)
-                || fullPricing.find(p => p.tld.toLowerCase().replace(/^\./, '') === tld);
-            if (match && match.registerPrice > 0) {
-                const priceBdt = match.registerPrice;
-                const renewalPriceBdt = match.renewPrice;
-                return {
-                    ...r,
-                    price: priceBdt,
-                    priceBdt: priceBdt,
-                    renewalPrice: renewalPriceBdt,
-                    currency: 'BDT',
-                    error: undefined,
-                };
             }
             return {
                 ...r,
@@ -436,12 +438,12 @@ domainRouter.post('/check', domainSearchLimiter, async (req, res) => {
                 error: 'A valid registration and renewal price could not be retrieved from registrar.',
             };
         }));
-        // Store fresh results in 60-second in-memory availability cache
+        // Store fresh results in 5-minute in-memory availability cache
         for (const r of enriched) {
             if (r && r.domain) {
                 domainAvailabilityCache.set(r.domain.toLowerCase(), {
                     result: r,
-                    expiresAt: Date.now() + 60_000
+                    expiresAt: Date.now() + 300_000
                 });
             }
         }

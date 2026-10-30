@@ -46,7 +46,7 @@ export default function DomainSearchResults() {
     }
   });
   
-  const { loading, results, search, error } = useDomainSearch();
+  const { loading, alternativesLoading, results, searchProgressive, search, error } = useDomainSearch();
   
   // A base list of popular TLDs to check
   const popularTlds = [
@@ -134,9 +134,9 @@ export default function DomainSearchResults() {
 
     if (lastSearchRef.current !== searchKey) {
       lastSearchRef.current = searchKey;
-      search(domainsToSearch);
+      searchProgressive(exactDomain, alternates);
     }
-  }, [query, search]);
+  }, [query, searchProgressive]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -349,7 +349,7 @@ export default function DomainSearchResults() {
                     const parts = clean.split('.');
                     const base = parts[0];
                     const alternates = popularTlds.map(tld => `${base}${tld}`);
-                    search([targetDomain, ...alternates]);
+                    searchProgressive(targetDomain, alternates);
                   }
                 }}
                 className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold px-6 py-3 rounded-xl text-sm shadow-md hover:from-orange-600 hover:to-orange-700 active:scale-95 transition-all cursor-pointer"
@@ -444,7 +444,15 @@ export default function DomainSearchResults() {
               {/* Results List */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-gray-800 font-bold text-sm md:text-base">Extension Alternatives</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-gray-800 font-bold text-sm md:text-base">Extension Alternatives</h3>
+                    {alternativesLoading && (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full font-medium border border-orange-100">
+                        <Loader2 className="w-3 h-3 animate-spin text-orange-500" />
+                        <span className="hidden sm:inline">Finding more extensions...</span>
+                      </span>
+                    )}
+                  </div>
                   
                   <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-semibold">
                     <button
@@ -481,12 +489,14 @@ export default function DomainSearchResults() {
                 </div>
                 
                 <div className="divide-y divide-gray-100">
-                  {loading ? (
+                  {loading || (alternatives.length === 0 && alternativesLoading) ? (
                     <div className="py-12 flex justify-center items-center">
-                      <Loader2 className="animate-spin text-blue-500" size={32} />
+                      <Loader2 className="animate-spin text-orange-500" size={30} />
+                      <span className="text-xs font-medium text-gray-500">Checking extension alternatives...</span>
                     </div>
                   ) : filteredAlternatives.length > 0 ? (
-                    filteredAlternatives.map((alt, idx) => (
+                    <>
+                    {filteredAlternatives.map((alt, idx) => (
                       <div key={idx} className="px-4 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-0 hover:bg-gray-50 transition-colors">
                         <div className="flex items-center gap-2 md:gap-3">
                           <span className={alt.available ? "text-gray-800 text-base md:text-lg font-medium" : "text-gray-400 text-base md:text-lg"}>{alt.domain}</span>
@@ -543,7 +553,14 @@ export default function DomainSearchResults() {
                           )}
                         </div>
                       </div>
-                    ))
+                    ))}
+                    {alternativesLoading && (
+                      <div className="px-6 py-3 bg-orange-50/40 flex items-center justify-center gap-2 text-xs text-orange-600 font-medium border-t border-orange-100/50">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Streaming additional extension alternatives...</span>
+                      </div>
+                    )}
+                  </>
                   ) : (
                     <div className="py-8 text-center text-gray-500 text-sm">
                       {activeFilter === 'all' 
