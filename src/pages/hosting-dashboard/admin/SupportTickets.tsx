@@ -155,7 +155,7 @@ export default function SupportTickets() {
       }
       
       if (selectedTicket?.id === ticketId) setSelectedTicket(null);
-      fetchTickets();
+      setTickets(prev => prev.filter(t => t.id !== ticketId));
       toast.success('Ticket deleted successfully');
     } catch (error) {
       console.error('Error deleting ticket:', error);

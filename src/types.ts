@@ -172,7 +172,9 @@ export interface CartItem extends Product {
   authCode?: string;
   discount?: number;
   selectedSerials?: string[];
-  itemType?: 'product' | 'domain' | 'hosting' | 'domain_transfer' | 'domain_renewal' | 'ssl' | 'service';
+  itemType?: 'product' | 'domain' | 'hosting' | 'domain_transfer' | 'domain_renewal' | 'ssl' | 'service' | 'license';
+  serverIp?: string;
+  domainName?: string;
   domainTld?: string;
   billingCycle?: 'monthly' | 'yearly';
   termYears?: number;
@@ -659,7 +661,8 @@ export interface DomainOrder {
   tld: string;
   userId: string;
   orderId: string;
-  status: 'pending' | 'active' | 'suspended' | 'cancelled' | 'failed' | 'registered' | 'manual_review';
+  status: 'pending' | 'active' | 'suspended' | 'cancelled' | 'failed' | 'registered' | 'manual_review' | 'pending_transfer';
+  transferId?: string;
   type?: 'register' | 'renewal' | 'transfer';
   action?: 'register' | 'renewal' | 'transfer';
   authCode?: string;

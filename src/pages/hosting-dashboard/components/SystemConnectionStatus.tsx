@@ -36,7 +36,15 @@ interface ConnectionOverviewResponse {
   };
 }
 
-const SERVICE_METADATA = {
+const SERVICE_METADATA: Record<'backend' | 'openprovider' | 'whm' | 'cloudlinux', {
+  title: string;
+  category: string;
+  subtitle: string;
+  icon: any;
+  accent: string;
+  defaultMsg: string;
+  isOptional?: boolean;
+}> = {
   backend: {
     title: 'Backend API',
     category: 'Core Engine',

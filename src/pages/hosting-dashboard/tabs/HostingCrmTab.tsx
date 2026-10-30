@@ -1345,7 +1345,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
         <p style="font-size:12px;color:#64748b;margin:0;">Click2IT Hosting & Domain Services</p>
       </div>`;
 
-      await sendRealEmail(lead.email, subject, htmlBody).catch(() => false);
+      await sendRealEmail({ to: lead.email, subject, html: htmlBody }).catch(() => false);
 
       const logItem: LeadActivityLog = {
         id: `tl_${Date.now()}_${Math.random().toString(36).substring(2,5)}`,
@@ -1810,7 +1810,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
         <p style="font-size:12px;color:#64748b;margin:0;">Sent by ${actor} — Click2IT Hosting & Domain Services</p>
       </div>`;
 
-      await sendRealEmail(selectedLeadForDetail.email, newEmailSubject, htmlBody);
+      await sendRealEmail({ to: selectedLeadForDetail.email, subject: newEmailSubject, html: htmlBody });
 
       const emailEntry: LeadActivityLog = {
         id: `tl_${Date.now()}`,
@@ -2126,7 +2126,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
     `;
 
     try {
-      await sendRealEmail(quoteLead.email, subject, htmlBody);
+      await sendRealEmail({ to: quoteLead.email, subject, html: htmlBody });
       await handleSaveQuoteToLead();
       toast.success(`📧 Sent official quotation email to ${quoteLead.email}!`);
       setShowQuoteModal(false);
@@ -4545,7 +4545,7 @@ export function HostingCrmTab({ state }: { state?: any }) {
                   <label className="font-bold text-slate-700">Customer Portal Login Password *</label>
                   <button
                     type="button"
-                    onClick={() => setConvertForm({ ...convertForm, password: generateRandomPassword(10) })}
+                    onClick={() => setConvertForm({ ...convertForm, password: generateCustomerPassword(12) })}
                     className="text-[10px] font-black text-blue-600 hover:text-blue-700 cursor-pointer"
                   >
                     ↻ Generate Strong Password
@@ -4566,8 +4566,8 @@ export function HostingCrmTab({ state }: { state?: any }) {
                   <label className="font-bold text-slate-700 block mb-1">Street Address</label>
                   <input
                     type="text"
-                    value={convertForm.street}
-                    onChange={(e) => setConvertForm({ ...convertForm, street: e.target.value })}
+                    value={convertForm.address1}
+                    onChange={(e) => setConvertForm({ ...convertForm, address1: e.target.value })}
                     className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-900"
                   />
                 </div>
@@ -4604,11 +4604,11 @@ export function HostingCrmTab({ state }: { state?: any }) {
                 </button>
                 <button
                   type="submit"
-                  disabled={convertingLoading}
+                  disabled={convertingSubmitting}
                   className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-black rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer"
                 >
                   <UserPlus size={14} />
-                  {convertingLoading ? 'Creating Customer Account...' : 'Create Account & Convert Lead'}
+                  {convertingSubmitting ? 'Creating Customer Account...' : 'Create Account & Convert Lead'}
                 </button>
               </div>
             </form>

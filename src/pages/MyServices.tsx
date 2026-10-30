@@ -11,7 +11,7 @@ import {
   RefreshCw, CheckCircle, XCircle, Clock, AlertTriangle, HardDrive, Wifi, 
   Server, Globe, Receipt, Download, ExternalLink, ChevronRight, LayoutDashboard, 
   Ticket, Terminal, Copy, Eye, EyeOff, Cpu, Key, X, Share2, Shield, 
-  Sparkles, Plus, Search, Activity, Layers, ArrowUpRight, UserCheck
+  Sparkles, Plus, Search, Activity, Layers, ArrowUpRight, UserCheck, Loader2
 } from 'lucide-react';
 import { HostingOrder } from '../types';
 
@@ -77,6 +77,17 @@ interface HostingAccount {
   createdAt: string;
   updatedAt: string;
   [key: string]: any;
+}
+
+function formatExpiryDate(dateStr?: string): string {
+  if (!dateStr) return 'Active Subscription';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
 }
 
 export const MyServices: React.FC = () => {
