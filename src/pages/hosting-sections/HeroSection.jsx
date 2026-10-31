@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, ShieldCheck, Zap, Headphones, X, ArrowRight } from 'lucide-react';
+import { Search, Loader2, ShieldCheck, Zap, Headphones, X, ArrowRight, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useCart } from '../../context/CartContext';
+import toast from 'react-hot-toast';
 
 const POPULAR_TLDS = ['.com', '.net', '.org', '.com.bd', '.xyz', '.store', '.online'];
 
@@ -8,6 +10,7 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
   const [query, setQuery] = useState('');
   const [showPopup, setShowPopup] = useState(false);
   const navigate = useNavigate();
+  const { setAppliedDiscount } = useCart();
 
   useEffect(() => {
     // Trigger popup notification exactly 10 seconds after page entry
@@ -27,7 +30,28 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
   };
 
   const handleClaimOffer = () => {
+    const discountPct = Number(bundleDiscount) || 10;
+    const discountObj = {
+      code: 'HOSTING10',
+      discountPercentage: discountPct,
+      type: 'percentage',
+      description: `Special ${discountPct}% Hosting & Bundle Discount`
+    };
+
+    // 1. Activate in CartContext and persistent storages
+    setAppliedDiscount(discountObj);
+    localStorage.setItem('c2i_claimed_discount', JSON.stringify(discountObj));
+    localStorage.setItem('appliedDiscount', JSON.stringify(discountObj));
+    sessionStorage.setItem('c2i_bundle_popup_dismissed', 'true');
     setShowPopup(false);
+
+    // 2. Friendly confirmation toast
+    toast.success(`🎉 ${discountPct}% Discount Activated! Promo code HOSTING10 has been applied to your checkout.`, {
+      duration: 6000,
+      icon: '🎁'
+    });
+
+    // 3. Smooth scroll down to hosting packages
     const plansEl = document.getElementById('shared-hosting') || document.getElementById('hosting-plans');
     if (plansEl) {
       plansEl.scrollIntoView({ behavior: 'smooth' });
@@ -49,23 +73,31 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
         minHeight: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
         position: 'relative',
         overflow: 'hidden',
       }}
     >
-      {/* Dot grid overlay */}
+      {/* Background ambient glows */}
       <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: 'radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)',
-        backgroundSize: '30px 30px',
+        position: 'absolute',
+        top: '10%',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '700px',
+        height: '350px',
+        background: 'radial-gradient(ellipse at center, rgba(59,130,246,0.18) 0%, transparent 70%)',
+        pointerEvents: 'none',
       }} />
 
-      {/* Ambient glow */}
       <div style={{
-        position: 'absolute', top: 0, left: '25%',
-        width: '80vw', maxWidth: 600, height: 400, pointerEvents: 'none',
-        background: 'radial-gradient(ellipse at center, rgba(56,100,240,0.18) 0%, transparent 70%)',
+        position: 'absolute',
+        top: '30%',
+        right: '10%',
+        width: '300px',
+        height: '300px',
+        background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)',
+        pointerEvents: 'none',
         filter: 'blur(40px)',
       }} />
 
@@ -73,42 +105,42 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
 
         {/* Heading */}
         <div className="text-center max-w-4xl mx-auto mb-10">
-
-          <div className="inline-flex items-center gap-2 border border-blue-500/30 bg-blue-500/10 rounded-full px-4 py-1.5 mb-6 text-xs text-blue-300 font-semibold uppercase tracking-widest">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-            Bangladesh's Fastest Hosting
-          </div>
-
-          <h1 className="font-black text-white leading-tight tracking-tight mb-5"
-            style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2.2rem, 6vw, 4.5rem)' }}>
-            Find Your Perfect<br />
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-tight">
+            High-Performance Web Hosting{' '}
             <span style={{
-              background: 'linear-gradient(90deg, #60a5fa 0%, #38bdf8 50%, #818cf8 100%)',
+              background: 'linear-gradient(135deg, #60a5fa, #a78bfa)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
             }}>
-              Domain Name
+              &amp; Domains
             </span>
           </h1>
-
-          <p className="text-gray-400 text-lg max-w-xl mx-auto mb-10 leading-relaxed">
-            Search, register &amp; host — all in one place. Instant activation with 99.9% uptime guarantee.
+          <p className="text-blue-200/80 text-lg sm:text-xl mt-4 font-normal max-w-2xl mx-auto">
+            Ultra-fast NVMe cPanel hosting, instant domain registration, and automated WordPress Cloud powered by BDIX.
           </p>
+        </div>
 
-          {/* Search bar */}
-          <div className="bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.4)] overflow-hidden flex items-stretch max-w-3xl mx-auto mb-6">
-            <div className="flex items-center pl-5 text-gray-400">
-              <Search size={20} />
+        {/* Domain Search Box */}
+        <div className="max-w-3xl mx-auto px-4 mb-6">
+          <div
+            className="flex items-center rounded-2xl p-2 shadow-2xl transition-all"
+            style={{
+              background: 'rgba(255, 255, 255, 0.07)',
+              border: '1.5px solid rgba(255, 255, 255, 0.15)',
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
+            }}
+          >
+            <div className="pl-4 text-blue-300">
+              <Search size={22} />
             </div>
             <input
               type="text"
-              id="domainSearchInput"
               value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="Type your domain name here..."
-              className="flex-1 px-4 py-5 text-lg text-gray-800 outline-none bg-transparent placeholder-gray-400"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="Search your ideal domain name..."
+              className="w-full px-4 py-4 bg-transparent text-white placeholder-blue-300/50 outline-none text-base sm:text-lg font-medium"
             />
             <div className="flex items-center gap-2 pr-2">
               <button
@@ -117,34 +149,30 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
                 style={{ background: 'linear-gradient(135deg, #f97316, #ea6100)' }}
               >
                 <Search size={18} />
-                <span className="hidden sm:inline">Search Now</span>
+                <span className="hidden sm:inline">Search Domain</span>
+                <span className="sm:hidden">Search</span>
               </button>
             </div>
           </div>
 
-          {/* Static popular TLD badges */}
-          <div className="flex flex-wrap justify-center gap-2 mb-6">
-            {POPULAR_TLDS.slice(0, 7).map((tld, i) => (
-              <span
-                key={i}
-                className="select-none px-4 py-1.5 rounded-full text-sm font-semibold transition-all border"
+          {/* Popular TLD pills */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs">
+            <span className="text-blue-300/60 font-semibold uppercase tracking-wider text-[11px] mr-1">Popular:</span>
+            {POPULAR_TLDS.map((tld) => (
+              <button
+                key={tld}
+                onClick={() => {
+                  const base = query ? query.split('.')[0] : 'mybrand';
+                  navigate(`/domain/search?q=${encodeURIComponent(base + tld)}`);
+                }}
+                className="px-3 py-1 rounded-full text-blue-200/80 hover:text-white transition-all font-mono font-medium hover:scale-105"
                 style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  color: '#94a3b8',
-                  borderColor: 'rgba(255,255,255,0.12)'
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
-                <span className="font-bold">{tld}</span>
-              </span>
-            ))}
-          </div>
-
-          {/* Trust strip */}
-          <div className="flex flex-wrap items-center justify-center gap-6 text-gray-500 text-sm">
-            {[{ Icon: ShieldCheck, t: 'Free SSL' }, { Icon: Zap, t: 'Instant Activation' }, { Icon: Headphones, t: '24/7 Support' }].map(({ Icon, t }, i) => (
-              <span key={i} className="flex items-center gap-1.5">
-                <Icon size={14} className="text-blue-400" />{t}
-              </span>
+                {tld}
+              </button>
             ))}
           </div>
         </div>
@@ -152,13 +180,13 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
         {/* Server image centered */}
         <div className="flex justify-center mt-4">
           <div className="relative w-full max-w-[520px] hover:scale-[1.02] transition-transform duration-700">
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-16 blur-3xl rounded-full"
-              style={{ background: 'rgba(56,100,240,0.35)' }} />
             <img
-              src="/assets/hero_server.jpg"
-              alt="Server Infrastructure"
-              className="relative w-full h-auto rounded-2xl"
-              style={{ boxShadow: '0 0 60px rgba(56,100,240,0.25)' }}
+              src="/server-light.png"
+              alt="High Performance Cloud Infrastructure"
+              className="w-full h-auto object-contain drop-shadow-[0_25px_35px_rgba(0,0,0,0.6)]"
+              style={{
+                filter: 'drop-shadow(0 0 40px rgba(59,130,246,0.3))',
+              }}
             />
           </div>
         </div>
@@ -194,9 +222,14 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
                 🎉
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
-                  Special Offer
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
+                    Special Offer
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                    <Tag size={10} /> HOSTING10
+                  </span>
+                </div>
                 <h4 className="text-sm font-bold text-white tracking-tight">
                   Add hosting now and save {bundleDiscount}%!
                 </h4>
@@ -217,7 +250,7 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
               <button
                 type="button"
                 onClick={handleClaimOffer}
-                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-md shadow-orange-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-md shadow-orange-500/20 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
               >
                 <span>Claim {bundleDiscount}% Off</span>
                 <ArrowRight size={13} />

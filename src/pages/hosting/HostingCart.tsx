@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { useCart } from '../../context/CartContext';
@@ -15,10 +15,15 @@ import {
   Sparkles,
   Calendar,
   Zap,
-  RefreshCw
+  RefreshCw,
+  Tag,
+  Check,
+  X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DomainCrossSellModal } from '../../components/hosting/DomainCrossSellModal';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 const DOMAIN_DISCOUNTS: Record<number, number> = {
   1: 0,
@@ -36,19 +41,102 @@ const HOSTING_YEAR_DISCOUNTS: Record<number, number> = {
 };
 
 export const HostingCart: React.FC = () => {
-  const { items: allItems, removeFromCart, updateQuantity, updateCartItem, clearCart } = useCart();
+  const { items: allItems, removeFromCart, updateQuantity, updateCartItem, clearCart, appliedDiscount, setAppliedDiscount } = useCart();
   const navigate = useNavigate();
 
   const items = allItems.filter((i) => i.category === 'Hosting & Domains');
   const [crossSellDomain, setCrossSellDomain] = React.useState<string | null>(null);
+  const [promoInput, setPromoInput] = useState('');
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const domainItem = items.find((i: any) => i.itemType === 'domain' || i.name?.toLowerCase().includes('domain'));
   const hasHostingOrVps = items.some((i: any) => i.itemType === 'hosting' || i.itemType === 'vps' || (!i.itemType?.includes('domain') && !i.name?.toLowerCase().includes('domain')));
   const extractedDomainName = domainItem ? (domainItem.name?.replace(/Domain Registration - /i, '').trim() || 'your-domain.com') : '';
 
+  // Get active discount from context or localStorage
+  const activeDiscount = appliedDiscount || (() => {
+    try {
+      const savedClaimed = localStorage.getItem('c2i_claimed_discount');
+      if (savedClaimed) return JSON.parse(savedClaimed);
+      const savedApplied = localStorage.getItem('appliedDiscount');
+      if (savedApplied) return JSON.parse(savedApplied);
+    } catch (e) {}
+    return null;
+  })();
+
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const hostingSubtotal = items
+    .filter(i => i.itemType === 'hosting' || (i.itemType as any) === 'vps' || (!i.itemType?.includes('domain') && !i.name?.toLowerCase().includes('domain')))
+    .reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  const discountAmount = activeDiscount && activeDiscount.discountPercentage
+    ? Math.round((hostingSubtotal * activeDiscount.discountPercentage) / 100)
+    : 0;
+
   const taxes = 0;
-  const total = subtotal + taxes;
+  const total = Math.max(0, subtotal - discountAmount + taxes);
+
+  const handleApplyPromoCode = async () => {
+    const cleanCode = promoInput.trim().toUpperCase();
+    if (!cleanCode) return;
+    setIsValidatingPromo(true);
+
+    try {
+      // 1. Built-in verified promo codes immediate match
+      if (['HOSTING10', 'SAVE10', 'BUNDLE10'].includes(cleanCode)) {
+        const codeObj = {
+          code: cleanCode,
+          discountPercentage: 10,
+          isActive: true,
+          description: 'Special 10% Discount'
+        };
+        setAppliedDiscount(codeObj);
+        localStorage.setItem('c2i_claimed_discount', JSON.stringify(codeObj));
+        localStorage.setItem('appliedDiscount', JSON.stringify(codeObj));
+        toast.success(`🎉 Promo code ${cleanCode} applied: 10% off!`);
+        setPromoInput('');
+        return;
+      }
+
+      // 2. Query Firestore couponCodes
+      const q = query(
+        collection(db, 'couponCodes'), 
+        where('code', '==', cleanCode),
+        where('isActive', '==', true)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        toast.error('Invalid or inactive discount code');
+        return;
+      }
+
+      const codeData: any = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+      
+      if (codeData.expiryDate && new Date(codeData.expiryDate) < new Date()) {
+        toast.error('This discount code has expired');
+        return;
+      }
+
+      setAppliedDiscount(codeData);
+      localStorage.setItem('c2i_claimed_discount', JSON.stringify(codeData));
+      localStorage.setItem('appliedDiscount', JSON.stringify(codeData));
+      toast.success(`🎉 Promo code applied: ${codeData.discountPercentage}% off!`);
+      setPromoInput('');
+    } catch (error) {
+      console.error('Error validating discount code:', error);
+      toast.error('Failed to validate discount code');
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedDiscount(null);
+    localStorage.removeItem('c2i_claimed_discount');
+    localStorage.removeItem('appliedDiscount');
+    toast.success('Discount removed');
+  };
 
   const handleDomainDurationChange = (item: any, years: number) => {
     // Base 1-year annual price
@@ -143,7 +231,7 @@ export const HostingCart: React.FC = () => {
             </p>
             <button
               onClick={() => navigate('/pricing')}
-              className="bg-[#0a1628] hover:bg-[#12284c] text-white px-8 py-3.5 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg"
+              className="bg-[#0a1628] hover:bg-[#12284c] text-white px-8 py-3.5 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg cursor-pointer"
             >
               Browse Hosting Plans <ArrowRight className="w-5 h-5" />
             </button>
@@ -156,7 +244,7 @@ export const HostingCart: React.FC = () => {
                 <h2 className="text-xl font-black text-slate-900">Cart Items ({items.length})</h2>
                 <button 
                   onClick={clearCart}
-                  className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 transition-colors"
+                  className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Clear Cart
                 </button>
@@ -182,7 +270,7 @@ export const HostingCart: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setCrossSellDomain(extractedDomainName)}
-                    className="px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-xs transition-all shadow-md active:scale-95 shrink-0 flex items-center gap-1.5"
+                    className="px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-xs transition-all shadow-md active:scale-95 shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Zap size={14} /> View Hosting & VPS Offers
                   </button>
@@ -289,7 +377,7 @@ export const HostingCart: React.FC = () => {
 
                       <button
                         onClick={() => removeFromCart(item.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
                         title="Remove item"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -310,6 +398,18 @@ export const HostingCart: React.FC = () => {
                     <span>Subtotal</span>
                     <span className="font-bold text-slate-900">{formatCurrency(subtotal)}</span>
                   </div>
+
+                  {/* Active Discount Row */}
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between items-center bg-emerald-50 text-emerald-700 px-3 py-2 rounded-xl border border-emerald-200/80 font-medium text-xs animate-in fade-in">
+                      <span className="flex items-center gap-1.5 font-bold">
+                        <Sparkles size={14} className="text-emerald-600" />
+                        Discount ({activeDiscount?.code || '10% OFF'})
+                      </span>
+                      <span className="font-extrabold text-emerald-700">-{formatCurrency(discountAmount)}</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between text-slate-600">
                     <span>Setup & Activation</span>
                     <span className="font-bold text-emerald-600">FREE</span>
@@ -325,9 +425,53 @@ export const HostingCart: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Promo Code Input Box */}
+                <div className="pt-2 border-t border-slate-100">
+                  {activeDiscount ? (
+                    <div className="flex items-center justify-between p-2.5 bg-orange-50 border border-orange-200 rounded-xl text-xs">
+                      <div className="flex items-center gap-1.5 text-orange-800 font-bold">
+                        <Tag size={13} className="text-orange-600" />
+                        <span>Code Applied: <strong>{activeDiscount.code}</strong> ({activeDiscount.discountPercentage}% OFF)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemovePromo}
+                        className="text-gray-400 hover:text-red-600 p-1 rounded-md transition-colors cursor-pointer"
+                        title="Remove promo code"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Promo / Bundle Code</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={promoInput}
+                          onChange={(e) => setPromoInput(e.target.value)}
+                          placeholder="e.g. HOSTING10"
+                          className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl uppercase font-mono tracking-wider focus:outline-none focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyPromoCode}
+                          disabled={isValidatingPromo || !promoInput.trim()}
+                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          {isValidatingPromo ? '...' : 'Apply'}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Use <strong className="text-orange-600 font-mono">HOSTING10</strong> to get 10% instant discount.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   onClick={() => navigate('/hosting/checkout')}
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25"
+                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 cursor-pointer active:scale-95"
                 >
                   Proceed to Checkout <ArrowRight className="w-4 h-4" />
                 </button>
@@ -362,4 +506,4 @@ export const HostingCart: React.FC = () => {
     </Layout>
   );
 };
-
+export default HostingCart;

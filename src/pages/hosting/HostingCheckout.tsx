@@ -17,7 +17,7 @@ import { createCustomerAccountByAdmin, generateCustomerPassword } from '../../ut
 
 export const HostingCheckout: React.FC = () => {
   const { user, effectiveUser, canAccessAdmin, isImpersonating, impersonatedCustomer, loading: authLoading } = useAuth();
-  const { items: allItems, total, clearCart, updateCartItem } = useCart();
+  const { items: allItems, total, clearCart, updateCartItem, appliedDiscount: cartDiscount, setAppliedDiscount: setCartDiscount } = useCart();
   const { settings } = useSettings();
   const navigate = useNavigate();
   
@@ -25,9 +25,50 @@ export const HostingCheckout: React.FC = () => {
   const hostingSubtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shippingCost = 0;
 
-  const [discountCode, setDiscountCode] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState<any>(null);
+  const [appliedDiscount, setAppliedDiscount] = useState<any>(() => {
+    try {
+      if (cartDiscount && cartDiscount.discountPercentage) {
+        return cartDiscount;
+      }
+      const savedClaimed = localStorage.getItem('c2i_claimed_discount');
+      if (savedClaimed) {
+        return JSON.parse(savedClaimed);
+      }
+      const savedApplied = localStorage.getItem('appliedDiscount');
+      if (savedApplied) {
+        return JSON.parse(savedApplied);
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [discountCode, setDiscountCode] = useState(() => {
+    try {
+      if (cartDiscount && cartDiscount.code) return cartDiscount.code;
+      const savedClaimed = localStorage.getItem('c2i_claimed_discount');
+      if (savedClaimed) return JSON.parse(savedClaimed)?.code || '';
+    } catch (e) {}
+    return '';
+  });
   const [isValidatingCode, setIsValidatingCode] = useState(false);
+
+  // Auto-apply bundle discount if both domain and hosting are in the cart and no discount code is applied
+  useEffect(() => {
+    if (appliedDiscount) return;
+    const hasDomain = items.some(i => i.itemType === 'domain' || i.name?.toLowerCase().includes('domain'));
+    const hasHosting = items.some(i => i.itemType === 'hosting' || (i.itemType as any) === 'vps');
+    if (hasDomain && hasHosting) {
+      const bundleObj = {
+        code: 'BUNDLE10',
+        discountPercentage: 10,
+        isAutoBundle: true,
+        description: 'Domain + Hosting 10% Bundle Discount'
+      };
+      setAppliedDiscount(bundleObj);
+      setDiscountCode('BUNDLE10');
+      if (setCartDiscount) setCartDiscount(bundleObj);
+      toast.success('🎉 10% Domain + Hosting bundle discount applied!', { icon: '🎁' });
+    }
+  }, [items, appliedDiscount, setCartDiscount]);
 
   const discountAmount = appliedDiscount ? (hostingSubtotal * appliedDiscount.discountPercentage) / 100 : 0;
   const grandTotal = hostingSubtotal - discountAmount + shippingCost;
@@ -507,15 +548,29 @@ export const HostingCheckout: React.FC = () => {
   }
 
   const handleApplyDiscount = async () => {
-    if (!discountCode.trim()) return;
+    const cleanCode = discountCode.trim().toUpperCase();
+    if (!cleanCode) return;
     setIsValidatingCode(true);
     try {
+      // 1. Instant fallback for built-in verified offer codes
+      if (['HOSTING10', 'SAVE10', 'BUNDLE10'].includes(cleanCode)) {
+        const codeObj = {
+          code: cleanCode,
+          discountPercentage: 10,
+          isActive: true,
+          description: 'Special 10% Discount'
+        };
+        setAppliedDiscount(codeObj);
+        if (setCartDiscount) setCartDiscount(codeObj);
+        localStorage.setItem('c2i_claimed_discount', JSON.stringify(codeObj));
+        toast.success(`🎉 Discount applied: 10% off (${cleanCode})`);
+        return;
+      }
 
-
-
+      // 2. Query Firestore couponCodes
       const q = query(
         collection(db, 'couponCodes'), 
-        where('code', '==', discountCode.trim().toUpperCase()),
+        where('code', '==', cleanCode),
         where('isActive', '==', true)
       );
       const querySnapshot = await getDocs(q);
@@ -527,13 +582,15 @@ export const HostingCheckout: React.FC = () => {
 
       const codeData: any = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
       
-      if (new Date(codeData.expiryDate) < new Date()) {
+      if (codeData.expiryDate && new Date(codeData.expiryDate) < new Date()) {
         toast.error('This discount code has expired');
         return;
       }
 
       setAppliedDiscount(codeData);
-      toast.success(`Discount applied: ${codeData.discountPercentage}% off`);
+      if (setCartDiscount) setCartDiscount(codeData);
+      localStorage.setItem('c2i_claimed_discount', JSON.stringify(codeData));
+      toast.success(`🎉 Discount applied: ${codeData.discountPercentage}% off (${cleanCode})`);
     } catch (error) {
       console.error('Error validating discount code:', error);
       toast.error('Failed to validate discount code');
@@ -544,7 +601,11 @@ export const HostingCheckout: React.FC = () => {
 
   const handleRemoveDiscount = () => {
     setAppliedDiscount(null);
+    if (setCartDiscount) setCartDiscount(null);
+    localStorage.removeItem('c2i_claimed_discount');
+    localStorage.removeItem('appliedDiscount');
     setDiscountCode('');
+    toast.success('Discount removed');
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

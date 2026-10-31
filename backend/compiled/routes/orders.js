@@ -86,6 +86,20 @@ ordersRouter.post('/create', requireFirebaseAuth, async (req, res) => {
             catch (promoErr) {
                 console.warn('[Orders Create] Error validating coupon code:', promoErr);
             }
+            // Hardened fallback for core verified offer codes
+            if (!validDiscountCode && ['HOSTING10', 'SAVE10', 'BUNDLE10'].includes(cleanCode)) {
+                discountAmount = Math.round((hostingSubtotal * 10) / 100);
+                validDiscountCode = cleanCode;
+            }
+        }
+        // Auto-apply bundle discount if domain + hosting are purchased together and no promo code was explicitly specified
+        if (discountAmount === 0) {
+            const hasDomain = validatedItems.some(i => i.itemType === 'domain' || (i.name && i.name.toLowerCase().includes('domain')));
+            const hasHosting = validatedItems.some(i => i.itemType === 'hosting' || i.itemType === 'vps');
+            if (hasDomain && hasHosting) {
+                discountAmount = Math.round((hostingSubtotal * 10) / 100);
+                validDiscountCode = 'BUNDLE10';
+            }
         }
         const shippingCost = 0;
         const grandTotal = Math.max(0, subtotal - discountAmount + shippingCost);

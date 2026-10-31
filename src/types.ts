@@ -566,14 +566,16 @@ export interface EmployeeSalary {
 }
 
 export interface DiscountCode {
-  id: string;
+  id?: string;
   code: string;
   discountPercentage: number;
   type?: 'percentage' | 'fixed' | 'free_shipping';
   fixedAmount?: number;
-  expiryDate: string;
-  isActive: boolean;
-  createdAt: string;
+  expiryDate?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  description?: string;
+  isAutoBundle?: boolean;
 }
 
 export interface Audience {

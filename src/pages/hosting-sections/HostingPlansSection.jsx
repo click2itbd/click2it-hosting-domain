@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, Monitor, Server, Check, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { Database, Monitor, Server, Check, ArrowRight, ShieldCheck, Zap, Sparkles, Tag } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCart } from '../../context/CartContext';
 import { useSettings } from '../../context/SettingsContext';
@@ -195,18 +195,28 @@ export default function HostingPlansSection({
   onBillingCycleChange,
   onNavigate,
 }) {
-  const { addToCart } = useCart();
+  const { addToCart, appliedDiscount } = useCart();
   const { settings } = useSettings();
   const navigate = useNavigate();
   const [plans, setPlans] = useState(CANONICAL_PLANS);
   const [loading, setLoading] = useState(true);
 
+  const activeOffer = appliedDiscount || (() => {
+    try {
+      const s = localStorage.getItem('c2i_claimed_discount');
+      if (s) return JSON.parse(s);
+    } catch (e) {}
+    return null;
+  })();
+
   const calculatePlanPrice = (plan) => {
     if (!plan) return { monthly: 0, annually: 0 };
     
-    if (plan.priceOverride && plan.overridePrice > 0) {
+    if (plan.priceOverride && typeof plan.overridePrice === 'number' && plan.overridePrice > 0) {
       const monthly = plan.overridePrice;
-      const annually = plan.overrideAnnualPrice || Math.round(monthly * 12 * 0.8);
+      const annually = typeof plan.overrideAnnualPrice === 'number' && plan.overrideAnnualPrice > 0
+        ? plan.overrideAnnualPrice
+        : Math.round(monthly * 12 * 0.8);
       return { monthly, annually };
     }
 
@@ -229,19 +239,19 @@ export default function HostingPlansSection({
       try {
         const q = query(collection(db, 'hostingPlans'), orderBy('order', 'asc'));
         const snap = await getDocs(q);
-          const allPlans = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          const fetchedPlans = allPlans.filter((p) => (p.category === 'shared' || !p.category || p.id.startsWith('plan_')) && p.category !== 'wordpress' && p.category !== 'vps');
-          
-          if (fetchedPlans.length > 0) {
-            const hasStudent = fetchedPlans.some(p => p.slug === 'student' || p.id === 'plan_student' || p.name?.toLowerCase().includes('student'));
-            if (!hasStudent) {
-              setPlans([CANONICAL_PLANS[0], ...fetchedPlans]);
-            } else {
-              setPlans(fetchedPlans);
-            }
+        const allPlans = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const fetchedPlans = allPlans.filter((p) => (p.category === 'shared' || !p.category || p.id.startsWith('plan_')) && p.category !== 'wordpress' && p.category !== 'vps');
+        
+        if (fetchedPlans.length > 0) {
+          const hasStudent = fetchedPlans.some(p => p.slug === 'student' || p.id === 'plan_student' || p.name?.toLowerCase().includes('student'));
+          if (!hasStudent) {
+            setPlans([CANONICAL_PLANS[0], ...fetchedPlans]);
           } else {
-            setPlans(CANONICAL_PLANS);
+            setPlans(fetchedPlans);
           }
+        } else {
+          setPlans(CANONICAL_PLANS);
+        }
       } catch (error) {
         console.error('Error fetching hosting plans:', error);
         setPlans(CANONICAL_PLANS);
@@ -254,9 +264,10 @@ export default function HostingPlansSection({
 
   const handleBuyNow = (plan) => {
     const priceObj = calculatePlanPrice(plan);
-    const price = billingCycle === 'yearly' || billingCycle === 'annually' ? priceObj.annually : priceObj.monthly;
-    
-    if (price <= 0) {
+    const isYearly = billingCycle === 'yearly' || billingCycle === 'annually';
+    const price = isYearly ? priceObj.annually : priceObj.monthly;
+
+    if (!price || price <= 0) {
       toast.error('Price unavailable for this plan. Please contact us.');
       return;
     }
@@ -289,7 +300,9 @@ export default function HostingPlansSection({
     const list = [];
     if (cv.disk_space) list.push(`${cv.disk_space} Storage`);
     if (cv.bandwidth) list.push(`${cv.bandwidth} Bandwidth`);
-    if (cv.addon_domains !== undefined) list.push(`${cv.addon_domains === '0' ? '1 Website (0 Addon)' : cv.addon_domains + ' Addon Domains'}`);
+    if (cv.addon_domains !== undefined) {
+      list.push(cv.addon_domains === '0' || cv.addon_domains === 0 ? '1 Hosted Website' : `${cv.addon_domains} Addon Domains`);
+    }
     if (cv.subdomains) list.push(`${cv.subdomains} Subdomains`);
     if (cv.emails) list.push(`${cv.emails} Email Accounts`);
     if (cv.databases) list.push(`${cv.databases} MySQL Databases`);
@@ -297,16 +310,17 @@ export default function HostingPlansSection({
     if (cv.litespeed) list.push('LiteSpeed Web Server');
     if (cv.daily_backup) list.push('Daily Backup Included');
     if (cv.cpanel) list.push('cPanel Control Panel');
-    if (cv.softaculous) list.push('Softaculous 1-Click');
-    return list.length > 0 ? list : ['Fast NVMe SSD Storage', 'cPanel & LiteSpeed', 'Free SSL & Daily Backup'];
+    if (cv.softaculous) list.push('Softaculous 1-Click Installer');
+    return list.length > 0 ? list : ['cPanel Control Panel', 'High-Speed NVMe', '24/7 Support'];
   };
 
   return (
-    <section id="shared-hosting" className="py-12 bg-gray-50 border-t border-gray-100 scroll-mt-20">
-      <div className="container mx-auto px-2 sm:px-4 max-w-7xl">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest mb-4 border border-blue-100">
-            <Zap className="w-3.5 h-3.5" /> High Performance cPanel Hosting
+    <section id="shared-hosting" className="py-20 bg-gray-50 border-t border-gray-100">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div className="text-center max-w-3xl mx-auto mb-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-600 text-xs font-bold uppercase tracking-wider mb-4">
+            <Zap size={14} /> Shared NVMe Hosting
           </div>
           <h2 className="text-3xl md:text-5xl font-extrabold text-gray-900 uppercase tracking-tight">OUR BEST PRICING</h2>
           <p className="text-gray-500 max-w-2xl mx-auto mt-3 text-sm sm:text-base">
@@ -314,12 +328,26 @@ export default function HostingPlansSection({
           </p>
         </div>
 
+        {/* Claimed Offer Banner */}
+        {activeOffer?.discountPercentage > 0 && (
+          <div className="max-w-xl mx-auto mb-8 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-300 rounded-2xl p-3.5 text-center shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-orange-800">
+              <span className="text-base">🎉</span>
+              <span>Special <strong>{activeOffer.discountPercentage}% Discount</strong> Active!</span>
+              <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-orange-100 text-orange-900 px-2 py-0.5 rounded-md border border-orange-200">
+                <Tag size={11} /> {activeOffer.code || 'HOSTING10'}
+              </span>
+              <span className="text-slate-600 font-normal hidden sm:inline">(auto-applied in cart &amp; checkout)</span>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-center mb-12">
           <div className="inline-flex bg-white rounded-full p-1.5 border border-gray-200 shadow-sm">
             <button
               onClick={() => onBillingCycleChange && onBillingCycleChange('yearly')}
               className={cn(
-                "px-5 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all uppercase tracking-wide",
+                "px-5 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all uppercase tracking-wide cursor-pointer",
                 (billingCycle === 'yearly' || billingCycle === 'annually') ? "bg-blue-600 text-white shadow-md" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
               )}
             >
@@ -328,7 +356,7 @@ export default function HostingPlansSection({
             <button
               onClick={() => onBillingCycleChange && onBillingCycleChange('monthly')}
               className={cn(
-                "px-5 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all uppercase tracking-wide",
+                "px-5 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all uppercase tracking-wide cursor-pointer",
                 billingCycle === 'monthly' ? "bg-blue-600 text-white shadow-md" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
               )}
             >
@@ -412,7 +440,7 @@ export default function HostingPlansSection({
                 <button 
                   onClick={() => handleBuyNow(plan)}
                   className={cn(
-                    "w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-xs sm:text-sm uppercase tracking-widest transition-all",
+                    "w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-xs sm:text-sm uppercase tracking-widest transition-all cursor-pointer active:scale-95",
                     isPopular 
                       ? "bg-blue-600 text-white shadow-lg hover:shadow-blue-500/25 hover:bg-blue-700" 
                       : "bg-gray-900 text-white hover:bg-black hover:shadow-md"
