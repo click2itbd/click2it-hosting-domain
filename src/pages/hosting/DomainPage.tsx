@@ -16,7 +16,10 @@ import {
   Globe,
   HelpCircle,
   ChevronDown,
-  Lock
+  Lock,
+  Sparkles,
+  CheckCircle2,
+  Server
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -96,93 +99,169 @@ const DomainPage = () => {
         canonical="https://click2it.bd/domain"
       />
 
+      {/* Custom Keyframe Animations for Hero Vibe */}
+      <style>{`
+        @keyframes floatSlow {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+        }
+        @keyframes floatReverse {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(10px); }
+        }
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0.45; transform: translateX(-50%) scale(1); }
+          50% { opacity: 0.75; transform: translateX(-50%) scale(1.06); }
+        }
+      `}</style>
+
       {/* 1. Unified Dark-Navy Glassmorphic Hero Section */}
-      <section className="relative bg-[#020b2e] pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden">
-        {/* Background Image & Overlay (matching .BD Hero aesthetic) */}
+      <section className="relative bg-[#020b2e] pt-28 pb-20 md:pt-36 md:pb-28 overflow-hidden">
+        {/* Background Image & Vibrant Cyber Overlay */}
         <div className="absolute inset-0">
           <img
             src="/assets/domain_hero_bg.jpg"
             alt=""
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-bottom scale-105 transition-transform duration-1000"
+            style={{ filter: 'saturate(1.35) contrast(1.1) brightness(1.08)' }}
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#020b2e]/80 via-[#050f3a]/65 to-[#020b2e]/95"></div>
+          {/* Balanced multi-stop overlay so the glowing globe & fiber lines pop through */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#020b2e]/70 via-[#04103a]/35 to-[#020b2e]/80"></div>
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(circle at 50% 62%, rgba(6, 182, 212, 0.22) 0%, rgba(59, 130, 246, 0.14) 35%, rgba(2, 11, 46, 0.65) 80%)',
+            }}
+          />
         </div>
 
-        {/* Subtle dot grid pattern */}
+        {/* Subtle cyber grid overlay */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
             pointerEvents: 'none',
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)',
-            backgroundSize: '30px 30px',
+            backgroundImage:
+              'linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            maskImage: 'radial-gradient(ellipse at center, black 35%, transparent 80%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, black 35%, transparent 80%)',
           }}
         />
 
-        {/* Ambient glows */}
+        {/* Animated Top & Center Aurora Glows */}
         <div
           style={{
             position: 'absolute',
-            top: '5%',
+            top: '8%',
             left: '50%',
-            transform: 'translateX(-50%)',
-            width: '750px',
-            height: '380px',
-            background: 'radial-gradient(ellipse at center, rgba(59,130,246,0.20) 0%, transparent 70%)',
+            width: '850px',
+            height: '420px',
+            background:
+              'radial-gradient(ellipse at center, rgba(56, 189, 248, 0.26) 0%, rgba(99, 102, 241, 0.14) 45%, transparent 72%)',
             pointerEvents: 'none',
+            filter: 'blur(30px)',
+            animation: 'pulseGlow 7s ease-in-out infinite',
           }}
         />
+
+        {/* Floating Decorative Glass Cards (Desktop Vibe Elements) */}
         <div
-          style={{
-            position: 'absolute',
-            bottom: '10%',
-            right: '8%',
-            width: '320px',
-            height: '320px',
-            background: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)',
-            pointerEvents: 'none',
-            filter: 'blur(40px)',
-          }}
-        />
+          className="hidden xl:flex items-center gap-3 absolute left-[5%] top-[34%] z-10 px-4 py-3 rounded-2xl border border-cyan-400/25 bg-[#061540]/65 backdrop-blur-md shadow-2xl shadow-cyan-500/10 select-none pointer-events-none"
+          style={{ animation: 'floatSlow 5s ease-in-out infinite' }}
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/30">
+            <CheckCircle2 size={18} />
+          </div>
+          <div className="text-left">
+            <div className="text-[11px] uppercase tracking-wider text-cyan-300 font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              Instant Lookup
+            </div>
+            <div className="text-xs font-extrabold text-white font-mono">yourbrand.com</div>
+          </div>
+        </div>
+
+        <div
+          className="hidden xl:flex items-center gap-3 absolute right-[5%] top-[32%] z-10 px-4 py-3 rounded-2xl border border-indigo-400/25 bg-[#061540]/65 backdrop-blur-md shadow-2xl shadow-indigo-500/10 select-none pointer-events-none"
+          style={{ animation: 'floatReverse 5.5s ease-in-out infinite' }}
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/30">
+            <Server size={18} />
+          </div>
+          <div className="text-left">
+            <div className="text-[11px] uppercase tracking-wider text-indigo-300 font-bold">
+              Anycast DNS
+            </div>
+            <div className="text-xs font-extrabold text-white">99.99% Uptime SLA</div>
+          </div>
+        </div>
+
+        <div
+          className="hidden xl:flex items-center gap-2.5 absolute left-[8%] bottom-[20%] z-10 px-3.5 py-2 rounded-xl border border-emerald-400/25 bg-[#061540]/60 backdrop-blur-md shadow-xl select-none pointer-events-none"
+          style={{ animation: 'floatReverse 6s ease-in-out infinite' }}
+        >
+          <ShieldCheck size={16} className="text-emerald-400" />
+          <span className="text-xs font-bold text-emerald-100">DNSSEC &amp; Theft Lock</span>
+        </div>
+
+        <div
+          className="hidden xl:flex items-center gap-2.5 absolute right-[8%] bottom-[20%] z-10 px-3.5 py-2 rounded-xl border border-amber-400/25 bg-[#061540]/60 backdrop-blur-md shadow-xl select-none pointer-events-none"
+          style={{ animation: 'floatSlow 6.5s ease-in-out infinite' }}
+        >
+          <Sparkles size={16} className="text-amber-400" />
+          <span className="text-xs font-bold text-amber-100">500+ Global Extensions</span>
+        </div>
 
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
           {/* Top Pill Badge */}
-          <div className="inline-flex items-center gap-2 border border-blue-400/30 bg-blue-500/10 rounded-full px-4 py-1.5 mb-6 text-xs text-blue-300 font-semibold uppercase tracking-widest">
-            <Globe size={14} className="text-blue-400 animate-pulse" />
+          <div className="inline-flex items-center gap-2 border border-cyan-400/35 bg-cyan-500/10 backdrop-blur-md rounded-full px-4 py-1.5 mb-6 text-xs text-cyan-200 font-semibold uppercase tracking-widest shadow-lg shadow-cyan-950/50">
+            <Globe size={14} className="text-cyan-400 animate-spin" style={{ animationDuration: '10s' }} />
             <span>Instant Domain Registration &amp; DNS Control</span>
           </div>
 
           {/* Main Heading */}
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-tight max-w-4xl mx-auto">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-tight max-w-4xl mx-auto drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
             Find Your Perfect{' '}
             <span
               style={{
-                background: 'linear-gradient(135deg, #60a5fa, #38bdf8, #a78bfa)',
+                background: 'linear-gradient(135deg, #38bdf8 0%, #60a5fa 50%, #c084fc 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
+                filter: 'drop-shadow(0 0 25px rgba(56,189,248,0.35))',
               }}
             >
               Domain Name
             </span>
           </h1>
 
-          <p className="text-blue-200/80 text-base sm:text-lg md:text-xl mt-4 max-w-2xl mx-auto leading-relaxed font-normal">
+          <p className="text-blue-100/90 text-base sm:text-lg md:text-xl mt-4 max-w-2xl mx-auto leading-relaxed font-normal drop-shadow">
             Search, register, and manage your domain names with ease. Get the perfect web address for your business with free WHOIS privacy.
           </p>
 
-          {/* Glassmorphic Domain Search Box */}
-          <div className="max-w-3xl mx-auto mt-8 mb-6">
+          {/* Glassmorphic Domain Search Box with Glowing Aura */}
+          <div className="max-w-3xl mx-auto mt-9 mb-6 relative group">
+            {/* Glowing neon aura behind search bar */}
+            <div
+              className="absolute -inset-1 rounded-3xl opacity-70 group-hover:opacity-100 transition duration-500 blur-xl pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(90deg, rgba(56,189,248,0.35), rgba(59,130,246,0.45), rgba(249,115,22,0.35))',
+              }}
+            />
+
             <form
               onSubmit={handleSearch}
-              className="flex items-center rounded-2xl p-2 shadow-2xl transition-all"
+              className="relative flex items-center rounded-2xl p-2 shadow-2xl transition-all"
               style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1.5px solid rgba(255, 255, 255, 0.16)',
-                backdropFilter: 'blur(16px)',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.45)',
+                background: 'rgba(8, 20, 62, 0.72)',
+                border: '1.5px solid rgba(125, 211, 252, 0.30)',
+                backdropFilter: 'blur(20px)',
+                boxShadow: '0 25px 60px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.18)',
               }}
             >
-              <div className="pl-4 pr-1 text-blue-300 shrink-0 flex items-center">
+              <div className="pl-4 pr-1 text-cyan-300 shrink-0 flex items-center">
                 <Search size={22} className="shrink-0" />
               </div>
               <input
@@ -191,14 +270,14 @@ const DomainPage = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 disabled={isSearching}
-                className="flex-1 min-w-0 px-3 py-3.5 bg-transparent text-white placeholder-blue-200/50 outline-none text-base sm:text-lg font-medium"
+                className="flex-1 min-w-0 px-3 py-3.5 bg-transparent text-white placeholder-blue-200/60 outline-none text-base sm:text-lg font-medium"
               />
               <div className="shrink-0 flex items-center pr-1 pl-2">
                 <button
                   type="submit"
                   disabled={isSearching}
-                  className="flex items-center justify-center gap-2 text-white font-bold px-6 sm:px-8 py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-95 shadow-lg shadow-orange-500/25 cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-70"
-                  style={{ background: 'linear-gradient(135deg, #f97316, #ea6100)' }}
+                  className="flex items-center justify-center gap-2 text-white font-bold px-6 sm:px-8 py-3.5 rounded-xl transition-all active:scale-95 hover:brightness-110 shadow-lg shadow-orange-500/30 cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-70"
+                  style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
                 >
                   {isSearching ? (
                     <Loader2 size={18} className="animate-spin shrink-0" />
@@ -213,17 +292,17 @@ const DomainPage = () => {
             </form>
 
             {/* Static Popular TLD Pills (without prices) */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-5 text-xs select-none">
-              <span className="text-blue-300/60 font-semibold uppercase tracking-wider text-[11px] mr-1">
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-5 text-xs select-none relative z-10">
+              <span className="text-cyan-300/80 font-bold uppercase tracking-wider text-[11px] mr-1">
                 Popular:
               </span>
               {STATIC_TLD_HIGHLIGHTS.map((tld) => (
                 <span
                   key={tld}
-                  className="px-3.5 py-1.5 rounded-full text-blue-200 font-mono select-none cursor-default"
+                  className="px-3.5 py-1.5 rounded-full text-white font-mono font-semibold select-none cursor-default backdrop-blur-md shadow-sm"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'rgba(14, 35, 94, 0.65)',
+                    border: '1px solid rgba(125, 211, 252, 0.24)',
                   }}
                 >
                   {tld}
@@ -236,7 +315,7 @@ const DomainPage = () => {
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5">
             <Link
               to="/domain/bd"
-              className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-6 py-3 rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-emerald-900/40 transition-all hover:scale-[1.02] border border-emerald-400/30"
+              className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white px-6 py-3 rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-emerald-900/50 transition-all hover:scale-[1.02] border border-emerald-300/40"
             >
               <ShieldCheck size={17} />
               <span>Register .BD Domains in Bangladesh</span>
@@ -244,15 +323,15 @@ const DomainPage = () => {
 
             <Link
               to="/domain/transfer"
-              className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 text-blue-100 px-6 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all border border-white/15 backdrop-blur-sm"
+              className="inline-flex items-center justify-center gap-2 bg-[#0a1d56]/70 hover:bg-[#0f2975]/80 text-blue-100 px-6 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all border border-cyan-400/25 backdrop-blur-md shadow-lg"
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={15} className="text-cyan-300" />
               <span>Transfer Existing Domain</span>
             </Link>
           </div>
 
           {/* Trust Feature Strip */}
-          <div className="flex flex-wrap items-center justify-center gap-6 mt-8 pt-6 border-t border-white/10 max-w-2xl mx-auto text-blue-200/75 text-xs sm:text-sm">
+          <div className="flex flex-wrap items-center justify-center gap-6 mt-8 pt-6 border-t border-cyan-400/15 max-w-2xl mx-auto text-blue-100/90 text-xs sm:text-sm font-medium">
             <span className="flex items-center gap-1.5">
               <Lock size={14} className="text-emerald-400" />
               Free WHOIS Privacy
@@ -262,7 +341,7 @@ const DomainPage = () => {
               Instant Activation
             </span>
             <span className="flex items-center gap-1.5">
-              <Headphones size={14} className="text-blue-400" />
+              <Headphones size={14} className="text-cyan-400" />
               24/7 Local Support
             </span>
           </div>
