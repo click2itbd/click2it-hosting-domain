@@ -131,8 +131,8 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
               boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
             }}
           >
-            <div className="pl-4 text-blue-300">
-              <Search size={22} />
+            <div className="pl-4 pr-1 text-blue-300 shrink-0 flex items-center">
+              <Search size={22} className="shrink-0" />
             </div>
             <input
               type="text"
@@ -140,17 +140,17 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="Search your ideal domain name..."
-              className="w-full px-4 py-4 bg-transparent text-white placeholder-blue-300/50 outline-none text-base sm:text-lg font-medium"
+              className="flex-1 min-w-0 px-3 py-3.5 bg-transparent text-white placeholder-blue-300/50 outline-none text-base sm:text-lg font-medium"
             />
-            <div className="flex items-center gap-2 pr-2">
+            <div className="shrink-0 flex items-center pr-1 pl-2">
               <button
+                type="button"
                 onClick={handleSearch}
-                className="flex items-center gap-2 text-white font-bold px-7 py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-90 cursor-pointer"
+                className="flex items-center justify-center gap-2 text-white font-bold px-6 sm:px-8 py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-95 shadow-lg shadow-orange-500/25 cursor-pointer whitespace-nowrap shrink-0"
                 style={{ background: 'linear-gradient(135deg, #f97316, #ea6100)' }}
               >
-                <Search size={18} />
-                <span className="hidden sm:inline">Search Domain</span>
-                <span className="sm:hidden">Search</span>
+                <Search size={18} className="shrink-0" />
+                <span className="whitespace-nowrap font-bold text-sm sm:text-base">Search Domain</span>
               </button>
             </div>
           </div>
