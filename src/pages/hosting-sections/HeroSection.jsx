@@ -180,12 +180,19 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
         {/* Server image centered */}
         <div className="flex justify-center mt-4">
           <div className="relative w-full max-w-[520px] hover:scale-[1.02] transition-transform duration-700">
+            <div
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-16 blur-3xl rounded-full"
+              style={{ background: 'rgba(56,100,240,0.35)' }}
+            />
             <img
-              src="/server-light.png"
+              src="/assets/hero_server.jpg"
               alt="High Performance Cloud Infrastructure"
-              className="w-full h-auto object-contain drop-shadow-[0_25px_35px_rgba(0,0,0,0.6)]"
-              style={{
-                filter: 'drop-shadow(0 0 40px rgba(59,130,246,0.3))',
+              className="relative w-full h-auto rounded-2xl drop-shadow-[0_25px_35px_rgba(0,0,0,0.6)]"
+              style={{ boxShadow: '0 0 60px rgba(56,100,240,0.25)' }}
+              onError={(e) => {
+                if (e.currentTarget.src !== window.location.origin + '/hero_server.jpg') {
+                  e.currentTarget.src = '/hero_server.jpg';
+                }
               }}
             />
           </div>
