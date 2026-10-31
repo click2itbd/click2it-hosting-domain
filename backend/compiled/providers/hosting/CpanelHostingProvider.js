@@ -127,6 +127,22 @@ export class CpanelHostingProvider {
         const normalizedBillingCycle = this.normalizeBillingCycle(billingCycle);
         const maxAttempts = 3;
         let lastError = '';
+        const planMap = {
+            'cl_shared_starter': 'starter',
+            'cl_shared_standard': 'standard',
+            'cl_shared_advanced': 'professional',
+            'cl_shared_turbo': 'premium',
+            'plan_student': 'student',
+            'plan_starter': 'starter',
+            'plan_standard': 'standard',
+            'plan_professional': 'professional',
+            'plan_premium': 'premium',
+            'wp-starter': 'wp_starter',
+            'wp-pro-turbo': 'wp_pro',
+            'wp-ecom-ultra': 'wp_ecom',
+            'wp-mega-portal': 'wp_mega',
+        };
+        const resolvedPlan = (planCode && planMap[planCode.toLowerCase()]) ? planMap[planCode.toLowerCase()] : (planCode || 'default');
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             const username = this.generateUsername(domain, attempt);
             const password = this.generatePassword();
@@ -135,7 +151,7 @@ export class CpanelHostingProvider {
                     username,
                     password,
                     domain,
-                    plan: planCode || 'default',
+                    plan: resolvedPlan,
                     contactemail: contactEmail,
                     billingcycle: normalizedBillingCycle,
                 }, 60000);

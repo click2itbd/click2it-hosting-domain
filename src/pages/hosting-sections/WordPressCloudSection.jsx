@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Check, ArrowRight, Sparkles, Shield, Rocket, Cpu, Server } from 'lucide-react';
+import { Check, ArrowRight, Rocket } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCart } from '../../context/CartContext';
 import { useNavigate } from 'react-router-dom';
@@ -9,100 +9,102 @@ import { db } from '../../firebase';
 
 const CANONICAL_WP_PLANS = [
   {
-    id: 'cl_shared_starter',
-    name: 'Starter Cloud',
-    badge: 'Beginner Friendly',
-    description: 'Perfect for personal blogs, portfolio sites, and small student projects.',
-    pricing: { monthly: 100, annually: 1000 },
-    space: '5 GB NVMe SSD',
-    cpu: '1 vCPU Core',
-    ram: '1 GB RAM',
-    websites: '1 Hosted Domain',
-    bandwidth: 'Unlimited Bandwidth',
-    features: [
-      '5 GB NVMe SSD Storage',
-      '1 Hosted Domain',
-      '1 vCPU & 1 GB RAM',
-      'LiteSpeed Web Server',
-      'CloudLinux OS & CageFS',
-      'Free SSL Certificate',
-      'Unlimited Bandwidth',
-      'cPanel Control Panel',
-      'Weekly Backups',
-      '24/7 Standard Support'
-    ],
-  },
-  {
-    id: 'cl_shared_standard',
-    name: 'Standard Cloud',
-    badge: 'Most Popular',
-    popular: true,
-    description: 'Designed for growing websites, small businesses, and professional blogs.',
-    pricing: { monthly: 200, annually: 2000 },
-    space: '15 GB NVMe SSD',
-    cpu: '1.5 vCPU Cores',
+    id: 'wp_starter',
+    slug: 'wp-starter',
+    name: 'WP Starter',
+    badge: 'Student & Blogger',
+    description: 'Optimized Turbo WordPress hosting with NVMe SSD for fast loading blogs & portfolios.',
+    pricing: { monthly: 250, annually: 2400 },
+    space: '10 GB NVMe SSD',
+    cpu: '2 vCPU Cores',
     ram: '2 GB RAM',
-    websites: '5 Hosted Domains',
-    bandwidth: 'Unlimited Bandwidth',
+    websites: '1 Website',
+    bandwidth: '100 GB Bandwidth',
     features: [
-      '15 GB NVMe SSD Storage',
-      '5 Hosted Domains',
-      '1.5 vCPU & 2 GB RAM',
-      'LiteSpeed Web Server',
-      'CloudLinux OS & CageFS',
+      '10 GB NVMe SSD Storage',
+      '1 Hosted Website',
+      '2 vCPU & 2 GB RAM',
+      'LiteSpeed Web Server + LSCache',
+      'CloudLinux LVE CageFS',
       'Free SSL Certificate',
-      'Unlimited Bandwidth',
-      'cPanel Control Panel',
-      'Daily Backups',
+      'Daily Automated Backups',
+      '1-Click WordPress Setup',
       '24/7 Priority Support'
     ],
   },
   {
-    id: 'cl_shared_advanced',
-    name: 'Advanced Cloud',
-    badge: 'Business Class',
-    description: 'Optimized for high-traffic websites, agencies, and medium businesses.',
-    pricing: { monthly: 350, annually: 3500 },
-    space: '30 GB NVMe SSD',
-    cpu: '2 vCPU Cores',
-    ram: '3 GB RAM',
-    websites: 'Unlimited Hosted Domains',
+    id: 'wp_pro',
+    slug: 'wp-pro-turbo',
+    name: 'WP Pro Turbo',
+    badge: 'Most Popular',
+    popular: true,
+    description: 'High-speed WordPress hosting with Dedicated Redis cache for professional blogs & agencies.',
+    pricing: { monthly: 500, annually: 4800 },
+    space: '25 GB NVMe SSD',
+    cpu: '4 vCPU Cores',
+    ram: '4 GB RAM',
+    websites: '5 Websites',
     bandwidth: 'Unlimited Bandwidth',
     features: [
-      '30 GB NVMe SSD Storage',
-      'Unlimited Hosted Domains',
-      '2 vCPU &?  GB RAM',
+      '25 GB NVMe SSD Storage',
+      '5 Hosted Websites',
+      '4 vCPU & 4 GB RAM',
       'LiteSpeed + Redis Cache',
-      'CloudLinux OS & CageFS',
+      'CloudLinux LVE CageFS',
       'Free SSL Certificate',
-      'Unlimited Bandwidth',
-      'cPanel Control Panel',
       'Daily Automated Backups',
+      'Malware Scanner & Protection',
+      '24/7 Priority Support'
+    ],
+  },
+  {
+    id: 'wp_ecom',
+    slug: 'wp-ecom-ultra',
+    name: 'E-Commerce Ultra',
+    badge: 'WooCommerce Boosted',
+    popular: false,
+    description: 'Turbocharged for WooCommerce online stores with high database concurrency & order surges.',
+    pricing: { monthly: 950, annually: 9120 },
+    space: '50 GB NVMe SSD',
+    cpu: '6 vCPU Cores',
+    ram: '8 GB RAM',
+    websites: '10 Websites',
+    bandwidth: 'Unlimited Bandwidth',
+    features: [
+      '50 GB NVMe SSD Storage',
+      '10 Hosted Websites',
+      '6 vCPU & 8 GB RAM',
+      'WooCommerce Optimized Engine',
+      'LiteSpeed + Redis Cache',
+      'Free SSL Certificate',
+      'Daily Automated Backups',
+      'Real-time DDoS Protection',
       '24/7 VIP Support'
     ],
   },
   {
-    id: 'cl_shared_turbo',
-    name: 'Turbo Cloud',
-    badge: 'Enterprise Performance',
-    description: 'Maximum power for large news portals, e-commerce shops, and heavy traffic.',
-    pricing: { monthly: 600, annually: 6000 },
-    space: '60 GB NVMe SSD',
-    cpu: '3 vCPU Cores',
-    ram: '4 GB RAM',
-    websites: 'Unlimited Hosted Domains',
-    bandwidth: 'Unmetered 1Gbps Port',
+    id: 'wp_mega',
+    slug: 'wp-mega-portal',
+    name: 'Mega Portal Cloud',
+    badge: 'Enterprise WP',
+    popular: false,
+    description: 'Maximum cloud power for large news portals, multivendor marketplaces, and heavy traffic.',
+    pricing: { monthly: 1800, annually: 17280 },
+    space: '100 GB Enterprise NVMe',
+    cpu: '8 vCPU Cores',
+    ram: '16 GB RAM',
+    websites: 'Unlimited Websites',
+    bandwidth: 'Unlimited Bandwidth',
     features: [
-      '60 GB NVMe SSD Storage',
-      'Unlimited Hosted Domains',
-      '3 vCPU & 4 GB RAM',
-      'Extreme LiteSpeed Performance',
-      'CloudLinux LVE Isolation',
-      'Free SSL + Dedicated IP Option',
-      'Unmetered Bandwidth',
-      'cPanel Control Panel',
-      'Hourly & Daily Backups',
-      'Dedicated Account Manager'
+      '100 GB NVMe SSD Storage',
+      'Unlimited Websites',
+      '8 vCPU & 16 GB RAM',
+      'Dedicated IP Address',
+      'LiteSpeed Enterprise + Redis',
+      'Free SSL Certificate',
+      'Real-time Backups',
+      'Dedicated Account Manager',
+      '24/7 VIP Priority Support'
     ],
   }
 ];
@@ -123,16 +125,18 @@ export default function WordPressCloudSection() {
 
         if (wpDocs.length > 0) {
           const merged = wpDocs.map((docItem) => {
-            const canonical = CANONICAL_WP_PLANS.find(c => c.id === docItem.id || c.id === `wp_${docItem.slug}`) || {};
+            const canonical = CANONICAL_WP_PLANS.find(c => c.id === docItem.id || c.slug === docItem.slug || docItem.id === `wp_${docItem.slug}`) 
+              || CANONICAL_WP_PLANS.find(c => c.name.toLowerCase() === docItem.name?.toLowerCase()) || {};
             const monthlyPrice = docItem.priceOverride && docItem.overridePrice > 0 
               ? docItem.overridePrice 
               : (docItem.pricing?.monthly || canonical.pricing?.monthly || 250);
             const annualPrice = docItem.priceOverride && docItem.overrideAnnualPrice > 0 
               ? docItem.overrideAnnualPrice 
-              : (docItem.pricing?.annually || Math.round(monthlyPrice * 12 * 0.8));
+              : (docItem.pricing?.annually || canonical.pricing?.annually || Math.round(monthlyPrice * 12 * 0.8));
 
             return {
               id: docItem.id,
+              slug: docItem.slug || canonical.slug || docItem.id,
               name: docItem.name || canonical.name || 'WordPress Cloud',
               badge: docItem.badge || canonical.badge,
               popular: docItem.popular ?? canonical.popular ?? false,
@@ -141,8 +145,14 @@ export default function WordPressCloudSection() {
                 monthly: monthlyPrice,
                 annually: annualPrice
               },
-              cpu: docItem.cloudLinuxLimits?.cpu ? `${docItem.cloudLinuxLimits.cpu}% vCPU` : (canonical.cpu || '4 vCPU Cores'),
-              ram: docItem.cloudLinuxLimits?.pmem ? `${docItem.cloudLinuxLimits.pmem} MB RAM` : (canonical.ram || '4 GB RAM'),
+              cpu: docItem.cloudLinuxLimits?.cpu 
+                ? (typeof docItem.cloudLinuxLimits.cpu === 'string' && docItem.cloudLinuxLimits.cpu.includes('Core') 
+                    ? docItem.cloudLinuxLimits.cpu 
+                    : `${docItem.cloudLinuxLimits.cpu}% vCPU`) 
+                : (canonical.cpu || '2 vCPU Cores'),
+              ram: docItem.cloudLinuxLimits?.pmem 
+                ? `${docItem.cloudLinuxLimits.pmem} MB RAM` 
+                : (canonical.ram || '2 GB RAM'),
               space: docItem.comparisonValues?.disk_space || canonical.space || '25 GB Pure NVMe SSD',
               features: docItem.features || canonical.features || [
                 'Pure NVMe SSD Storage',
@@ -167,21 +177,22 @@ export default function WordPressCloudSection() {
     
     addToCart({
       id: `${plan.id}_${billingCycle}`,
-      name: `${plan.name} (CloudLinux Shared Hosting)`,
+      name: `${plan.name} (WordPress Cloud)`,
       price: price,
       billingCycle: isAnnual ? 'yearly' : 'monthly',
       category: 'Hosting & Domains',
       itemType: 'hosting',
-      planSlug: plan.id,
+      planSlug: plan.slug || plan.id,
       quantity: 1,
       image: '/images/hosting-icon.png',
       details: {
         cpu: plan.cpu,
         ram: plan.ram,
-        space: plan.space
+        space: plan.space,
+        features: plan.features
       }
     });
-
+    
     toast.success(`${plan.name} added to cart!`);
     navigate('/hosting/cart');
   };
@@ -197,13 +208,13 @@ export default function WordPressCloudSection() {
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/30 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest mb-4">
             <Rocket size={14} className="text-blue-400 animate-pulse" />
-            Premium CloudLinux Hosting
+            Managed WordPress Cloud
           </div>
           <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-4">
-            Fast & Secure CloudLinux Shared Hosting
+            Turbo WordPress & WooCommerce Hosting
           </h2>
           <p className="text-gray-400 text-base md:text-lg">
-            Affordable, fast, and secure shared hosting with NVMe SSDs for optimal speed and reliability.
+            High-performance WordPress hosting powered by LiteSpeed, dedicated Redis Cache, and isolated CloudLinux resources.
           </p>
 
           {/* Billing Cycle Toggle */}
@@ -267,10 +278,10 @@ export default function WordPressCloudSection() {
 
                   {/* Price Block */}
                   <div className="pb-5 mb-6 border-b border-gray-700/60">
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl md:text-4xl font-black text-white">৳ {price.toLocaleString()}</span>
-                        <span className="text-xs text-gray-400 font-medium">{isAnnual ? '/year' : '/month'}</span>
-                      </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl md:text-4xl font-black text-white">৳ {price.toLocaleString()}</span>
+                      <span className="text-xs text-gray-400 font-medium">{isAnnual ? '/year' : '/month'}</span>
+                    </div>
                     {isAnnual && (
                       <span className="inline-block mt-1 text-[11px] text-emerald-400 font-semibold">
                         Includes 20% annual discount
@@ -313,7 +324,7 @@ export default function WordPressCloudSection() {
                       : "bg-gray-700 hover:bg-gray-600 text-white"
                   )}
                 >
-                  Buy Cloud Now
+                  Buy WordPress Now
                   <ArrowRight size={14} />
                 </button>
               </div>
@@ -324,4 +335,3 @@ export default function WordPressCloudSection() {
     </section>
   );
 }
-
