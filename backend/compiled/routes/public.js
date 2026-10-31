@@ -78,8 +78,22 @@ publicRouter.get('/product-meta/:id', async (req, res) => {
         return res.status(500).json({ success: false, error: 'Failed to fetch product metadata' });
     }
 });
+// In-memory cache for status page to eliminate repetitive Firestore read/write quota consumption
+let cachedStatusPayload = null;
+let lastStatusFetchTimestamp = 0;
+const STATUS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
 // Server status and 30-day uptime metrics endpoint
 publicRouter.get('/status', async (req, res) => {
+    const isForced = req.query.force === 'true';
+    const nowMs = Date.now();
+    // Return cached payload if available and fresh to avoid Firestore reads
+    if (!isForced && cachedStatusPayload && nowMs - lastStatusFetchTimestamp < STATUS_CACHE_TTL_MS) {
+        return res.json({
+            success: true,
+            data: cachedStatusPayload,
+            cached: true
+        });
+    }
     try {
         const statusDoc = await getAdminDocument('settings', 'status_page');
         const customData = statusDoc.data || {};
@@ -249,17 +263,20 @@ publicRouter.get('/status', async (req, res) => {
         // Calculate overall uptime
         const avg30dUptime = Number((history30d.reduce((sum, h) => sum + h.uptimePercentage, 0) /
             history30d.length).toFixed(2));
+        const responsePayload = {
+            overallStatus: customData.overallStatus || 'operational', // 'operational' | 'degraded' | 'maintenance' | 'outage'
+            overallUptime30d: customData.overallUptime30d || avg30dUptime,
+            lastUpdated: new Date().toISOString(),
+            history30d,
+            servers,
+            incidents,
+            announcement: customData.announcement || 'All shared hosting servers, cPanel services, and BDIX network routes are operating at 100% capacity with ultra-low latency.',
+        };
+        cachedStatusPayload = responsePayload;
+        lastStatusFetchTimestamp = Date.now();
         return res.json({
             success: true,
-            data: {
-                overallStatus: customData.overallStatus || 'operational', // 'operational' | 'degraded' | 'maintenance' | 'outage'
-                overallUptime30d: customData.overallUptime30d || avg30dUptime,
-                lastUpdated: new Date().toISOString(),
-                history30d,
-                servers,
-                incidents,
-                announcement: customData.announcement || 'All shared hosting servers, cPanel services, and BDIX network routes are operating at 100% capacity with ultra-low latency.',
-            },
+            data: responsePayload,
         });
     }
     catch (error) {
