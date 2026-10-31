@@ -1,12 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, ShieldCheck, Zap, Headphones } from 'lucide-react';
+import { Search, Loader2, ShieldCheck, Zap, Headphones, X, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const POPULAR_TLDS = ['.com', '.net', '.org', '.com.bd', '.xyz', '.store', '.online'];
 
-export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
+export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
   const [query, setQuery] = useState('');
+  const [showPopup, setShowPopup] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Trigger popup notification exactly 10 seconds after page entry
+    const dismissed = sessionStorage.getItem('c2i_bundle_popup_dismissed');
+    if (dismissed === 'true') return;
+
+    const timer = setTimeout(() => {
+      setShowPopup(true);
+    }, 10000); // 10 seconds
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleDismissPopup = () => {
+    setShowPopup(false);
+    sessionStorage.setItem('c2i_bundle_popup_dismissed', 'true');
+  };
+
+  const handleClaimOffer = () => {
+    setShowPopup(false);
+    const plansEl = document.getElementById('shared-hosting') || document.getElementById('hosting-plans');
+    if (plansEl) {
+      plansEl.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      navigate('/pricing');
+    }
+  };
 
   const handleSearch = () => {
     const clean = query.trim();
@@ -41,7 +69,7 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
         filter: 'blur(40px)',
       }} />
 
-      <div className="container mx-auto  relative z-10 pt-28 pb-16">
+      <div className="container mx-auto relative z-10 pt-28 pb-10">
 
         {/* Heading */}
         <div className="text-center max-w-4xl mx-auto mb-10">
@@ -85,7 +113,7 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
             <div className="flex items-center gap-2 pr-2">
               <button
                 onClick={handleSearch}
-                className="flex items-center gap-2 text-white font-bold px-7 py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-90"
+                className="flex items-center gap-2 text-white font-bold px-7 py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-90 cursor-pointer"
                 style={{ background: 'linear-gradient(135deg, #f97316, #ea6100)' }}
               >
                 <Search size={18} />
@@ -121,7 +149,6 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
           </div>
         </div>
 
-
         {/* Server image centered */}
         <div className="flex justify-center mt-4">
           <div className="relative w-full max-w-[520px] hover:scale-[1.02] transition-transform duration-700">
@@ -138,11 +165,65 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
 
       </div>
 
-      {hasDomainInCart && bundleDiscount > 0 && (
-        <div className="text-center mt-6 relative z-20">
-          <span className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white py-2.5 px-6 rounded-full text-sm font-bold shadow-xl shadow-orange-500/30">
-            🎉 Add hosting now and save {bundleDiscount}%!
-          </span>
+      {/* Wave divider (Original Design Preserved) */}
+      <div className="relative z-10" style={{ lineHeight: 0 }}>
+        <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
+          <path d="M0 60 C360 0 1080 0 1440 60 L1440 60 L0 60 Z" fill="#f9fafb" />
+        </svg>
+      </div>
+
+      {/* 10-Second Entry Popup Notification */}
+      {showPopup && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full mx-4 sm:mx-0 animate-in fade-in slide-in-from-bottom-5 duration-500">
+          <div className="bg-gradient-to-r from-slate-900 via-gray-900 to-slate-900 border border-orange-500/40 p-5 rounded-2xl shadow-2xl shadow-black/80 relative overflow-hidden backdrop-blur-xl">
+            {/* Ambient orange glow */}
+            <div className="absolute -top-10 -right-10 w-24 h-24 bg-orange-500/20 rounded-full blur-xl pointer-events-none" />
+
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={handleDismissPopup}
+              className="absolute top-3 right-3 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Close notification"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="flex items-start gap-3.5 pr-6">
+              <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center shrink-0 text-xl shadow-sm">
+                🎉
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
+                  Special Offer
+                </span>
+                <h4 className="text-sm font-bold text-white tracking-tight">
+                  Add hosting now and save {bundleDiscount}%!
+                </h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  Combine high-speed NVMe hosting with your domain to enjoy exclusive instant savings today.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2 pt-3 border-t border-gray-800">
+              <button
+                type="button"
+                onClick={handleDismissPopup}
+                className="px-3 py-1.5 text-xs text-gray-400 hover:text-white font-medium transition-colors cursor-pointer"
+              >
+                Later
+              </button>
+              <button
+                type="button"
+                onClick={handleClaimOffer}
+                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-md shadow-orange-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>Claim {bundleDiscount}% Off</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
