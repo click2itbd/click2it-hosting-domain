@@ -21,13 +21,13 @@ import {
 import { toast } from 'react-hot-toast';
 
 const STATIC_TLD_HIGHLIGHTS = [
-  { tld: '.com', price: '৳1,199' },
-  { tld: '.net', price: '৳1,350' },
-  { tld: '.org', price: '৳1,250' },
-  { tld: '.com.bd', price: '৳1,000' },
-  { tld: '.xyz', price: '৳250' },
-  { tld: '.store', price: '৳450' },
-  { tld: '.online', price: '৳350' },
+  '.com',
+  '.net',
+  '.org',
+  '.com.bd',
+  '.xyz',
+  '.store',
+  '.online',
 ];
 
 const DOMAIN_FAQS = [
@@ -97,14 +97,17 @@ const DomainPage = () => {
       />
 
       {/* 1. Unified Dark-Navy Glassmorphic Hero Section */}
-      <section
-        style={{
-          background: 'linear-gradient(160deg, #020b2e 0%, #050f3a 55%, #0b1a5c 100%)',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-        className="pt-28 pb-16 md:pt-36 md:pb-24"
-      >
+      <section className="relative bg-[#020b2e] pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden">
+        {/* Background Image & Overlay (matching .BD Hero aesthetic) */}
+        <div className="absolute inset-0">
+          <img
+            src="/assets/domain_hero_bg.jpg"
+            alt=""
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#020b2e]/80 via-[#050f3a]/65 to-[#020b2e]/95"></div>
+        </div>
+
         {/* Subtle dot grid pattern */}
         <div
           style={{
@@ -209,22 +212,21 @@ const DomainPage = () => {
               </div>
             </form>
 
-            {/* Static Popular TLD Pills with Starting Price */}
+            {/* Static Popular TLD Pills (without prices) */}
             <div className="flex flex-wrap items-center justify-center gap-2 mt-5 text-xs select-none">
               <span className="text-blue-300/60 font-semibold uppercase tracking-wider text-[11px] mr-1">
-                Popular Extensions:
+                Popular:
               </span>
-              {STATIC_TLD_HIGHLIGHTS.map(({ tld, price }) => (
+              {STATIC_TLD_HIGHLIGHTS.map((tld) => (
                 <span
                   key={tld}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-blue-100 font-mono font-medium select-none cursor-default"
+                  className="px-3.5 py-1.5 rounded-full text-blue-200 font-mono select-none cursor-default"
                   style={{
                     background: 'rgba(255, 255, 255, 0.06)',
                     border: '1px solid rgba(255, 255, 255, 0.12)',
                   }}
                 >
-                  <span className="font-bold text-white">{tld}</span>
-                  <span className="text-[11px] text-amber-300/90 font-sans font-semibold">{price}</span>
+                  {tld}
                 </span>
               ))}
             </div>
