@@ -155,24 +155,20 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
             </div>
           </div>
 
-          {/* Popular TLD pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs">
+          {/* Static popular TLD badges */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs select-none">
             <span className="text-blue-300/60 font-semibold uppercase tracking-wider text-[11px] mr-1">Popular:</span>
             {POPULAR_TLDS.map((tld) => (
-              <button
+              <span
                 key={tld}
-                onClick={() => {
-                  const base = query ? query.split('.')[0] : 'mybrand';
-                  navigate(`/domain/search?q=${encodeURIComponent(base + tld)}`);
-                }}
-                className="px-3 py-1 rounded-full text-blue-200/80 hover:text-white transition-all font-mono font-medium hover:scale-105"
+                className="px-3.5 py-1 rounded-full text-blue-200/80 font-mono font-medium select-none cursor-default"
                 style={{
                   background: 'rgba(255, 255, 255, 0.06)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
                 {tld}
-              </button>
+              </span>
             ))}
           </div>
         </div>
