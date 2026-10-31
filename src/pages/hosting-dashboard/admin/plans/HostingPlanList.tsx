@@ -57,7 +57,7 @@ const HostingPlanList: React.FC<HostingPlanListProps> = ({
                   : "bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
               )}
             >
-              {cat === 'shared' ? 'Shared cPanel' : cat === 'wordpress' ? 'WP Cloud' : cat === 'cloudlinux_license' ? 'CloudLinux OS' : 'Cloud VPS'} 
+              {cat === 'shared' ? 'Shared cPanel' : cat === 'wordpress' ? 'WP Cloud Turbo' : cat === 'vps' ? 'Cloud VPS' : cat === 'cloudlinux_license' ? 'CloudLinux OS' : cat} 
               <span className="opacity-70 ml-1">({packages.filter(p => (p.category || 'shared') === cat).length})</span>
             </button>
           ))}
@@ -139,6 +139,11 @@ const HostingPlanList: React.FC<HostingPlanListProps> = ({
                     {cat === 'shared' ? 'Shared cPanel' : cat === 'wordpress' ? 'WP Cloud Turbo' : cat === 'cloudlinux_license' ? 'CloudLinux OS' : 'Cloud VPS'}
                   </span>
 
+                  {p.whmPackageName && (
+                    <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 border border-gray-200">
+                      WHM: {p.whmPackageName}
+                    </span>
+                  )}
                   {p.badge && (
                     <span className="text-[10px] font-bold px-3 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-100">
                       {p.badge}

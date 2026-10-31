@@ -87,7 +87,7 @@ const HostingPlanModal: React.FC<HostingPlanModalProps> = ({
                   <h4 className="font-bold text-gray-900 text-lg">Core Information</h4>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Package Name</label>
                     <input type="text" required value={packageForm.name} onChange={(e) => setPackageForm({...packageForm, name: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="e.g. WP Pro Turbo" />
@@ -95,6 +95,10 @@ const HostingPlanModal: React.FC<HostingPlanModalProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Slug / Identifier</label>
                     <input type="text" required value={packageForm.slug} onChange={(e) => setPackageForm({...packageForm, slug: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="e.g. wp-pro" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2">WHM Package</label>
+                    <input type="text" value={packageForm.whmPackageName || ''} onChange={(e) => setPackageForm({...packageForm, whmPackageName: e.target.value})} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="e.g. student or wp_starter" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Tier / Category</label>

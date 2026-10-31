@@ -68,6 +68,7 @@ const HostingPlansTab: React.FC = () => {
   const [packageForm, setPackageForm] = useState({
     name: '',
     slug: '',
+    whmPackageName: '',
     category: 'shared',
     status: 'published',
     badge: '',
@@ -206,6 +207,11 @@ const HostingPlansTab: React.FC = () => {
       for (const feat of DEFAULT_HOSTING_FEATURES) {
         await setDoc(doc(db, 'hosting_features', feat.id), feat, { merge: true });
       }
+      // Clean legacy conflicting dummy cloud plans if any exist
+      const legacyIds = ['starter_cloud', 'standard_cloud', 'advanced_cloud', 'turbo_cloud', 'starter-cloud', 'standard-cloud', 'advanced-cloud', 'turbo-cloud', 'plan_starter_cloud', 'plan_standard_cloud', 'plan_advanced_cloud', 'plan_turbo_cloud'];
+      for (const legId of legacyIds) {
+        try { await deleteDoc(doc(db, 'hostingPlans', legId)); } catch (e) {}
+      }
       for (const pkg of DEFAULT_HOSTING_PACKAGES) {
         await setDoc(doc(db, 'hostingPlans', pkg.id), pkg, { merge: true });
       }
@@ -296,6 +302,7 @@ const HostingPlansTab: React.FC = () => {
               setPackageForm({
                 name: '',
                 slug: '',
+                whmPackageName: '',
                 category: packageCategoryFilter === 'all' ? 'shared' : packageCategoryFilter,
                 status: 'published',
                 badge: '',
