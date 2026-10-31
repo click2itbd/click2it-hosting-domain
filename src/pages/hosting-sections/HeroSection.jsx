@@ -41,7 +41,7 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
         filter: 'blur(40px)',
       }} />
 
-      <div className="container mx-auto  relative z-10 pt-28 pb-10">
+      <div className="container mx-auto  relative z-10 pt-28 pb-16">
 
         {/* Heading */}
         <div className="text-center max-w-4xl mx-auto mb-10">
@@ -138,16 +138,9 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount }) {
 
       </div>
 
-      {/* Wave divider */}
-      <div className="relative z-10" style={{ lineHeight: 0 }}>
-        <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
-          <path d="M0 60 C360 0 1080 0 1440 60 L1440 60 L0 60 Z" fill="#f9fafb" />
-        </svg>
-      </div>
-
       {hasDomainInCart && bundleDiscount > 0 && (
-        <div className="absolute bottom-20 left-0 right-0 z-20 text-center">
-          <span className="inline-block bg-orange-500/90 backdrop-blur text-white py-2 px-6 rounded-full text-sm font-bold">
+        <div className="text-center mt-6 relative z-20">
+          <span className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white py-2.5 px-6 rounded-full text-sm font-bold shadow-xl shadow-orange-500/30">
             🎉 Add hosting now and save {bundleDiscount}%!
           </span>
         </div>
