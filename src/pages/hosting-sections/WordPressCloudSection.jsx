@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 import { useCart } from '../../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 const CANONICAL_WP_PLANS = [
@@ -116,57 +116,100 @@ export default function WordPressCloudSection() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // 1. Silent cleanup of legacy dummy cloud packages from Firestore
+    const legacyIds = [
+      'cl_shared_starter', 'cl_shared_standard', 'cl_shared_advanced', 'cl_shared_turbo',
+      'starter_cloud', 'standard_cloud', 'advanced_cloud', 'turbo_cloud',
+      'starter-cloud', 'standard-cloud', 'advanced-cloud', 'turbo-cloud',
+      'plan_starter_cloud', 'plan_standard_cloud', 'plan_advanced_cloud', 'plan_turbo_cloud'
+    ];
+
+    legacyIds.forEach(async (legId) => {
+      try {
+        await deleteDoc(doc(db, 'hostingPlans', legId));
+      } catch (e) {}
+    });
+
+    // 2. Ensure canonical WP plans are present in Firestore
+    CANONICAL_WP_PLANS.forEach(async (p, idx) => {
+      try {
+        await setDoc(doc(db, 'hostingPlans', p.id), {
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          category: 'wordpress',
+          whmPackageName: p.id,
+          order: idx + 6,
+          status: 'published',
+          badge: p.badge,
+          popular: p.popular || false,
+          pricing: p.pricing,
+          priceOverride: true,
+          overridePrice: p.pricing.monthly,
+          overrideAnnualPrice: p.pricing.annually,
+          features: p.features
+        }, { merge: true });
+      } catch (e) {}
+    });
+
+    // 3. Listen to hostingPlans collection with strict canonical filtering
     const unsub = onSnapshot(collection(db, 'hostingPlans'), (snapshot) => {
       if (!snapshot.empty) {
-        const wpDocs = snapshot.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter((p) => p.category === 'wordpress' || p.id.startsWith('wp_') || p.id.startsWith('wp-'))
-          .sort((a, b) => (a.order || 0) - (b.order || 0));
+        const allDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        if (wpDocs.length > 0) {
-          const merged = wpDocs.map((docItem) => {
-            const canonical = CANONICAL_WP_PLANS.find(c => c.id === docItem.id || c.slug === docItem.slug || docItem.id === `wp_${docItem.slug}`) 
-              || CANONICAL_WP_PLANS.find(c => c.name.toLowerCase() === docItem.name?.toLowerCase()) || {};
-            const monthlyPrice = docItem.priceOverride && docItem.overridePrice > 0 
-              ? docItem.overridePrice 
-              : (docItem.pricing?.monthly || canonical.pricing?.monthly || 250);
-            const annualPrice = docItem.priceOverride && docItem.overrideAnnualPrice > 0 
-              ? docItem.overrideAnnualPrice 
-              : (docItem.pricing?.annually || canonical.pricing?.annually || Math.round(monthlyPrice * 12 * 0.8));
+        // Delete any legacy documents returned
+        allDocs.forEach((d) => {
+          const nameLower = (d.name || '').toLowerCase().trim();
+          const isLegacy = legacyIds.includes(d.id) || 
+            ['starter cloud', 'standard cloud', 'advanced cloud', 'turbo cloud'].includes(nameLower);
+          if (isLegacy) {
+            try { deleteDoc(doc(db, 'hostingPlans', d.id)); } catch (e) {}
+          }
+        });
 
-            return {
-              id: docItem.id,
-              slug: docItem.slug || canonical.slug || docItem.id,
-              name: docItem.name || canonical.name || 'WordPress Cloud',
-              badge: docItem.badge || canonical.badge,
-              popular: docItem.popular ?? canonical.popular ?? false,
-              description: docItem.description || canonical.description || 'Optimized Turbo WordPress hosting with NVMe SSD.',
-              pricing: {
-                monthly: monthlyPrice,
-                annually: annualPrice
-              },
-              cpu: docItem.cloudLinuxLimits?.cpu 
-                ? (typeof docItem.cloudLinuxLimits.cpu === 'string' && docItem.cloudLinuxLimits.cpu.includes('Core') 
-                    ? docItem.cloudLinuxLimits.cpu 
-                    : `${docItem.cloudLinuxLimits.cpu}% vCPU`) 
-                : (canonical.cpu || '2 vCPU Cores'),
-              ram: docItem.cloudLinuxLimits?.pmem 
-                ? `${docItem.cloudLinuxLimits.pmem} MB RAM` 
-                : (canonical.ram || '2 GB RAM'),
-              space: docItem.comparisonValues?.disk_space || canonical.space || '25 GB Pure NVMe SSD',
-              features: docItem.features || canonical.features || [
-                'Pure NVMe SSD Storage',
-                'LiteSpeed Enterprise Web Server',
-                'Dedicated Redis Object Cache',
-                'Free SSL Certificate',
-                'Daily Automated Backups'
-              ]
-            };
-          });
-          setPlans(merged);
-        }
+        // Always resolve strictly based on CANONICAL_WP_PLANS
+        const resolvedPlans = CANONICAL_WP_PLANS.map((canonical) => {
+          const match = allDocs.find(d => 
+            (d.id === canonical.id || d.slug === canonical.slug || d.id === `plan_${canonical.slug}`) &&
+            !['starter cloud', 'standard cloud', 'advanced cloud', 'turbo cloud'].includes((d.name || '').toLowerCase().trim())
+          );
+
+          if (!match) return canonical;
+
+          const monthlyPrice = match.priceOverride && match.overridePrice > 0 
+            ? match.overridePrice 
+            : (match.pricing?.monthly || canonical.pricing.monthly);
+          const annualPrice = match.priceOverride && match.overrideAnnualPrice > 0 
+            ? match.overrideAnnualPrice 
+            : (match.pricing?.annually || canonical.pricing.annually || Math.round(monthlyPrice * 12 * 0.8));
+
+          return {
+            ...canonical,
+            badge: match.badge || canonical.badge,
+            popular: match.popular ?? canonical.popular,
+            pricing: {
+              monthly: monthlyPrice,
+              annually: annualPrice
+            },
+            cpu: match.cloudLinuxLimits?.cpu 
+              ? (typeof match.cloudLinuxLimits.cpu === 'string' && match.cloudLinuxLimits.cpu.includes('Core') 
+                  ? match.cloudLinuxLimits.cpu 
+                  : `${match.cloudLinuxLimits.cpu}% vCPU`) 
+              : canonical.cpu,
+            ram: match.cloudLinuxLimits?.pmem ? `${match.cloudLinuxLimits.pmem} MB RAM` : canonical.ram,
+            space: match.comparisonValues?.disk_space || canonical.space,
+            features: match.features || canonical.features
+          };
+        });
+
+        setPlans(resolvedPlans);
+      } else {
+        setPlans(CANONICAL_WP_PLANS);
       }
-    }, (err) => console.error(err));
+    }, (err) => {
+      console.error(err);
+      setPlans(CANONICAL_WP_PLANS);
+    });
 
     return () => unsub();
   }, []);
@@ -198,39 +241,42 @@ export default function WordPressCloudSection() {
   };
 
   return (
-    <section id="wordpress-cloud" className="py-20 bg-gradient-to-b from-gray-900 via-slate-900 to-gray-950 text-white relative overflow-hidden scroll-mt-20">
-      {/* Glow Effects */}
-      <div className="absolute top-0 left-1/4 w-48 h-48 md:w-96 md:h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-48 h-48 md:w-96 md:h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+    <section id="wordpress-hosting" className="py-20 bg-gray-900 text-white relative overflow-hidden border-t border-b border-gray-800">
+      {/* Background Glows */}
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="container mx-auto px-2 sm:px-4 max-w-7xl relative z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-14">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-400 border border-blue-500/30 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest mb-4">
-            <Rocket size={14} className="text-blue-400 animate-pulse" />
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider mb-4">
+            <Rocket size={14} className="text-blue-400" />
             Managed WordPress Cloud
           </div>
           <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-4">
             Turbo WordPress & WooCommerce Hosting
           </h2>
-          <p className="text-gray-400 text-base md:text-lg">
+          <p className="text-gray-400 text-sm md:text-base leading-relaxed">
             High-performance WordPress hosting powered by LiteSpeed, dedicated Redis Cache, and isolated CloudLinux resources.
           </p>
 
-          {/* Billing Cycle Toggle */}
-          <div className="mt-8 inline-flex items-center bg-gray-800/80 p-1.5 rounded-2xl border border-gray-700">
+          {/* Billing Switcher */}
+          <div className="mt-8 inline-flex items-center p-1.5 rounded-2xl bg-gray-800/80 border border-gray-700/80 backdrop-blur-md">
             <button
+              type="button"
               onClick={() => setBillingCycle('monthly')}
               className={cn(
                 "px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
                 billingCycle === 'monthly'
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/25"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
                   : "text-gray-400 hover:text-white"
               )}
             >
               Monthly Billing
             </button>
             <button
+              type="button"
               onClick={() => setBillingCycle('annually')}
               className={cn(
                 "px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
@@ -292,8 +338,8 @@ export default function WordPressCloudSection() {
                   {/* Hardware Specs Highlights */}
                   <div className="grid grid-cols-2 gap-2 mb-6 bg-gray-900/60 p-3 rounded-2xl border border-gray-700/40 text-center">
                     <div>
-                      <span className="block text-[10px] text-gray-400 font-medium">CPU Power</span>
-                      <span className="text-xs font-bold text-blue-400">{plan.cpu}</span>
+                      <span className="block text-[10px] text-gray-400 font-medium">Storage Quota</span>
+                      <span className="text-xs font-bold text-blue-400">{plan.space}</span>
                     </div>
                     <div>
                       <span className="block text-[10px] text-gray-400 font-medium">Memory RAM</span>
