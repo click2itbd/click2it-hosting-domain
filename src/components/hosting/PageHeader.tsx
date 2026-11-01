@@ -8,7 +8,7 @@ interface PageHeaderProps {
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle }) => {
   return (
     <div 
-      className="pt-20 pb-16 px-4 text-center border-b border-blue-900/50 relative overflow-hidden"
+      className="pt-28 md:pt-36 pb-16 px-4 text-center border-b border-blue-900/50 relative overflow-hidden"
       style={{
         background: 'linear-gradient(160deg, #020b2e 0%, #050f3a 55%, #0b1a5c 100%)',
       }}
@@ -21,9 +21,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle }) => {
         filter: 'blur(40px)',
       }} />
       <div className="max-w-4xl mx-auto relative z-10">
-        <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-5 tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
         {subtitle && (
-          <p className="text-xl text-blue-100 max-w-2xl mx-auto opacity-90 leading-relaxed">
+          <p className="text-base sm:text-lg md:text-xl text-blue-100 max-w-2xl mx-auto opacity-90 leading-relaxed">
             {subtitle}
           </p>
         )}
