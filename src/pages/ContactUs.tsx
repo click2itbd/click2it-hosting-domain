@@ -15,13 +15,12 @@ export const ContactUs = () => {
 export default function ContactUsDefault() {
   const { settings } = useSettings();
   const siteContext = useSiteContext();
-  const isHosting = siteContext === 'hosting';
   
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    subject: 'General Inquiry',
+    subject: 'General Hosting & Domain Inquiry',
     message: '',
   });
   const [loading, setLoading] = useState(false);
@@ -49,7 +48,7 @@ export default function ContactUsDefault() {
         name: '',
         email: '',
         phone: '',
-        subject: 'General Inquiry',
+        subject: 'General Hosting & Domain Inquiry',
         message: '',
       });
     } catch (error) {
@@ -63,21 +62,21 @@ export default function ContactUsDefault() {
   return (
     <Layout fullWidth>
       <SEO 
-        title={`Contact Us & Customer Support - ${settings.brandName}`} 
-        description={`Get in touch with ${settings.brandName}. Contact our hardware sales, web hosting support, billing department, or visit our retail store.`} 
+        title={`Contact Us & 24/7 Hosting Support - ${settings.brandName}`} 
+        description={`Get in touch with ${settings.brandName}. Contact our domain registration desk, 24/7 web hosting technical support, Cloud VPS engineers, or billing department.`} 
       />
 
       {/* Hero */}
       <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-black text-white py-14 md:py-20">
         <div className="container mx-auto px-2 sm:px-4 sm:px-6 lg:px-8 text-center max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-blue-300 text-xs font-semibold uppercase tracking-wider mb-4">
-            <Sparkles size={14} /> 24/7 Dedicated Support
+            <Sparkles size={14} /> 24/7 Dedicated NOC &amp; Billing Support
           </div>
           <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">
             We'd Love to Hear From You
           </h1>
           <p className="text-gray-300 text-sm md:text-base leading-relaxed">
-            'Have questions about custom PC builds, tech gadgets, or premium web hosting? Our dedicated specialists are here to assist you 24/7.'
+            Have questions about domain registration, NVMe cPanel web hosting, WordPress cloud migration, or KVM VPS servers? Our dedicated hosting specialists are here to assist you 24/7.
           </p>
         </div>
       </div>
@@ -99,11 +98,11 @@ export default function ContactUsDefault() {
                     <Phone className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">Customer Hotline</p>
+                    <p className="text-xs text-gray-500 font-medium">Support Hotline</p>
                     <a href={`tel:${settings.contactPhone || '+8809640887777'}`} className="text-sm font-bold text-gray-900 hover:text-blue-600">
                       {settings.contactPhone || '+8809640887777'}
                     </a>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Sat - Thu: 9:00 AM - 9:00 PM</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">24/7 Technical &amp; Billing Desk</p>
                   </div>
                 </div>
 
@@ -113,11 +112,11 @@ export default function ContactUsDefault() {
                     <Mail className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">'Support Email'</p>
-                    <a href={`mailto:${settings.contactEmail}`} className="text-sm font-bold text-gray-900 hover:text-blue-600 break-all">
-                      {settings.contactEmail}
+                    <p className="text-xs text-gray-500 font-medium">Support Email</p>
+                    <a href={`mailto:${settings.contactEmail || 'support@click2it.bd'}`} className="text-sm font-bold text-gray-900 hover:text-blue-600 break-all">
+                      {settings.contactEmail || 'support@click2it.bd'}
                     </a>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Response within 2 - 4 hours</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Average response within 15 - 60 mins</p>
                   </div>
                 </div>
 
@@ -127,9 +126,9 @@ export default function ContactUsDefault() {
                     <MapPin className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">Store & Head Office</p>
+                    <p className="text-xs text-gray-500 font-medium">Head Office</p>
                     <p className="text-sm font-bold text-gray-900 leading-snug">
-                      {settings.address}
+                      {settings.address || 'Dhaka, Bangladesh'}
                     </p>
                   </div>
                 </div>
@@ -140,11 +139,11 @@ export default function ContactUsDefault() {
                     <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">Business Hours</p>
+                    <p className="text-xs text-gray-500 font-medium">Support Availability</p>
                     <p className="text-sm font-bold text-gray-900">
-                      10:00 AM – 8:30 PM
+                      24/7 Online Ticket &amp; Chat
                     </p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Friday: 2:30 PM - 8:30 PM</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Office Hours: Sat - Thu (10:00 AM – 8:30 PM)</p>
                   </div>
                 </div>
               </div>
@@ -156,7 +155,7 @@ export default function ContactUsDefault() {
                   <h4 className="font-bold text-base">Instant WhatsApp Support</h4>
                 </div>
                 <p className="text-xs text-emerald-100 leading-relaxed mb-4">
-                  Chat with our technical support team directly on WhatsApp for real-time queries and 'order assistance, or tech support.'
+                  Chat directly with our hosting &amp; domain support engineers on WhatsApp for real-time server, DNS, or billing assistance.
                 </p>
                 <a 
                   href={`https://wa.me/${(settings.contactPhone || '8801900000000').replace(/[^0-9]/g, '')}`} 
@@ -174,7 +173,7 @@ export default function ContactUsDefault() {
               <div className="bg-white p-8 md:p-10 rounded-3xl border border-gray-100 shadow-sm h-full flex flex-col justify-center">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Send us a Message</h2>
                 <p className="text-sm text-gray-500 mb-8">
-                  Fill out the form below and our team will get back to you as soon as possible.
+                  Fill out the form below and our hosting &amp; domain team will get back to you as soon as possible.
                 </p>
 
                 {submitted ? (
@@ -184,7 +183,7 @@ export default function ContactUsDefault() {
                     </div>
                     <h3 className="text-xl font-bold text-green-900 mb-2">Message Received!</h3>
                     <p className="text-sm text-green-700 max-w-md mx-auto">
-                      Thank you for reaching out. A support ticket has been created, and one of our representatives will contact you shortly.
+                      Thank you for reaching out. Your inquiry has been logged, and one of our hosting specialists will contact you shortly.
                     </p>
                     <button 
                       onClick={() => setSubmitted(false)}
@@ -240,13 +239,12 @@ export default function ContactUsDefault() {
                           onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                           className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm outline-none appearance-none"
                         >
-                          <>
-                              <option>General Inquiry</option>
-                              <option>Order Status & Sales</option>
-                              <option>PC Build Quotation</option>
-                              <option>Hosting & Technical Support</option>
-                              <option>Warranty Claim / RMA</option>
-                            </>
+                          <option>General Hosting &amp; Domain Inquiry</option>
+                          <option>Domain Registration &amp; Transfer (.com / .bd)</option>
+                          <option>NVMe Web Hosting &amp; cPanel Support</option>
+                          <option>Cloud VPS &amp; Dedicated Server Inquiry</option>
+                          <option>Free Website Migration Request</option>
+                          <option>Billing, Invoice &amp; Payment Support</option>
                         </select>
                       </div>
                     </div>
@@ -259,7 +257,7 @@ export default function ContactUsDefault() {
                         onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                         rows={5}
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm outline-none resize-none"
-                        placeholder="How can we help you today?"
+                        placeholder="Tell us about your domain, website, or server requirements..."
                       ></textarea>
                     </div>
 

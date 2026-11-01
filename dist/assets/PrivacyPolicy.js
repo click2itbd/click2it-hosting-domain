@@ -1,76 +1,72 @@
-import{j as e}from"./react-vendor-Cng6SX1J.js";import{D as o}from"./DynamicPolicyPage-CdVhKnBh.js";import"./Layout-C6t7ry58.js";import"./index-BaNB0zSH.js";import"./pdf-vendor-NPDNq7Yg.js";import"./firebase-auth-Dnk_YjNZ.js";import"./firebase-app-BNSQpfg_.js";import"./firebase-firestore-B2zgnHWy.js";import"./firebase-storage-D4bmr71_.js";import"./lucide-DSyVGiGY.js";import"./react-router-50nwX4I3.js";import"./framer-motion-jLegE0I7.js";import"./recharts-vendor-DPbu2651.js";import"./SEO-TqSWyCEf.js";import"./purify.es-DiIPND8F.js";const f=()=>e.jsx(o,{pageId:"privacy-policy",defaultTitle:"Privacy Policy",defaultContent:`<section>
-                <p className="text-lg">
-                  Welcome to {brandName}. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website or use our services, encompassing our <strong>Tech Shop</strong>, <strong>Custom PC Builder</strong>, and <strong>Domain & Hosting</strong> platforms.
-                </p>
-              </section>
+import{j as e}from"./react-vendor-Cng6SX1J.js";import{D as t}from"./DynamicPolicyPage-YNDXSNTZ.js";import"./Layout-BmS9oidA.js";import"./index-DihU5Z25.js";import"./pdf-vendor-NPDNq7Yg.js";import"./firebase-auth-Dnk_YjNZ.js";import"./firebase-app-BNSQpfg_.js";import"./firebase-firestore-B2zgnHWy.js";import"./firebase-storage-D4bmr71_.js";import"./lucide-DSyVGiGY.js";import"./react-router-50nwX4I3.js";import"./framer-motion-jLegE0I7.js";import"./recharts-vendor-DPbu2651.js";import"./SEO-Dq3FPHyX.js";import"./purify.es-DiIPND8F.js";const v=()=>e.jsx(t,{pageId:"privacy-policy",defaultTitle:"Privacy Policy",defaultContent:`<section>
+  <p class="text-lg">
+    Welcome to <strong>{brandName}</strong>. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website or use our <strong>Domain Registration</strong>, <strong>NVMe Web Hosting</strong>, <strong>WordPress Cloud</strong>, <strong>Cloud VPS</strong>, and <strong>SSL Certificate</strong> services.
+  </p>
+</section>
 
-              <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Information We Collect</h2>
-                <p>We collect information depending on the specific services you interact with:</p>
-                <ul className="list-disc pl-6 mt-3 space-y-2">
-                  <li><strong>General Account Data:</strong> Name, email address, phone number, and encrypted passwords when you register an account.</li>
-                  <li><strong>E-Commerce & Shop Data:</strong> Delivery addresses, billing information, and purchase history when you buy gadgets or components.</li>
-                  <li><strong>PC Build Preferences:</strong> Saved PC build configurations and hardware compatibility preferences.</li>
-                  <li><strong>Hosting & Domain Data:</strong> Domain registration details (WHOIS data), server logs, and website technical metadata.</li>
-                  <li><strong>Payment Data:</strong> Secure transaction IDs (Note: We do not store full credit card numbers or raw Mobile Banking PINs on our servers).</li>
-                </ul>
-              </section>
+<section>
+  <h2 class="text-2xl font-bold text-gray-900 mb-4">1. Information We Collect</h2>
+  <p>We collect only the information necessary to provision, manage, and secure your web infrastructure and domain services:</p>
+  <ul class="list-disc pl-6 mt-3 space-y-2">
+    <li><strong>Account & Billing Data:</strong> Your full name, company/organization name, email address, phone number, billing address, and encrypted account credentials when you register a client account.</li>
+    <li><strong>Domain Registration (WHOIS & BTCL) Data:</strong> Registrant, administrative, and technical contact details required by ICANN, global TLD registries, and BTCL (for .bd / .বাংলা domains) to establish legal domain ownership.</li>
+    <li><strong>Hosting & Server Telemetry:</strong> IP addresses, DNS zone records, cPanel/server access logs, resource utilization metrics (CPU, RAM, NVMe disk usage, bandwidth), and abuse-prevention logs.</li>
+    <li><strong>Payment & Transaction Data:</strong> Payment gateway transaction IDs, invoice records, and timestamps. We do not store raw credit/debit card numbers or mobile banking PINs (bKash, Nagad, Rocket, EPS) on our servers.</li>
+  </ul>
+</section>
 
-              <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">2. How We Use Your Information</h2>
-                <p>We use the collected information for specific service-related purposes:</p>
-                
-                <div className="mt-4 space-y-4 pl-2">
-                  <div>
-                    <h3 className="font-bold text-gray-900">A. Tech Shop & E-Commerce</h3>
-                    <ul className="list-disc pl-6 mt-1 space-y-1">
-                      <li>To process your orders, arrange nationwide delivery, and handle returns.</li>
-                      <li>To provide accurate warranty tracking for purchased components and gadgets.</li>
-                    </ul>
-                  </div>
-                  
-                  <div>
-                    <h3 className="font-bold text-gray-900">B. Custom PC Builder</h3>
-                    <ul className="list-disc pl-6 mt-1 space-y-1">
-                      <li>To review your selected components for compatibility before assembly.</li>
-                      <li>To provide tailored technical support and lifetime service records for your custom rig.</li>
-                    </ul>
-                  </div>
+<section>
+  <h2 class="text-2xl font-bold text-gray-900 mb-4">2. How We Use Your Information</h2>
+  <p>Your information is strictly used to deliver and maintain reliable hosting and domain services:</p>
+  <div class="mt-4 space-y-4 pl-2">
+    <div>
+      <h3 class="font-bold text-gray-900">A. Domain Name Registration & Management</h3>
+      <ul class="list-disc pl-6 mt-1 space-y-1">
+        <li>To register, transfer, and renew gTLD and ccTLD (.bd) domain names on your behalf.</li>
+        <li>To send mandatory ICANN/registry verification emails and timely domain expiration reminders.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="font-bold text-gray-900">B. Web Hosting, Cloud VPS & Server Provisioning</h3>
+      <ul class="list-disc pl-6 mt-1 space-y-1">
+        <li>To automatically provision cPanel accounts, CloudLinux LVE resources, and KVM VPS instances.</li>
+        <li>To monitor server uptime, prevent DDoS attacks, isolate malware via Imunify360, and maintain network stability.</li>
+        <li>To issue and renew SSL certificates and configure DNS/nameserver records.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="font-bold text-gray-900">C. Billing & Technical Support</h3>
+      <ul class="list-disc pl-6 mt-1 space-y-1">
+        <li>To generate automated VAT/tax invoices, renewal notices, and payment receipts.</li>
+        <li>To assist you via 24/7 support tickets, live chat, and WhatsApp technical support.</li>
+      </ul>
+    </div>
+  </div>
+</section>
 
-                  <div>
-                    <h3 className="font-bold text-gray-900">C. Domain & Hosting Services</h3>
-                    <ul className="list-disc pl-6 mt-1 space-y-1">
-                      <li>To register domain names on your behalf (requires sharing details with ICANN).</li>
-                      <li>To allocate server resources, monitor uptime, and maintain infrastructure security.</li>
-                      <li>To send administrative emails regarding server maintenance or SSL renewals.</li>
-                    </ul>
-                  </div>
-                </div>
-              </section>
+<section>
+  <h2 class="text-2xl font-bold text-gray-900 mb-4">3. Data Sharing and Disclosure</h2>
+  <p>
+    We strictly protect your privacy and never sell or rent your personal or business data. Information is shared only with authorized infrastructure partners when required to fulfill your service:
+  </p>
+  <ul class="list-disc pl-6 mt-3 space-y-2">
+    <li><strong>Domain Registries & Registrars:</strong> ICANN-accredited registrars (such as Openprovider) and BTCL require registrant details to activate and assign domain ownership to you.</li>
+    <li><strong>Certificate Authorities & Licensing Partners:</strong> Sectigo, Let's Encrypt, cPanel, and CloudLinux (for IP/domain license validation and SSL issuance).</li>
+    <li><strong>Payment Gateways:</strong> Authorized payment processors (EPS, SSLCommerz, bKash, Nagad, Bank Partners) to verify and complete transactions securely.</li>
+    <li><strong>Legal Compliance:</strong> When legally required by competent authorities in Bangladesh regarding cybercrime, phishing, or court orders.</li>
+  </ul>
+</section>
 
-              <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">3. Data Sharing and Disclosure</h2>
-                <p>
-                  We strictly protect your privacy and do not sell your personal data. We only share information with authorized third parties when necessary:
-                </p>
-                <ul className="list-disc pl-6 mt-3 space-y-2">
-                  <li><strong>Logistics Partners:</strong> Courier services (e.g., Pathao, RedX, Steadfast) require your phone number and address to deliver your Shop/PC orders.</li>
-                  <li><strong>Domain Registries:</strong> ICANN and global registries require contact data to officially assign a domain name to you.</li>
-                  <li><strong>Payment Processors:</strong> bKash, Nagad, and SSLCommerz process your payments securely off-site.</li>
-                  <li><strong>Legal Compliance:</strong> If requested by law enforcement authorities in Bangladesh regarding fraudulent transactions or cybercrimes.</li>
-                </ul>
-              </section>
+<section>
+  <h2 class="text-2xl font-bold text-gray-900 mb-4">4. Server & Data Security</h2>
+  <p>
+    We implement enterprise-grade security measures, including TLS/SSL encryption across all client portals, CloudLinux CageFS account isolation, Imunify360 proactive firewall protection, and automated off-site JetBackup snapshots in Tier-3+ data centers.
+  </p>
+</section>
 
-              <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">4. Data Security</h2>
-                <p>
-                  We implement robust security measures, including SSL encryption across our platform, secure Tier-3 data centers for our hosting nodes, and encrypted databases to protect your personal and financial information.
-                </p>
-              </section>
-
-              <section>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">5. Contact Us</h2>
-                <p>
-                  If you have any questions or concerns about this Privacy Policy, your shopping history, PC warranty data, or hosting information, please contact our support team.
-                </p>
-              </section>`});export{f as default};
+<section>
+  <h2 class="text-2xl font-bold text-gray-900 mb-4">5. Contact Us</h2>
+  <p>
+    If you have any questions about this Privacy Policy, WHOIS privacy protection, or how your hosting data is handled, please contact our 24/7 support and billing team.
+  </p>
+</section>`});export{v as default};

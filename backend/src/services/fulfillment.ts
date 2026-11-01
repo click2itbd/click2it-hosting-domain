@@ -943,9 +943,120 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
     }
   }
 
-  // Handle VPS accounts (manual provisioning / dedicated server setup)
+  // Handle VPS accounts (Automated API Provisioning with Manual Fallback)
   if (hostingData.provider === 'vps' || hostingData.type === 'vps' || hostingData.vpsDetails) {
     const vpsDetails = hostingData.vpsDetails || {};
+    const vpsName = hostingData.name || hostingData.planId || 'Cloud VPS';
+
+    try {
+      const { getVpsProviderWithSettings } = await import('./vpsConfig.js');
+      const { provider: vpsProvider, config: vpsCfg } = await getVpsProviderWithSettings();
+
+      if (vpsCfg.enabled && vpsCfg.mode === 'live') {
+        const planKey = String(hostingData.planId || 'vps_starter').toLowerCase() as keyof typeof vpsCfg.planMapping;
+        const mappedSize = vpsCfg.planMapping?.[planKey] || '';
+
+        const vpsRes = await vpsProvider.provisionServer({
+          planId: hostingData.planId || 'vps_starter',
+          planMapperCode: mappedSize,
+          hostname: vpsDetails.hostname || hostingData.domain || `vps-${hostingAccountId.slice(0, 6)}.click2it.bd`,
+          os: vpsDetails.os || 'Ubuntu 22.04 LTS',
+          region: vpsCfg.defaultRegion,
+          rootPassword: vpsDetails.rootPassword || '',
+          sshKey: vpsDetails.sshKey || '',
+          cores: vpsDetails.cores,
+          ram: vpsDetails.ram,
+          storage: vpsDetails.storage,
+        });
+
+        if (vpsRes.success && vpsRes.ipAddress) {
+          const isWin = String(vpsDetails.os || '').toLowerCase().includes('win');
+          const accessPort = isWin ? '3389 (RDP)' : '22 (SSH)';
+          const loginUser = vpsRes.username || (isWin ? 'Administrator' : 'root');
+
+          await db.collection('hostingAccounts').doc(hostingAccountId).update({
+            status: 'active',
+            provisioningStatus: 'completed',
+            providerAccountId: vpsRes.serverId || null,
+            serverIp: vpsRes.ipAddress,
+            username: loginUser,
+            password: vpsRes.rootPassword || vpsDetails.rootPassword || '',
+            contactEmail,
+            customerEmail: contactEmail,
+            vpsDetails: {
+              ...vpsDetails,
+              ipAddress: vpsRes.ipAddress,
+              ipv6Address: vpsRes.ipv6Address || '',
+              username: loginUser,
+              rootPassword: vpsRes.rootPassword || vpsDetails.rootPassword || '',
+              providerServerId: vpsRes.serverId || '',
+              providerName: vpsRes.provider || vpsCfg.provider,
+            },
+            updatedAt: now,
+          });
+
+          await writeAuditLog(
+            db,
+            hostingAccountId,
+            'vps_auto_provisioned',
+            actorUid,
+            hostingData.status,
+            'active',
+            null,
+            `Cloud VPS automatically provisioned via ${vpsCfg.provider.toUpperCase()} API (IP: ${vpsRes.ipAddress})`
+          );
+
+          if (contactEmail) {
+            const subject = `🎉 Your Cloud VPS is Ready & Active - ${vpsRes.ipAddress} [Click2IT]`;
+            const html = `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <div style="background: linear-gradient(135deg, #070e22 0%, #1d4ed8 100%); padding: 24px; border-radius: 12px; color: #ffffff; text-align: center; margin-bottom: 20px;">
+                  <h2 style="margin: 0; font-size: 22px; font-weight: 800;">🚀 Your KVM Cloud VPS is Live!</h2>
+                  <p style="margin: 6px 0 0; color: #bfdbfe; font-size: 13px;">Instant Automated Deployment Complete</p>
+                </div>
+                <p style="font-size: 15px;">Dear <strong>${customerName || 'Valued Customer'}</strong>,</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+                  Your Cloud VPS instance (<strong>${vpsName}</strong>) has been automatically provisioned and is now online. Below are your dedicated IPv4 and root/administrator credentials:
+                </p>
+                <table style="width: 100%; border-collapse: collapse; margin: 18px 0; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 13px;">
+                  <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; width: 42%; border-bottom: 1px solid #e2e8f0;">Dedicated IPv4 Address</td><td style="padding: 10px 14px; color: #059669; font-family: monospace; font-weight: 800; border-bottom: 1px solid #e2e8f0;">${vpsRes.ipAddress}</td></tr>
+                  <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Access Port</td><td style="padding: 10px 14px; color: #0f172a; font-family: monospace; border-bottom: 1px solid #e2e8f0;">${accessPort}</td></tr>
+                  <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Username</td><td style="padding: 10px 14px; color: #0f172a; font-family: monospace; font-weight: 700; border-bottom: 1px solid #e2e8f0;">${loginUser}</td></tr>
+                  <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Root / Admin Password</td><td style="padding: 10px 14px; color: #1d4ed8; font-family: monospace; font-weight: 800; border-bottom: 1px solid #e2e8f0;">${vpsRes.rootPassword || 'Use your configured password'}</td></tr>
+                  <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0;">Operating System</td><td style="padding: 10px 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0;">${vpsDetails.os || 'Linux x86_64'}</td></tr>
+                  <tr><td style="padding: 10px 14px; font-weight: 700; color: #475569;">Resources</td><td style="padding: 10px 14px; color: #0f172a;">${vpsDetails.cores || 'vCPU'} / ${vpsDetails.ram || 'RAM'} / ${vpsDetails.storage || 'NVMe'}</td></tr>
+                </table>
+                <div style="text-align: center; margin: 22px 0 10px;">
+                  <a href="https://click2it.bd/my-services" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 26px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Manage VPS in Client Area</a>
+                </div>
+              </div>
+            `;
+            await sendEmail({
+              to: contactEmail,
+              subject,
+              html,
+              orderId: hostingData.orderId,
+              customerEmail: contactEmail,
+              category: 'hosting',
+            }).catch((err) => console.warn('[Fulfillment] Auto-VPS activation email error:', err));
+          }
+
+          return {
+            itemId: hostingAccountId,
+            type: 'hosting',
+            action: 'provision',
+            success: true,
+            status: 'active',
+            providerResult: vpsRes,
+          };
+        } else {
+          console.warn('[Fulfillment] Live VPS API provisioning returned fallback to manual:', vpsRes.error);
+        }
+      }
+    } catch (vpsAutoErr: any) {
+      console.warn('[Fulfillment] VPS auto-provisioning exception, falling back to manual setup:', vpsAutoErr?.message);
+    }
+
     await db.collection('hostingAccounts').doc(hostingAccountId).update({
       status: 'pending_setup',
       provisioningStatus: 'manual_pending',
@@ -966,7 +1077,6 @@ async function fulfillHostingAccount(hostingAccountId: string, hostingData: any,
     );
 
     if (contactEmail) {
-      const vpsName = hostingData.name || hostingData.planId || 'Cloud VPS';
       const subject = `🚀 Cloud VPS Order Confirmed - ${vpsDetails.hostname || vpsName}`;
       const html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">

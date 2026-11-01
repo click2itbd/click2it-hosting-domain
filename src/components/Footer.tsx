@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Youtube, MapPin, Phone, Mail, Send } from 'lucide-react';
+import { Facebook, Instagram, Youtube, MapPin, Phone, Mail, Send, CheckCircle2, Loader2 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
@@ -11,42 +11,55 @@ export const Footer: React.FC = () => {
   const { settings } = useSettings();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
 
     setLoading(true);
+    let saved = false;
+
     try {
       await addDoc(collection(db, 'subscribers'), {
-        email,
+        email: cleanEmail,
         createdAt: new Date().toISOString(),
       });
+      saved = true;
+    } catch (firestoreErr) {
+      console.warn('Client Firestore subscriber write fallback:', firestoreErr);
+    }
 
-      await apiPost('/api/send-email', {
-        to: email,
-        subject: `Welcome to ${settings.brandName} Newsletter!`,
-        html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-              <h1 style="color: ${settings.primaryColor};">${settings.brandName}</h1>
-              <p>Hello!</p>
-              <p>Thank you for subscribing to our newsletter. We're excited to have you with us!</p>
-              <p>You'll be the first to know about our latest products, special offers, and tech news.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-              <p style="font-size: 12px; color: #666;">${settings.footerText}</p>
-            </div>
-          `,
+    try {
+      await apiPost('/api/newsletter-subscribe', {
+        email: cleanEmail,
+        brandName: settings.brandName || 'CLICK2IT BD',
+        footerText: settings.footerText || `© ${new Date().getFullYear()} CLICK2IT BD. All rights reserved.`,
       });
+      saved = true;
+    } catch (apiErr) {
+      console.warn('Newsletter API dispatch note:', apiErr);
+    }
 
-      toast.success('Subscribed successfully!');
+    setLoading(false);
+
+    if (saved) {
+      setSubscribed(true);
+      toast.success('Subscribed to newsletter successfully!');
       setEmail('');
-    } catch (error) {
-      console.error('Subscription error:', error);
+      setTimeout(() => setSubscribed(false), 6000);
+    } else {
       toast.error('Failed to subscribe. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
+
+  const facebookHref = settings.facebookUrl || 'https://web.facebook.com/CLICK2ITBD';
+  const instagramHref = settings.instagramUrl || 'https://www.instagram.com/click2itbd';
+  const youtubeHref = settings.youtubeUrl || 'https://www.youtube.com/@click2itbd';
 
   return (
     <footer className="text-white pt-12 pb-6 bg-black">
@@ -79,7 +92,7 @@ export const Footer: React.FC = () => {
                   <MapPin size={18} />
                 </div>
                 <div>
-                  <p className="text-xs">Store Locator</p>
+                  <p className="text-xs">Head Office</p>
                   <p className="font-bold">{settings.address || 'Dhaka, Bangladesh'}</p>
                 </div>
               </div>
@@ -90,84 +103,94 @@ export const Footer: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold mb-4 uppercase tracking-wider">About Us</h3>
             <ul className="flex flex-col gap-2 text-gray-400 text-sm">
-              <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
+              <li><Link to="/emi-terms" className="hover:text-white transition-colors">EMI Terms</Link></li>
               <li><Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/star-points" className="hover:text-white transition-colors">Star Point Policy</Link></li>
+              <li><Link to="/brands" className="hover:text-white transition-colors">Brands</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
               <li><Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
-              <li><Link to="/refund-policy" className="hover:text-white transition-colors">Refund Policy</Link></li>
             </ul>
           </div>
 
           {/* Customer Service & Quick Links */}
           <div>
-            <h3 className="text-lg font-bold mb-4 uppercase tracking-wider">Services</h3>
+            <h3 className="text-lg font-bold mb-4 uppercase tracking-wider">Customer Service</h3>
             <ul className="flex flex-col gap-2 text-gray-400 text-sm">
-              <li><Link to="/services" className="hover:text-white transition-colors">Hosting Services</Link></li>
-              <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing Plans</Link></li>
-              <li><Link to="/domain" className="hover:text-white transition-colors">Domain Search & Registration</Link></li>
-              <li><Link to="/vps" className="hover:text-white transition-colors">Cloud VPS</Link></li>
-              <li><Link to="/status" className="hover:text-white transition-colors">Server Status & Uptime</Link></li>
-              <li><Link to="/support" className="hover:text-white transition-colors">Help & Support</Link></li>
+              <li><Link to="/contact" className="hover:text-white transition-colors">Contact Us</Link></li>
+              <li><Link to="/online-delivery" className="hover:text-white transition-colors">Online Delivery</Link></li>
+              <li><Link to="/refund-policy" className="hover:text-white transition-colors">Refund and Return Policy</Link></li>
+              <li><Link to="/warranty-policy" className="hover:text-white transition-colors">Warranty Policy</Link></li>
+              <li><Link to="/status" className="hover:text-white transition-colors">Server Status &amp; Uptime</Link></li>
+              <li><Link to="/support" className="hover:text-white transition-colors">Help &amp; Support</Link></li>
             </ul>
           </div>
 
           {/* Social & Newsletter */}
           <div>
             <h3 className="text-lg font-bold mb-4 uppercase tracking-wider">Stay Connected</h3>
-            <p className="text-sm text-gray-400 mb-4">{settings.brandName}</p>
+            <Link to="/" className="inline-block text-sm text-gray-400 hover:text-white transition-colors mb-4">
+              {settings.brandName || 'CLICK2IT BD'}
+            </Link>
             
             <form onSubmit={handleSubscribe} className="mb-6">
               <p className="text-xs font-bold text-gray-300 uppercase mb-2">Newsletter Signup</p>
-              <div className="flex flex-col sm:flex-row">
+              <div className="flex flex-row">
                 <input
                   type="email"
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="bg-gray-800 border-none text-white text-sm px-4 py-2 rounded-t-md sm:rounded-l-md sm:rounded-tr-none focus:ring-1 focus:ring-white outline-none w-full"
+                  aria-label="Newsletter email address"
+                  className="bg-[#182232] border border-transparent focus:border-slate-600 text-white placeholder-gray-400 text-sm px-4 py-2.5 rounded-l-md outline-none w-full transition-colors"
                 />
                 <button
                   type="submit"
                   disabled={loading}
-                  className="bg-white text-black px-4 py-2 rounded-b-md sm:rounded-r-md sm:rounded-bl-none hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  aria-label="Subscribe to newsletter"
+                  className="bg-white text-black px-4 py-2.5 rounded-r-md hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer"
                 >
-                  <Send size={18} />
+                  {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                 </button>
               </div>
+              {subscribed && (
+                <p className="text-xs text-emerald-400 font-medium mt-2 flex items-center gap-1.5">
+                  <CheckCircle2 size={14} /> Subscribed! Thank you for joining us.
+                </p>
+              )}
             </form>
 
-            <div className="flex gap-4">
+            <div className="flex gap-3">
               <a 
-                href={settings.facebookUrl || "https://web.facebook.com/CLICK2ITBD"} 
+                href={facebookHref} 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all bg-slate-800 text-white" 
+                aria-label="Facebook"
+                className="h-10 w-10 rounded-full flex items-center justify-center hover:bg-blue-600 hover:scale-105 transition-all bg-[#182232] text-white" 
                 title="Facebook"
               >
                 <Facebook size={20} />
               </a>
-              {settings.instagramUrl ? (
-                <a 
-                  href={settings.instagramUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all bg-slate-800 text-white" 
-                  title="Instagram"
-                >
-                  <Instagram size={20} />
-                </a>
-              ) : null}
-              {settings.youtubeUrl ? (
-                <a 
-                  href={settings.youtubeUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="h-10 w-10 rounded-full flex items-center justify-center hover:opacity-80 transition-all bg-slate-800 text-white" 
-                  title="YouTube"
-                >
-                  <Youtube size={20} />
-                </a>
-              ) : null}
+              <a 
+                href={instagramHref} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                aria-label="Instagram"
+                className="h-10 w-10 rounded-full flex items-center justify-center hover:bg-pink-600 hover:scale-105 transition-all bg-[#182232] text-white" 
+                title="Instagram"
+              >
+                <Instagram size={20} />
+              </a>
+              <a 
+                href={youtubeHref} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                aria-label="YouTube"
+                className="h-10 w-10 rounded-full flex items-center justify-center hover:bg-red-600 hover:scale-105 transition-all bg-[#182232] text-white" 
+                title="YouTube"
+              >
+                <Youtube size={20} />
+              </a>
             </div>
           </div>
         </div>
@@ -180,5 +203,3 @@ export const Footer: React.FC = () => {
     </footer>
   );
 };
-
-

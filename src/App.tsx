@@ -60,6 +60,11 @@ const TermsOfService = lazyWithRetry(() => import('./pages/policies/TermsOfServi
 const PrivacyPolicy = lazyWithRetry(() => import('./pages/policies/PrivacyPolicy'));
 const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
 const RefundPolicy = lazyWithRetry(() => import('./pages/policies/RefundPolicy'));
+const EMITerms = lazyWithRetry(() => import('./pages/policies/EMITerms'));
+const StarPointPolicy = lazyWithRetry(() => import('./pages/policies/StarPointPolicy'));
+const OnlineDelivery = lazyWithRetry(() => import('./pages/policies/OnlineDelivery'));
+const WarrantyPolicy = lazyWithRetry(() => import('./pages/policies/WarrantyPolicy'));
+const Brands = lazyWithRetry(() => import('./pages/Brands'));
 const AboutUs = lazyWithRetry(() => import('./pages/AboutUs'));
 const ContactUs = lazyWithRetry(() => import('./pages/ContactUs'));
 const DomainTransferPage = lazyWithRetry(() => import('./pages/hosting/DomainTransferPage'));
@@ -158,6 +163,15 @@ export default function App() {
                   <Route path="/terms" element={<LazyWrapper><TermsOfService /></LazyWrapper>} />
                   <Route path="/privacy" element={<LazyWrapper><PrivacyPolicy /></LazyWrapper>} />
                   <Route path="/refund-policy" element={<LazyWrapper><RefundPolicy /></LazyWrapper>} />
+                  <Route path="/emi-terms" element={<LazyWrapper><EMITerms /></LazyWrapper>} />
+                  <Route path="/emi" element={<Navigate to="/emi-terms" replace />} />
+                  <Route path="/star-points" element={<LazyWrapper><StarPointPolicy /></LazyWrapper>} />
+                  <Route path="/reward-policy" element={<Navigate to="/star-points" replace />} />
+                  <Route path="/online-delivery" element={<LazyWrapper><OnlineDelivery /></LazyWrapper>} />
+                  <Route path="/delivery-info" element={<Navigate to="/online-delivery" replace />} />
+                  <Route path="/warranty-policy" element={<LazyWrapper><WarrantyPolicy /></LazyWrapper>} />
+                  <Route path="/warranty" element={<Navigate to="/warranty-policy" replace />} />
+                  <Route path="/brands" element={<LazyWrapper><Brands /></LazyWrapper>} />
 
                   {/* --- 404 NOT FOUND --- */}
                   <Route path="*" element={<LazyWrapper><NotFound /></LazyWrapper>} />

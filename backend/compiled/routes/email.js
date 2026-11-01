@@ -792,4 +792,61 @@ emailRouter.post('/reset-password', async (req, res) => {
         });
     }
 });
+// --- Public Newsletter Subscription Endpoint ---
+emailRouter.post('/newsletter-subscribe', async (req, res) => {
+    try {
+        const rawEmail = req.body?.email;
+        const brandName = req.body?.brandName || 'CLICK2IT BD';
+        const footerText = req.body?.footerText || `© ${new Date().getFullYear()} CLICK2IT BD. All rights reserved.`;
+        if (!rawEmail || typeof rawEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail.trim())) {
+            return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+        }
+        const cleanEmail = rawEmail.trim().toLowerCase();
+        const db = getAdminDb();
+        if (db) {
+            const subId = cleanEmail.replace(/[^a-z0-9@._-]/gi, '_');
+            await db.collection('subscribers').doc(subId).set({
+                email: cleanEmail,
+                source: 'footer_newsletter',
+                status: 'active',
+                updatedAt: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+            }, { merge: true });
+        }
+        // Dispatch welcome email (non-blocking so subscription always succeeds)
+        sendEmail({
+            to: cleanEmail,
+            customerEmail: cleanEmail,
+            subject: `Welcome to ${brandName} Newsletter!`,
+            html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+          <h1 style="color: #2563eb; margin: 0 0 12px 0; font-size: 22px;">${brandName}</h1>
+          <p style="font-size: 15px; color: #1e293b;">Hello!</p>
+          <p style="font-size: 14px; color: #475569; line-height: 1.6;">
+            Thank you for subscribing to the <strong>${brandName}</strong> newsletter. You'll now be the first to receive exclusive domain registration promos, NVMe cPanel &amp; WordPress cloud hosting discounts, and server infrastructure updates.
+          </p>
+          <div style="margin: 24px 0;">
+            <a href="https://click2it.bd/hosting" style="display: inline-block; padding: 10px 22px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 13px;">Explore Hosting &amp; Domains</a>
+          </div>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #94a3b8; margin: 0;">${footerText}</p>
+        </div>
+      `,
+            category: 'system',
+        }).catch((err) => {
+            console.warn('[Newsletter Welcome Email Warning]:', err?.message || err);
+        });
+        return res.status(200).json({
+            success: true,
+            message: 'Subscribed to newsletter successfully!',
+        });
+    }
+    catch (error) {
+        console.error('[Newsletter Subscribe Error]:', error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || 'Failed to subscribe. Please try again.',
+        });
+    }
+});
 export default emailRouter;

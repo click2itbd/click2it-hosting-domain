@@ -371,6 +371,44 @@ hostingRouter.post('/admin/cloudlinux-test', requireFirebaseAuth, async (req: an
   }
 });
 
+hostingRouter.get('/admin/vps-config', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const adminCheck = await isUserAdmin(req.user.uid, req.user.email);
+    if (!adminCheck) return res.status(403).json({ success: false, error: 'Admin access required' });
+    const { getVpsConfig, maskVpsConfig } = await import('../services/vpsConfig.js');
+    const cfg = await getVpsConfig();
+    return res.json({ success: true, config: maskVpsConfig(cfg) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error?.message || 'Failed to fetch VPS API config' });
+  }
+});
+
+hostingRouter.post('/admin/vps-config', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const adminCheck = await isUserAdmin(req.user.uid, req.user.email);
+    if (!adminCheck) return res.status(403).json({ success: false, error: 'Admin access required' });
+    const { saveVpsConfig, getVpsConfig, maskVpsConfig } = await import('../services/vpsConfig.js');
+    await saveVpsConfig(req.body || {});
+    const cfg = await getVpsConfig();
+    return res.json({ success: true, message: 'Cloud VPS API configuration saved successfully', config: maskVpsConfig(cfg) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error?.message || 'Failed to save VPS API config' });
+  }
+});
+
+hostingRouter.post('/admin/vps-test', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const adminCheck = await isUserAdmin(req.user.uid, req.user.email);
+    if (!adminCheck) return res.status(403).json({ success: false, error: 'Admin access required' });
+    const { getVpsProviderWithSettings } = await import('../services/vpsConfig.js');
+    const { provider } = await getVpsProviderWithSettings(req.body || {});
+    const result = await provider.testConnection();
+    return res.json(result);
+  } catch (error: any) {
+    return res.json({ success: false, code: 'VPS_ERROR', message: error?.message || 'VPS connection test failed' });
+  }
+});
+
 hostingRouter.post('/cloudlinux/license', requireFirebaseAuth, async (req: any, res: Response) => {
   try {
     const { getCloudLinuxConfig, getCloudLinuxProviderWithSettings } = await import('../services/cloudlinuxConfig.js');
