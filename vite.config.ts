@@ -18,6 +18,12 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       allowedHosts: true,
       hmr: process.env.DISABLE_HMR !== "true",
+      proxy: {
+        "/api": {
+          target: "http://127.0.0.1:4001",
+          changeOrigin: true,
+        },
+      },
     },
     esbuild: mode === "production" ? {
       drop: ["console", "debugger"],

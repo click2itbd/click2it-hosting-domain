@@ -194,6 +194,7 @@ export function createApp() {
     apiRouter.post("/auth/otp", authLimiter);
     apiRouter.use("/ai/chat", sensitiveLimiter);
     apiRouter.use(generalLimiter);
+    apiRouter.post("/newsletter-subscribe", (req, res, next) => publicRouter.handle(req, res, next));
     apiRouter.use("/public", publicRouter);
     apiRouter.use("/domains", domainRouter);
     apiRouter.use("/domain", domainRouter);

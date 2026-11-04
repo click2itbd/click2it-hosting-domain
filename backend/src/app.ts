@@ -217,6 +217,7 @@ export function createApp(): Express {
 
   apiRouter.use(generalLimiter);
 
+  apiRouter.post("/newsletter-subscribe", (req, res, next) => (publicRouter as any).handle(req, res, next));
   apiRouter.use("/public", publicRouter);
   apiRouter.use("/domains", domainRouter);
   apiRouter.use("/domain", domainRouter);

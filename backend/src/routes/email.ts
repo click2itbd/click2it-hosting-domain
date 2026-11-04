@@ -924,17 +924,21 @@ emailRouter.post('/newsletter-subscribe', async (req: any, res: Response) => {
     const db = getAdminDb();
 
     if (db) {
-      const subId = cleanEmail.replace(/[^a-z0-9@._-]/gi, '_');
-      await db.collection('subscribers').doc(subId).set(
-        {
-          email: cleanEmail,
-          source: 'footer_newsletter',
-          status: 'active',
-          updatedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      try {
+        const subId = cleanEmail.replace(/[^a-z0-9@._-]/gi, '_');
+        await db.collection('subscribers').doc(subId).set(
+          {
+            email: cleanEmail,
+            source: 'footer_newsletter',
+            status: 'active',
+            updatedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch (dbErr: any) {
+        console.warn('[Email Newsletter] Firestore write notice (handled gracefully):', dbErr?.message || dbErr);
+      }
     }
 
     // Dispatch welcome email (non-blocking so subscription always succeeds)

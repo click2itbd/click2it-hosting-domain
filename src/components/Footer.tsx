@@ -23,7 +23,37 @@ export const Footer: React.FC = () => {
 
     setLoading(true);
     let saved = false;
+    let message = 'Subscribed to newsletter successfully!';
 
+    // 1. Try public backend endpoint first (reliable deduplication + welcome email)
+    try {
+      const res: any = await apiPost('/api/public/newsletter-subscribe', {
+        email: cleanEmail,
+        brandName: settings.brandName || 'CLICK2IT BD',
+        footerText: settings.footerText || `© ${new Date().getFullYear()} CLICK2IT BD. All rights reserved.`,
+      });
+      if (res?.success) {
+        saved = true;
+        if (res.message) message = res.message;
+      }
+    } catch (apiErr) {
+      console.warn('Primary public newsletter endpoint notice, trying alias:', apiErr);
+      try {
+        const res2: any = await apiPost('/api/newsletter-subscribe', {
+          email: cleanEmail,
+          brandName: settings.brandName || 'CLICK2IT BD',
+          footerText: settings.footerText || `© ${new Date().getFullYear()} CLICK2IT BD. All rights reserved.`,
+        });
+        if (res2?.success) {
+          saved = true;
+          if (res2.message) message = res2.message;
+        }
+      } catch (aliasErr) {
+        console.warn('Alias newsletter endpoint notice:', aliasErr);
+      }
+    }
+
+    // 2. Client Firestore write fallback (guarantees subscription even if backend proxy is temporarily unreachable)
     try {
       await addDoc(collection(db, 'subscribers'), {
         email: cleanEmail,
@@ -31,25 +61,14 @@ export const Footer: React.FC = () => {
       });
       saved = true;
     } catch (firestoreErr) {
-      console.warn('Client Firestore subscriber write fallback:', firestoreErr);
-    }
-
-    try {
-      await apiPost('/api/newsletter-subscribe', {
-        email: cleanEmail,
-        brandName: settings.brandName || 'CLICK2IT BD',
-        footerText: settings.footerText || `© ${new Date().getFullYear()} CLICK2IT BD. All rights reserved.`,
-      });
-      saved = true;
-    } catch (apiErr) {
-      console.warn('Newsletter API dispatch note:', apiErr);
+      console.warn('Client Firestore subscriber write notice:', firestoreErr);
     }
 
     setLoading(false);
 
     if (saved) {
       setSubscribed(true);
-      toast.success('Subscribed to newsletter successfully!');
+      toast.success(message);
       setEmail('');
       setTimeout(() => setSubscribed(false), 6000);
     } else {
@@ -57,7 +76,7 @@ export const Footer: React.FC = () => {
     }
   };
 
-  const facebookHref = settings.facebookUrl || 'https://web.facebook.com/CLICK2ITBD';
+    const facebookHref = settings.facebookUrl || 'https://web.facebook.com/CLICK2ITBD';
   const instagramHref = settings.instagramUrl || 'https://www.instagram.com/click2itbd';
   const youtubeHref = settings.youtubeUrl || 'https://www.youtube.com/@click2itbd';
 
