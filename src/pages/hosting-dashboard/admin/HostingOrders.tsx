@@ -3,7 +3,7 @@ import { db, auth } from '../../../firebase';
 import { collection, query, orderBy, getDocs, doc, updateDoc, where, limit, deleteDoc, addDoc } from 'firebase/firestore';
 import { formatCurrency, cn } from '../../../lib/utils';
 import { toast } from 'react-hot-toast';
-import { Server, Search, Eye, EyeOff, X, Globe, Download, Loader2, FileText, CheckCircle, Wallet, AlertTriangle, Clock, Terminal, Copy, Key, Edit3, Check, RefreshCw, Trash2, Send } from 'lucide-react';
+import { Server, Search, Eye, EyeOff, X, Globe, Download, Loader2, FileText, CheckCircle, Wallet, AlertTriangle, Clock, Terminal, Copy, Key, Edit3, Check, RefreshCw, Trash2, Send, Truck, ChevronDown, RotateCcw } from 'lucide-react';
 import { HostingOrder, DomainOrder, HostingAccount } from '../../../types';
 import { useSettings } from '../../../context/SettingsContext';
 import { sendServiceActivationEmail, getEmailLogsForOrder, EmailLog } from '../../../services/emailService';
@@ -42,6 +42,19 @@ export default function HostingOrders() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [invoiceModalOrder, setInvoiceModalOrder] = useState<HostingOrder | null>(null);
   const [sendingInvoiceEmailId, setSendingInvoiceEmailId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | 'last7' | 'thisMonth'>('all');
+  const [openDocDropdownId, setOpenDocDropdownId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.doc-action-dropdown-container')) {
+        setOpenDocDropdownId(null);
+      }
+    };
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
   const handleSendInvoiceEmail = async (order: HostingOrder) => {
     if (!order.id || !order.customerEmail) {
@@ -997,12 +1010,147 @@ export default function HostingOrders() {
     toast.success('Invoice generated successfully!');
   };
 
+  const generateChallan = async (order: HostingOrder) => {
+    const { jsPDF } = await import('jspdf');
+    const autoTable = (await import('jspdf-autotable')).default;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    let currentY = 15;
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(settings?.brandName || 'CLICK2IT', 14, currentY);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100);
+    currentY += 6;
+    doc.text(settings?.contactEmail || '', 14, currentY);
+    currentY += 5;
+    doc.text(settings?.contactPhone || '', 14, currentY);
+
+    doc.setFontSize(20);
+    doc.setTextColor(5, 150, 105);
+    doc.text('DELIVERY CHALLAN', pageWidth - 14, 20, { align: 'right' });
+
+    currentY += 15;
+    doc.setLineWidth(0.5);
+    doc.line(14, currentY, pageWidth - 14, currentY);
+    currentY += 10;
+
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Deliver / Ship To:', 14, currentY);
+    doc.setFont('helvetica', 'normal');
+    currentY += 5;
+
+    const startY = currentY;
+    const nameLines = doc.splitTextToSize(order.customerName || 'N/A', 120);
+    doc.text(nameLines, 14, currentY);
+    currentY += nameLines.length * 5;
+
+    const emailLines = doc.splitTextToSize(order.customerEmail || 'N/A', 120);
+    doc.text(emailLines, 14, currentY);
+    currentY += emailLines.length * 5;
+
+    if (order.customerPhone) {
+      const phoneLines = doc.splitTextToSize(order.customerPhone, 120);
+      doc.text(phoneLines, 14, currentY);
+      currentY += phoneLines.length * 5;
+    }
+
+    let detailsY = startY;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Challan Details:', pageWidth - 65, detailsY);
+    doc.setFont('helvetica', 'normal');
+    detailsY += 5;
+    doc.text(`Challan No: CHL-${order.documentNumber || order.id.slice(0, 8)}`, pageWidth - 65, detailsY);
+    detailsY += 5;
+    doc.text(`Ref Order: ${order.documentNumber || order.id.slice(0, 8)}`, pageWidth - 65, detailsY);
+    detailsY += 5;
+    doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString()}`, pageWidth - 65, detailsY);
+
+    currentY = Math.max(currentY + 10, detailsY + 15);
+
+    const tableBody = (order.items || []).map((item, idx) => [
+      String(idx + 1),
+      item.name,
+      item.itemType === 'domain' ? `${item.termYears || 1} Year(s)` : (item.billingCycle || 'Monthly'),
+      '1 Service Unit',
+      order.status === 'completed' ? 'Delivered / Active' : 'In Fulfillment'
+    ]);
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['SL', 'Item Description', 'Billing Term', 'Quantity', 'Delivery Status']],
+      body: tableBody,
+      theme: 'grid',
+      headStyles: { fillColor: [5, 150, 105] },
+      styles: { fontSize: 10 }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 30;
+
+    // Signatures
+    doc.setFontSize(10);
+    doc.text('_____________________', 20, finalY);
+    doc.text('Customer Received Signature', 20, finalY + 6);
+
+    doc.text('_____________________', pageWidth - 70, finalY);
+    doc.text('Authorized By (Click2IT)', pageWidth - 70, finalY + 6);
+
+    doc.save(`Challan_${order.documentNumber || order.id.slice(0, 8)}.pdf`);
+    toast.success('Challan generated successfully!');
+  };
+
   
-  const processedOrders = orders.filter(o => 
-    o.documentNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.customerEmail?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const isSameDay = (d1: Date, d2: Date) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  const processedOrders = orders.filter(o => {
+    const matchesSearch =
+      !searchTerm ||
+      o.documentNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      o.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      o.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      o.customerEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (o.customerPhone && o.customerPhone.includes(searchTerm));
+
+    if (!matchesSearch) return false;
+
+    if (dateFilter === 'all') return true;
+
+    const orderDate = new Date(o.createdAt);
+    const now = new Date();
+
+    if (dateFilter === 'today') {
+      return isSameDay(orderDate, now);
+    }
+
+    if (dateFilter === 'yesterday') {
+      const yesterday = new Date();
+      yesterday.setDate(now.getDate() - 1);
+      return isSameDay(orderDate, yesterday);
+    }
+
+    if (dateFilter === 'last7') {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      return orderDate >= sevenDaysAgo && orderDate <= now;
+    }
+
+    if (dateFilter === 'thisMonth') {
+      return (
+        orderDate.getFullYear() === now.getFullYear() &&
+        orderDate.getMonth() === now.getMonth()
+      );
+    }
+
+    return true;
+  });
   
   const totalPages = Math.ceil(processedOrders.length / itemsPerPage);
   const currentOrders = processedOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -1028,17 +1176,78 @@ export default function HostingOrders() {
         </div>
       </div>
 
+      {/* Quick Dates Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+          <span className="text-gray-400">QUICK DATES:</span>
+          <button
+            onClick={() => { setDateFilter('today'); setCurrentPage(1); }}
+            className={cn(
+              "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer",
+              dateFilter === 'today'
+                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            TODAY
+          </button>
+          <button
+            onClick={() => { setDateFilter('yesterday'); setCurrentPage(1); }}
+            className={cn(
+              "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer",
+              dateFilter === 'yesterday'
+                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            YESTERDAY
+          </button>
+          <button
+            onClick={() => { setDateFilter('last7'); setCurrentPage(1); }}
+            className={cn(
+              "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer",
+              dateFilter === 'last7'
+                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            LAST 7 DAYS
+          </button>
+          <button
+            onClick={() => { setDateFilter('thisMonth'); setCurrentPage(1); }}
+            className={cn(
+              "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer",
+              dateFilter === 'thisMonth'
+                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            THIS MONTH
+          </button>
+          <button
+            onClick={() => { setDateFilter('all'); setCurrentPage(1); }}
+            className={cn(
+              "px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer",
+              dateFilter === 'all'
+                ? "bg-rose-50 text-rose-600 border-rose-200"
+                : "bg-white text-rose-500 border-rose-200 hover:bg-rose-50"
+            )}
+          >
+            CLEAR
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">Order ID & Date</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">Customer</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">Order Items</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">Payment</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">Status</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Actions</th>
+              <tr className="bg-[#0b1727] text-white">
+                <th className="px-6 py-4 text-xs font-bold tracking-wider uppercase text-white">ORDER INFO</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-wider uppercase text-white">CUSTOMER</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-wider uppercase text-white">AMOUNT & PAYMENT</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-wider uppercase text-white">STATUS</th>
+                <th className="px-6 py-4 text-xs font-bold tracking-wider uppercase text-white text-right">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1062,61 +1271,70 @@ export default function HostingOrders() {
                 currentOrders.map(order => (
                   <tr key={order.id} className="hover:bg-gray-50/70 transition-colors group">
                     <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-gray-900">{order.documentNumber || order.id.slice(0, 8)}</div>
-                      <div className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3" />
-                        {new Date(order.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                          <FileText className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-gray-900 tracking-tight">
+                            {order.documentNumber || `INV-${order.id.slice(0, 5).toUpperCase()}`}
+                          </div>
+                          <div className="text-xs text-gray-500 font-medium mt-0.5">
+                            {new Date(order.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </div>
+                          <div className="text-[11px] text-gray-400 mt-0.5">
+                            By: {order.customerName ? order.customerName.split(' ')[0] : 'Online Order'}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-bold text-gray-900">{order.customerName}</div>
-                      <div className="text-xs text-gray-500">{order.customerEmail}</div>
-                      {order.customerPhone && <div className="text-xs text-gray-500">{order.customerPhone}</div>}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
+                      <div className="text-xs text-gray-500 font-medium mt-0.5">
+                        {order.customerPhone || order.customerEmail}
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
                         {order.items?.map((item: any, i: number) => (
-                          <div key={i} className="text-xs font-medium bg-gray-100 text-gray-700 px-2 py-1 rounded w-fit max-w-[200px] truncate flex items-center gap-1.5">
-                            {item.targetType === 'domain' ? (
-                              <Globe size={12} className="text-blue-500 shrink-0" />
-                            ) : (
-                              <Server size={12} className="text-emerald-500 shrink-0" />
-                            )}
-                            <span className="truncate">{item.name}</span>
-                          </div>
+                          <span key={i} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-medium truncate max-w-[150px]">
+                            {item.name}
+                          </span>
                         ))}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-gray-900">
-                        {`BDT ${order.total.toLocaleString()}`}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className={cn("text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded",
-                          (order as any).paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-gray-900">
+                          BDT {order.total.toLocaleString()}
+                        </span>
+                        <span className={cn("text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded",
+                          (order as any).paymentStatus === 'paid' || order.paymentStatus === 'verified'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : (order as any).paymentStatus === 'partial'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-rose-100 text-rose-700'
                         )}>
-                          {(order as any).paymentStatus || 'Unpaid'}
+                          {(order as any).paymentStatus === 'paid' || order.paymentStatus === 'verified' ? 'PAID' : (order as any).paymentStatus === 'partial' ? 'PARTIAL' : 'DUE'}
                         </span>
-                        <span className="text-xs font-medium text-gray-500 capitalize">
-                          • {order.paymentMethod || 'Manual'}
-                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 font-medium mt-0.5">
+                        Paid: BDT {((order as any).paymentStatus === 'paid' || order.paymentStatus === 'verified' ? order.total : 0).toLocaleString()}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={cn("px-2.5 py-1.5 rounded-lg text-xs font-bold capitalize flex items-center gap-1.5 w-fit shadow-sm", getStatusColor(order.status))}>
+                      <span className={cn("px-3 py-1.5 rounded-lg text-xs font-bold capitalize inline-flex items-center gap-1.5 shadow-2xs border", getStatusColor(order.status))}>
                         {order.status === 'completed' && <CheckCircle className="w-3.5 h-3.5" />}
                         {order.status === 'processing' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         {order.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
-                        {order.status === 'fulfillment_pending' ? 'Awaiting Registrar' : order.status}
+                        {order.status === 'fulfillment_pending' ? 'Delivered' : order.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1.5">
                         {order.paymentStatus !== 'verified' ? (
                           <button
                             onClick={() => handleAcceptOrder(order)}
                             disabled={statusUpdating}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm shadow-blue-200 transition"
+                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm transition cursor-pointer"
                             title="Accept payment and process order"
                           >
                             Accept
@@ -1127,43 +1345,106 @@ export default function HostingOrders() {
                               <button
                                 onClick={() => handleMarkCompletedOrder(order)}
                                 disabled={statusUpdating}
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm shadow-emerald-200 transition"
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm transition cursor-pointer"
                                 title="Mark completed once live"
                               >
                                 Complete
                               </button>
                             )}
-                            {order.status === 'failed' && (
-                              <button
-                                onClick={() => handleAcceptOrder(order)}
-                                disabled={statusUpdating}
-                                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm shadow-amber-200 transition"
-                                title="Retry provisioning"
-                              >
-                                Retry
-                              </button>
-                            )}
                           </>
                         )}
                         <button
-                          onClick={() => setInvoiceModalOrder(order)}
-                          className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold transition-colors border border-purple-200 flex items-center gap-1 shadow-xs cursor-pointer"
-                          title="View, Print & Email Invoice"
+                          onClick={() => handleViewOrder(order)}
+                          className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg border border-gray-200 transition shadow-2xs cursor-pointer"
+                          title="Edit / Order Details"
                         >
-                          <FileText className="w-3.5 h-3.5" />
-                          Invoice
+                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleViewOrder(order)}
-                          className="px-3 py-1.5 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-700 rounded-lg text-xs font-bold transition-colors border border-gray-200 hover:border-blue-200 flex items-center gap-1.5"
+                          className="p-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg border border-gray-200 transition shadow-2xs cursor-pointer"
+                          title="View Order"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          View
+                        </button>
+                        <button
+                          onClick={() => generateChallan(order)}
+                          className="p-2 bg-white hover:bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-200 transition shadow-2xs cursor-pointer"
+                          title="Generate Delivery Challan"
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Document & Invoice Dropdown Menu */}
+                        <div className="relative doc-action-dropdown-container">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenDocDropdownId(openDocDropdownId === order.id ? null : order.id);
+                            }}
+                            className={cn(
+                              "p-2 rounded-lg border transition shadow-2xs cursor-pointer flex items-center gap-0.5",
+                              openDocDropdownId === order.id
+                                ? "bg-purple-100 text-purple-700 border-purple-300"
+                                : "bg-white hover:bg-purple-50 text-purple-600 border-gray-200 hover:border-purple-200"
+                            )}
+                            title="Invoice & Challan Documents"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <ChevronDown className="w-3 h-3 text-gray-400" />
+                          </button>
+
+                          {openDocDropdownId === order.id && (
+                            <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-50 text-left animate-in fade-in zoom-in-95 duration-150">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDocDropdownId(null);
+                                  setInvoiceModalOrder(order);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-bold text-gray-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-rose-500" />
+                                Invoice
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDocDropdownId(null);
+                                  generateChallan(order);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-bold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <Truck className="w-3.5 h-3.5 text-emerald-600" />
+                                Challan
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDocDropdownId(null);
+                                  handleSendInvoiceEmail(order);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 cursor-pointer transition-colors border-t border-gray-100"
+                              >
+                                <Send className="w-3.5 h-3.5 text-blue-600" />
+                                Email Invoice
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => handleSendInvoiceEmail(order)}
+                          disabled={sendingInvoiceEmailId === order.id}
+                          className="p-2 bg-white hover:bg-rose-50 text-rose-500 rounded-lg border border-gray-200 hover:border-rose-200 transition shadow-2xs cursor-pointer disabled:opacity-50"
+                          title="Resend Invoice Email"
+                        >
+                          <RotateCcw className={cn("w-3.5 h-3.5", sendingInvoiceEmailId === order.id && "animate-spin")} />
                         </button>
                         <button
                           onClick={() => handleDeleteOrder(order)}
                           disabled={statusUpdating}
-                          className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors border border-red-200 flex items-center gap-1"
+                          className="p-2 bg-white hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 hover:border-red-200 transition shadow-2xs cursor-pointer"
                           title="Delete Order"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
