@@ -75,6 +75,7 @@ const PaymentReturn = lazyWithRetry(() => import('./pages/PaymentReturn').then(m
 
 const HostingCart = lazyWithRetry(() => import('./pages/hosting/HostingCart').then(m => ({ default: m.HostingCart })));
 const HostingCheckout = lazyWithRetry(() => import('./pages/hosting/HostingCheckout').then(m => ({ default: m.HostingCheckout })));
+const OrderSuccess = lazyWithRetry(() => import('./pages/OrderSuccess').then(m => ({ default: m.OrderSuccess })));
 const DomainRenewal = lazyWithRetry(() => import('./pages/hosting/DomainRenewal'));
 const StatusPage = lazyWithRetry(() => import('./pages/StatusPage').then(m => ({ default: m.StatusPage })));
 
@@ -144,6 +145,8 @@ export default function App() {
                   <Route path="/checkout" element={<Navigate to="/hosting/checkout" replace />} />
                   <Route path="/hosting/cart" element={<LazyWrapper><HostingCart /></LazyWrapper>} />
                   <Route path="/hosting/checkout" element={<LazyWrapper><HostingCheckout /></LazyWrapper>} />
+                  <Route path="/order-success/:orderId" element={<LazyWrapper><OrderSuccess /></LazyWrapper>} />
+                  <Route path="/order-success" element={<Navigate to="/account/services" replace />} />
 
                   {/* --- PAYMENTS --- */}
                   <Route path="/payment/simulate" element={<LazyWrapper><PaymentSimulation /></LazyWrapper>} />

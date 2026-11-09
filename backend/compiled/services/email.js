@@ -367,6 +367,146 @@ export async function sendTestEmail(options) {
     }
 }
 export const EmailTemplates = {
+    invoice: (params) => {
+        const brand = params.brandName || 'Click2IT BD';
+        const docNo = params.docNumber || `#INV-${params.orderId.slice(0, 8).toUpperCase()}`;
+        const dateStr = params.createdAt
+            ? new Date(params.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const isPaid = ['paid', 'verified', 'completed'].includes(String(params.paymentStatus || '').toLowerCase());
+        const rowsHtml = (params.items || []).map((item) => {
+            const name = item.name || item.domain || 'Hosting / Domain Service';
+            const term = item.itemType === 'domain'
+                ? `${item.termYears || 1} Year(s)`
+                : (item.billingCycle || 'Monthly');
+            const price = Number(item.price || 0).toLocaleString();
+            const qty = item.quantity || 1;
+            const total = Number(item.total || item.price || 0).toLocaleString();
+            return `
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #1e293b;">
+            <strong>${name}</strong>
+            <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Term / Cycle: ${term}</div>
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #475569; text-align: center;">${qty}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #475569; text-align: right;">৳${price}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #0f172a; font-weight: bold; text-align: right;">৳${total}</td>
+        </tr>
+      `;
+        }).join('');
+        return {
+            subject: `Invoice ${docNo} - ${brand}`,
+            html: `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b;">
+          <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); padding: 32px; color: #ffffff;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td>
+                    <h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">${brand}</h1>
+                    <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">Premium Cloud Hosting &amp; Domain Services</p>
+                  </td>
+                  <td style="text-align: right;">
+                    <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; background-color: ${isPaid ? '#10b981' : '#f59e0b'}; color: #ffffff;">
+                      ${isPaid ? '✓ PAID' : 'PENDING PAYMENT'}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Invoice & Customer Info -->
+            <div style="padding: 24px 32px; border-bottom: 1px solid #e2e8f0;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="vertical-align: top; width: 50%;">
+                    <p style="margin: 0; font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.5px;">Invoiced To</p>
+                    <p style="margin: 6px 0 0; font-size: 16px; font-weight: 700; color: #0f172a;">${params.customerName || 'Customer'}</p>
+                    <p style="margin: 2px 0 0; font-size: 13px; color: #475569;">${params.customerEmail}</p>
+                    ${params.customerPhone ? `<p style="margin: 2px 0 0; font-size: 13px; color: #475569;">${params.customerPhone}</p>` : ''}
+                    ${params.customerAddress ? `<p style="margin: 2px 0 0; font-size: 13px; color: #64748b;">${params.customerAddress}</p>` : ''}
+                  </td>
+                  <td style="vertical-align: top; width: 50%; text-align: right;">
+                    <p style="margin: 0; font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.5px;">Invoice Details</p>
+                    <p style="margin: 6px 0 0; font-size: 15px; font-weight: 700; color: #2563eb;">${docNo}</p>
+                    <p style="margin: 2px 0 0; font-size: 13px; color: #475569;">Date: <strong>${dateStr}</strong></p>
+                    <p style="margin: 2px 0 0; font-size: 13px; color: #475569;">Payment: <strong style="text-transform: uppercase;">${params.paymentMethod || 'Manual'}</strong></p>
+                    ${params.transactionId ? `<p style="margin: 2px 0 0; font-size: 12px; color: #64748b; font-family: monospace;">TrxID: ${params.transactionId}</p>` : ''}
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Items Table -->
+            <div style="padding: 24px 32px;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                    <th style="padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase;">Item / Service</th>
+                    <th style="padding: 10px 12px; text-align: center; font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; width: 60px;">Qty</th>
+                    <th style="padding: 10px 12px; text-align: right; font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; width: 100px;">Price</th>
+                    <th style="padding: 10px 12px; text-align: right; font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; width: 110px;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+
+              <!-- Summary Table -->
+              <div style="margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="width: 50%;"></td>
+                    <td style="width: 50%;">
+                      <table style="width: 100%; font-size: 13px; color: #475569;">
+                        <tr>
+                          <td style="padding: 4px 0;">Subtotal:</td>
+                          <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #0f172a;">৳${Number(params.subtotal || 0).toLocaleString()}</td>
+                        </tr>
+                        ${params.discountAmount ? `
+                        <tr>
+                          <td style="padding: 4px 0; color: #16a34a;">Discount:</td>
+                          <td style="padding: 4px 0; text-align: right; font-weight: 600; color: #16a34a;">- ৳${Number(params.discountAmount).toLocaleString()}</td>
+                        </tr>
+                        ` : ''}
+                        <tr style="border-top: 2px solid #0f172a; font-size: 16px;">
+                          <td style="padding: 10px 0 4px; font-weight: 800; color: #0f172a;">Total:</td>
+                          <td style="padding: 10px 0 4px; text-align: right; font-weight: 800; color: #2563eb;">৳${Number(params.grandTotal || 0).toLocaleString()}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+
+            <!-- Call to action button -->
+            <div style="padding: 12px 32px 28px; text-align: center; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
+              <p style="font-size: 13px; color: #64748b; margin: 0 0 16px 0;">
+                You can manage your services, download PDF copies of your invoices, and check DNS anytime in your Client Area.
+              </p>
+              <a href="https://click2it.bd/account/services" style="display: inline-block; padding: 12px 28px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; box-shadow: 0 2px 6px rgba(37,99,235,0.25);">
+                View Invoices &amp; Services
+              </a>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding: 20px 32px; background-color: #0f172a; color: #94a3b8; font-size: 12px; text-align: center;">
+              <p style="margin: 0; color: #ffffff; font-weight: 600;">${brand}</p>
+              <p style="margin: 4px 0 0;">Need help? Call +8809640887777 or email <a href="mailto:info@click2it.bd" style="color: #60a5fa; text-decoration: none;">info@click2it.bd</a></p>
+              <p style="margin: 4px 0 0; font-size: 11px; color: #64748b;">© ${new Date().getFullYear()} ${brand}. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+        };
+    },
     orderReceived: (orderId, customerName, total, paymentMethod) => ({
         subject: `Order Received - #${orderId.slice(0, 8)}`,
         html: `

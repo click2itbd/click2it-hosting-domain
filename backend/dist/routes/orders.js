@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getAdminDb, isUserAdmin } from '../firebase/admin.js';
-import { sendEmail, queueEmail, notifyAdmins } from '../services/email.js';
+import { sendEmail, queueEmail, notifyAdmins, EmailTemplates } from '../services/email.js';
 import { requireFirebaseAuth } from '../middleware/firebaseAuth.js';
 import { fulfillOrder } from '../services/fulfillment.js';
 import { extractClientIp } from '../services/securityAudit.js';
@@ -372,6 +372,38 @@ ordersRouter.post('/create', requireFirebaseAuth, async (req, res) => {
             orderId,
             category: 'order'
         });
+        // Automatically send official invoice email to customer upon ordering
+        if (orderData.customerEmail) {
+            try {
+                const invoiceMail = EmailTemplates.invoice({
+                    docNumber,
+                    orderId,
+                    customerName: orderData.customerName,
+                    customerEmail: orderData.customerEmail,
+                    customerPhone: fullPhone,
+                    customerAddress: `${(formData.address1 || '').trim()}${formData.city ? ', ' + formData.city : ''}`,
+                    items: validatedItems,
+                    subtotal,
+                    discountAmount,
+                    grandTotal,
+                    paymentMethod,
+                    paymentStatus: orderData.paymentStatus,
+                    transactionId: orderData.transactionId,
+                    createdAt: now,
+                });
+                queueEmail({
+                    to: orderData.customerEmail,
+                    subject: invoiceMail.subject,
+                    html: invoiceMail.html,
+                    orderId,
+                    customerEmail: orderData.customerEmail,
+                    category: 'order',
+                });
+            }
+            catch (invoiceErr) {
+                console.warn('[Orders Create] Failed to queue customer invoice email:', invoiceErr);
+            }
+        }
         return res.status(201).json({
             success: true,
             orderId,
@@ -925,3 +957,69 @@ ordersRouter.post('/admin/service-status', requireFirebaseAuth, async (req, res)
     }
 });
 export default ordersRouter;
+/**
+ * POST /api/orders/:orderId/send-invoice-email
+ * Send or re-send official invoice email to customer or specified recipient
+ */
+ordersRouter.post('/:orderId/send-invoice-email', requireFirebaseAuth, async (req, res) => {
+    const callerUid = req.user?.uid;
+    const { orderId } = req.params;
+    const customTargetEmail = req.body?.recipientEmail;
+    if (!orderId) {
+        return res.status(400).json({ success: false, error: 'Order ID is required' });
+    }
+    try {
+        const db = getAdminDb();
+        const orderRef = db.collection('orders').doc(orderId);
+        const orderSnap = await orderRef.get();
+        if (!orderSnap.exists) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+        const orderData = orderSnap.data() || {};
+        const isAdmin = await isUserAdmin(callerUid, req.user?.email, req.user).catch(() => false);
+        const isOwner = orderData.userId === callerUid;
+        if (!isAdmin && !isOwner) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+        const targetEmail = customTargetEmail || orderData.customerEmail || req.user?.email;
+        if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+            return res.status(400).json({ success: false, error: 'Valid customer email address not found on order' });
+        }
+        const docNum = orderData.documentNumber || `#INV-${orderId.slice(0, 8).toUpperCase()}`;
+        const invoiceMail = EmailTemplates.invoice({
+            docNumber: docNum,
+            orderId,
+            customerName: orderData.customerName || 'Valued Customer',
+            customerEmail: targetEmail,
+            customerPhone: orderData.customerPhone || '',
+            customerAddress: typeof orderData.shippingAddress === 'string' ? orderData.shippingAddress : (orderData.shippingAddress?.address || ''),
+            items: Array.isArray(orderData.items) ? orderData.items : [],
+            subtotal: Number(orderData.subtotal || orderData.total || 0),
+            discountAmount: Number(orderData.discountAmount || 0),
+            grandTotal: Number(orderData.total || 0),
+            paymentMethod: orderData.paymentMethod || 'Manual',
+            paymentStatus: orderData.paymentStatus || 'pending',
+            transactionId: orderData.transactionId || '',
+            createdAt: orderData.createdAt,
+        });
+        const sendResult = await sendEmail({
+            to: targetEmail,
+            subject: invoiceMail.subject,
+            html: invoiceMail.html,
+            orderId,
+            customerEmail: targetEmail,
+            category: 'order',
+        });
+        if (!sendResult.success) {
+            return res.status(500).json({ success: false, error: sendResult.error || 'Failed to dispatch invoice email' });
+        }
+        return res.json({
+            success: true,
+            message: `Invoice ${docNum} sent successfully to ${targetEmail}`,
+        });
+    }
+    catch (error) {
+        console.error('[Send Invoice Email Error]:', error);
+        return res.status(500).json({ success: false, error: error.message || 'Failed to send invoice email' });
+    }
+});

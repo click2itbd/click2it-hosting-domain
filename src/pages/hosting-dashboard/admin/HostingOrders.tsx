@@ -7,7 +7,8 @@ import { Server, Search, Eye, EyeOff, X, Globe, Download, Loader2, FileText, Che
 import { HostingOrder, DomainOrder, HostingAccount } from '../../../types';
 import { useSettings } from '../../../context/SettingsContext';
 import { sendServiceActivationEmail, getEmailLogsForOrder, EmailLog } from '../../../services/emailService';
-import { getApiUrl } from '../../../services/apiClient';
+import { getApiUrl, apiPost } from '../../../services/apiClient';
+import { InvoiceModal } from '../../../components/hosting/InvoiceModal';
 import { Pagination } from '../../../components/common/Pagination';
 import { logAudit } from '../../../lib/audit';
 
@@ -39,6 +40,30 @@ export default function HostingOrders() {
   const [paymentAction, setPaymentAction] = useState<'accept' | 'reject' | null>(null);
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [invoiceModalOrder, setInvoiceModalOrder] = useState<HostingOrder | null>(null);
+  const [sendingInvoiceEmailId, setSendingInvoiceEmailId] = useState<string | null>(null);
+
+  const handleSendInvoiceEmail = async (order: HostingOrder) => {
+    if (!order.id || !order.customerEmail) {
+      toast.error('Customer email not found on this order.');
+      return;
+    }
+    setSendingInvoiceEmailId(order.id);
+    try {
+      const res: any = await apiPost(`/api/orders/${order.id}/send-invoice-email`, {
+        recipientEmail: order.customerEmail,
+      });
+      if (res?.success) {
+        toast.success(res.message || `Invoice sent to ${order.customerEmail}`);
+      } else {
+        toast.error(res?.error || 'Failed to dispatch invoice email');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to send invoice email');
+    } finally {
+      setSendingInvoiceEmailId(null);
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -1121,6 +1146,14 @@ export default function HostingOrders() {
                           </>
                         )}
                         <button
+                          onClick={() => setInvoiceModalOrder(order)}
+                          className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold transition-colors border border-purple-200 flex items-center gap-1 shadow-xs cursor-pointer"
+                          title="View, Print & Email Invoice"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Invoice
+                        </button>
+                        <button
                           onClick={() => handleViewOrder(order)}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-700 rounded-lg text-xs font-bold transition-colors border border-gray-200 hover:border-blue-200 flex items-center gap-1.5"
                         >
@@ -1872,15 +1905,32 @@ export default function HostingOrders() {
               )}
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
-              <button 
-                onClick={() => generateInvoice(selectedOrder)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-              >
-                <FileText className="w-4 h-4" />
-                Download Invoice
-              </button>
-              <button onClick={closeModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-wrap justify-between items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setInvoiceModalOrder(selectedOrder)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Invoice
+                </button>
+                <button 
+                  onClick={() => generateInvoice(selectedOrder)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </button>
+                <button 
+                  onClick={() => handleSendInvoiceEmail(selectedOrder)}
+                  disabled={sendingInvoiceEmailId === selectedOrder.id || !selectedOrder.customerEmail}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {sendingInvoiceEmailId === selectedOrder.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Email Customer
+                </button>
+              </div>
+              <button onClick={closeModal} className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                 Close
               </button>
             </div>
@@ -1964,6 +2014,15 @@ export default function HostingOrders() {
             </div>
           </div>
         </div>
+      )}
+
+      {invoiceModalOrder && (
+        <InvoiceModal
+          isOpen={Boolean(invoiceModalOrder)}
+          onClose={() => setInvoiceModalOrder(null)}
+          order={invoiceModalOrder}
+          isAdmin={true}
+        />
       )}
 
       {showEmailLogs && selectedOrder && (

@@ -11,7 +11,8 @@ import {
   RefreshCw, CheckCircle, XCircle, Clock, AlertTriangle, HardDrive, Wifi, 
   Server, Globe, Receipt, Download, ExternalLink, ChevronRight, LayoutDashboard, 
   Ticket, Terminal, Copy, Eye, EyeOff, Cpu, Key, X, Share2, Shield, 
-  Sparkles, Plus, Search, Activity, Layers, ArrowUpRight, UserCheck, Loader2
+  Sparkles, Plus, Search, Activity, Layers, ArrowUpRight, UserCheck, Loader2,
+  Mail, FileText
 } from 'lucide-react';
 import { HostingOrder } from '../types';
 
@@ -23,6 +24,7 @@ import { DomainSecurityModal } from '../components/hosting/DomainSecurityModal';
 import { DomainOwnershipModal } from '../components/hosting/DomainOwnershipModal';
 import { UserAffiliateTab } from '../components/hosting/UserAffiliateTab';
 import { HostingUpgradeModal } from '../components/hosting/HostingUpgradeModal';
+import { InvoiceModal } from '../components/hosting/InvoiceModal';
 import { apiPost } from '../services/apiClient';
 import { getFriendlyErrorMessage } from '../utils/errorUtils';
 
@@ -163,6 +165,30 @@ export const MyServices: React.FC = () => {
   const [upgradingHosting, setUpgradingHosting] = useState<HostingAccount | null>(null);
   const [selectedVpsModal, setSelectedVpsModal] = useState<HostingAccount | null>(null);
   const [showVpsModalPass, setShowVpsModalPass] = useState(false);
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<HostingOrder | null>(null);
+  const [sendingInvoiceEmailId, setSendingInvoiceEmailId] = useState<string | null>(null);
+
+  const handleSendInvoiceEmail = async (order: HostingOrder) => {
+    if (!order.id || !order.customerEmail) {
+      toast.error('Customer email not found on order.');
+      return;
+    }
+    setSendingInvoiceEmailId(order.id);
+    try {
+      const res: any = await apiPost(`/api/orders/${order.id}/send-invoice-email`, {
+        recipientEmail: order.customerEmail,
+      });
+      if (res?.success) {
+        toast.success(res.message || 'Invoice sent to your email successfully!');
+      } else {
+        toast.error(res?.error || 'Failed to dispatch invoice email');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to send invoice email');
+    } finally {
+      setSendingInvoiceEmailId(null);
+    }
+  };
 
   // Search & Filter state
   const [domainSearch, setDomainSearch] = useState('');
@@ -1756,7 +1782,7 @@ export const MyServices: React.FC = () => {
                               <th className="px-6 py-3.5">Date</th>
                               <th className="px-6 py-3.5">Total Amount</th>
                               <th className="px-6 py-3.5">Status</th>
-                              <th className="px-6 py-3.5 text-right">Download Receipt</th>
+                              <th className="px-6 py-3.5 text-right">Invoice Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -1775,12 +1801,33 @@ export const MyServices: React.FC = () => {
                                   {getStatusBadge(order.status)}
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                  <button 
-                                    onClick={() => generateInvoice(order)} 
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition shadow-xs"
-                                  >
-                                    <Download size={13} /> PDF Receipt
-                                  </button>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button 
+                                      onClick={() => setSelectedInvoiceOrder(order)} 
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                                      title="View Official Invoice"
+                                    >
+                                      <Eye size={13} /> View
+                                    </button>
+
+                                    <button 
+                                      onClick={() => generateInvoice(order)} 
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition shadow-xs cursor-pointer"
+                                      title="Download PDF Invoice"
+                                    >
+                                      <Download size={13} /> PDF
+                                    </button>
+
+                                    <button 
+                                      onClick={() => handleSendInvoiceEmail(order)}
+                                      disabled={sendingInvoiceEmailId === order.id}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition shadow-xs disabled:opacity-50 cursor-pointer"
+                                      title="Email Invoice to My Address"
+                                    >
+                                      {sendingInvoiceEmailId === order.id ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />}
+                                      Email
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -2044,6 +2091,15 @@ export const MyServices: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+        {/* Invoice Modal */}
+        {selectedInvoiceOrder && (
+          <InvoiceModal
+            isOpen={Boolean(selectedInvoiceOrder)}
+            onClose={() => setSelectedInvoiceOrder(null)}
+            order={selectedInvoiceOrder}
+            isAdmin={false}
+          />
         )}
       </div>
     </Layout>
