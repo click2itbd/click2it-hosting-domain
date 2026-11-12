@@ -220,9 +220,9 @@ const DomainTransferPage = () => {
   return (
     <Layout fullWidth>
       <SEO 
-        title="Domain Transfer to Click2IT | Free 1-Year Extension"
-        description="Transfer your existing domain to Click2IT seamlessly without downtime. Get free 1-year extension, free WHOIS privacy, and low renewal prices in Bangladesh."
-        keywords="domain transfer bangladesh, transfer domain bd, move domain to click2it, cheap domain renewal bd"
+        title="Domain Transfer with Free 1-Year Renewal & Zero Downtime | Click2IT"
+        description="Transfer your existing domain to Click2IT seamlessly without downtime. Enjoy free 1-year registration extension, automated nameserver retention, zero downtime, and free WHOIS privacy."
+        keywords="transfer domain, domain migration, switch domain registrar, cheap domain transfer, free domain renewal"
         canonical="https://click2it.bd/domain/transfer"
       />
       

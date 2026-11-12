@@ -74,9 +74,9 @@ export default function VpsPage() {
     <Layout fullWidth>
       <HostingPromoBanner />
       <SEO
-        title="High Performance KVM Cloud VPS Servers in Bangladesh | NVMe & BDIX"
-        description="Deploy ultra-fast KVM Cloud VPS with pure NVMe RAID-10 storage, dedicated IPv4, full root SSH / Windows RDP access, and 10Gbps BDIX connectivity."
-        keywords="cloud vps bd, bdix vps, kvm vps bangladesh, cheap vps dhaka, linux vps, windows vps bd"
+        title="KVM Cloud VPS Servers - Dedicated NVMe, Full Root Access & 1Gbps | Click2IT"
+        description="Deploy enterprise KVM Cloud VPS servers with pure NVMe RAID-10 storage, dedicated IPv4, 1Gbps uplink, full root SSH & Windows RDP access, and guaranteed CPU/RAM resources."
+        keywords="kvm cloud vps, linux vps, windows vps, high iops nvme vps, root access vps, cheap cloud server, unmetered bandwidth vps, bdix vps"
         canonical="https://click2it.bd/vps"
       />
 

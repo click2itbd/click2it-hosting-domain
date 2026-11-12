@@ -300,8 +300,10 @@ export const StatusPage: React.FC = () => {
   return (
     <Layout fullWidth={true} bgClassName="bg-[#070b12]">
       <SEO
-        title="Infrastructure Status & Server Telemetry | Click2IT"
-        description="Real-time uptime, BDIX domestic latency, LiteSpeed cPanel server health, and historical telemetry for Click2IT hosting nodes."
+        title="Real-Time Server Status & 99.9% Historical Cloud Uptime | Click2IT"
+        description="Monitor real-time server operational metrics, network latency, node health, and scheduled maintenance announcements for Click2IT web hosting infrastructure."
+        keywords="server status, hosting uptime, cloud status, live network monitoring, click2it status"
+        canonical="https://click2it.bd/status"
       />
 
       <div className="w-full min-h-screen bg-[#070b12] text-slate-100 py-8 sm:py-12 px-4 sm:px-6 lg:px-12 selection:bg-blue-600/30 selection:text-white">

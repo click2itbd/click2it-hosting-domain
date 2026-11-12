@@ -281,8 +281,10 @@ export default function SupportPage() {
   return (
     <Layout fullWidth>
       <SEO 
-        title={`24/7 Support Hub & Knowledgebase - ${settings?.brandName || 'Click2IT BD'}`} 
-        description={`Modern helpdesk and instant technical solutions for web hosting, cPanel, domain DNS, and bKash payment verification.`} 
+        title="24/7 Hosting Technical Support, Knowledgebase & Helpdesk | Click2IT" 
+        description="Need assistance? Access our 24/7 technical support helpdesk, cPanel knowledgebase, DNS configuration tutorials, and live ticket support system." 
+        keywords="hosting support, cpanel helpdesk, technical assistance, support tickets, click2it support"
+        canonical="https://click2it.bd/support"
       />
 
       {/* Modern Sleek Hero */}

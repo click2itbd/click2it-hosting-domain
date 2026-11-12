@@ -72,9 +72,9 @@ const ServicesPage = () => {
   return (
     <Layout fullWidth>
       <SEO 
-        title={`Web Hosting, Cloud VPS & Domain Infrastructure Services - ${settings.brandName}`} 
-        description={`Discover high-speed cPanel shared hosting, NVMe cloud servers, reseller hosting, and managed domains at ${settings.brandName} with 99.9% uptime and BDIX connectivity.`} 
-        keywords="web hosting services, cloud infrastructure bd, cpanel hosting dhaka, reseller hosting bangladesh, bdix web hosting"
+        title={`Enterprise Cloud, Web Hosting & Managed IT Infrastructure | ${settings.brandName}`} 
+        description="Explore scalable web hosting services, KVM Cloud VPS instances, reseller hosting, SSL certificates, and custom cloud architecture engineered for global performance and high reliability." 
+        keywords="hosting services, enterprise cloud, reseller hosting, kvm vps, managed hosting solutions, website security, cloud infrastructure"
         canonical="https://click2it.bd/services"
       />
 

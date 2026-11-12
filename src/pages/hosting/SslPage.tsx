@@ -70,9 +70,9 @@ export const SslPage = () => {
   return (
     <Layout>
       <SEO
-        title="SSL Certificates & Website Security in Bangladesh | Click2IT"
-        description="Secure your website with Sectigo & Comodo SSL certificates. Domain Validation, Wildcard, EV SSL with instant issuance, highest browser trust, and best price in BD."
-        keywords="ssl certificate bd, buy ssl bangladesh, wildcard ssl price bd, sectigo ssl, comodo ssl, https padlock"
+        title="SSL Certificates - 256-Bit HTTPS Encryption & Instant Issuance | Click2IT"
+        description="Secure your website visitors with industry-grade Sectigo DV, Wildcard, and EV SSL certificates. Boost Google SEO rankings and enable trusted HTTPS green lock icon."
+        keywords="buy ssl certificate, sectigo ssl, wildcard ssl, cheap https certificate, website security, ssl installation"
         canonical="https://click2it.bd/ssl"
       />
       {/* Hero Section */}

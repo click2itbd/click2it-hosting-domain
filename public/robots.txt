@@ -1,19 +1,31 @@
 User-agent: *
 Allow: /
 
-# Disallow private user and admin paths
+# Disallow private user, billing, payment, and admin paths
 Disallow: /admin
 Disallow: /admin/
 Disallow: /pos
 Disallow: /login
+Disallow: /register
 Disallow: /profile
 Disallow: /checkout
 Disallow: /order-success
+Disallow: /order-success/
 Disallow: /account/
 Disallow: /hosting/cart
 Disallow: /hosting/checkout
 Disallow: /payment/
 
-# Sitemaps for both sites
-Sitemap: https://click2itbd.com/sitemap.xml
+# Crawl-rate and Search Engine directives
+User-agent: Googlebot
+Allow: /
+Allow: /assets/
+Allow: /images/
+
+User-agent: Bingbot
+Allow: /
+Allow: /assets/
+Allow: /images/
+
+# Primary XML Sitemap
 Sitemap: https://click2it.bd/sitemap.xml
