@@ -101,11 +101,11 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
         filter: 'blur(40px)',
       }} />
 
-      <div className="container mx-auto relative z-10 pt-28 pb-10">
+      <div className="container mx-auto relative z-10 pt-20 sm:pt-28 pb-6 sm:pb-10 px-4">
 
         {/* Heading */}
-        <div className="text-center max-w-4xl mx-auto mb-10">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-tight">
+        <div className="text-center max-w-4xl mx-auto mb-6 sm:mb-10">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-[1.18] sm:leading-tight">
             High-Performance Web Hosting{' '}
             <span style={{
               background: 'linear-gradient(135deg, #60a5fa, #a78bfa)',
@@ -115,76 +115,82 @@ export default function HeroSection({ hasDomainInCart, bundleDiscount = 10 }) {
               &amp; Domains
             </span>
           </h1>
-          <p className="text-blue-200/80 text-lg sm:text-xl mt-4 font-normal max-w-2xl mx-auto">
+          <p className="text-blue-200/80 text-sm sm:text-lg mt-3 sm:mt-4 font-normal max-w-xl mx-auto px-1 leading-relaxed">
             Ultra-fast NVMe cPanel hosting, instant domain registration, and automated WordPress Cloud powered by BDIX.
           </p>
         </div>
 
-        {/* Domain Search Box */}
-        <div className="max-w-3xl mx-auto px-4 mb-6">
+        {/* Domain Search Box - Fully Responsive on Mobile & Desktop */}
+        <div className="max-w-3xl mx-auto px-1 sm:px-4 mb-4 sm:mb-6">
           <div
-            className="flex items-center rounded-2xl p-2 shadow-2xl transition-all"
+            className="flex items-center rounded-2xl p-1.5 sm:p-2 shadow-2xl transition-all"
             style={{
-              background: 'rgba(255, 255, 255, 0.07)',
-              border: '1.5px solid rgba(255, 255, 255, 0.15)',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1.5px solid rgba(255, 255, 255, 0.16)',
               backdropFilter: 'blur(16px)',
               boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
             }}
           >
-            <div className="pl-4 pr-1 text-blue-300 shrink-0 flex items-center">
-              <Search size={22} className="shrink-0" />
+            <div className="pl-3 sm:pl-4 pr-1 text-blue-300 shrink-0 flex items-center">
+              <Search size={20} className="shrink-0 sm:w-[22px] sm:h-[22px]" />
             </div>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search your ideal domain name..."
-              className="flex-1 min-w-0 px-3 py-3.5 bg-transparent text-white placeholder-blue-300/50 outline-none text-base sm:text-lg font-medium"
+              placeholder="Search domain name..."
+              className="flex-1 min-w-0 px-2 sm:px-3 py-2.5 sm:py-3.5 bg-transparent text-white placeholder-blue-300/50 outline-none text-sm sm:text-base md:text-lg font-medium"
             />
-            <div className="shrink-0 flex items-center pr-1 pl-2">
+            <div className="shrink-0 flex items-center pr-0.5 sm:pr-1 pl-1 sm:pl-2">
               <button
                 type="button"
                 onClick={handleSearch}
-                className="flex items-center justify-center gap-2 text-white font-bold px-6 sm:px-8 py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-95 shadow-lg shadow-orange-500/25 cursor-pointer whitespace-nowrap shrink-0"
+                className="flex items-center justify-center gap-1.5 sm:gap-2 text-white font-bold px-3.5 sm:px-8 py-2.5 sm:py-3.5 rounded-xl transition-all active:scale-95 hover:opacity-95 shadow-lg shadow-orange-500/25 cursor-pointer whitespace-nowrap shrink-0 text-xs sm:text-base"
                 style={{ background: 'linear-gradient(135deg, #f97316, #ea6100)' }}
               >
-                <Search size={18} className="shrink-0" />
-                <span className="whitespace-nowrap font-bold text-sm sm:text-base">Search Domain</span>
+                <Search size={16} className="shrink-0 sm:w-[18px] sm:h-[18px]" />
+                <span className="hidden sm:inline font-bold">Search Domain</span>
+                <span className="sm:hidden font-bold">Search</span>
               </button>
             </div>
           </div>
 
-          {/* Static popular TLD badges */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs select-none">
-            <span className="text-blue-300/60 font-semibold uppercase tracking-wider text-[11px] mr-1">Popular:</span>
+          {/* Interactive popular TLD badges */}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-3.5 sm:mt-4 text-xs select-none">
+            <span className="text-blue-300/60 font-semibold uppercase tracking-wider text-[10px] sm:text-[11px] mr-1">Popular:</span>
             {POPULAR_TLDS.map((tld) => (
-              <span
+              <button
+                type="button"
                 key={tld}
-                className="px-3.5 py-1 rounded-full text-blue-200/80 font-mono font-medium select-none cursor-default"
+                onClick={() => {
+                  const cleanQuery = query.split('.')[0] || '';
+                  setQuery(cleanQuery ? `${cleanQuery}${tld}` : tld);
+                }}
+                className="px-2.5 sm:px-3.5 py-0.5 sm:py-1 rounded-full text-blue-200/90 font-mono text-[11px] sm:text-xs font-medium cursor-pointer hover:bg-white/15 active:scale-95 transition-all"
                 style={{
                   background: 'rgba(255, 255, 255, 0.06)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
                 {tld}
-              </span>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Server image centered */}
-        <div className="flex justify-center mt-4">
-          <div className="relative w-full max-w-[520px] hover:scale-[1.02] transition-transform duration-700">
+        {/* Server image centered & responsive */}
+        <div className="flex justify-center mt-3 sm:mt-6 px-3">
+          <div className="relative w-full max-w-[320px] sm:max-w-[500px] hover:scale-[1.02] transition-transform duration-700">
             <div
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-16 blur-3xl rounded-full"
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-12 sm:h-16 blur-2xl sm:blur-3xl rounded-full"
               style={{ background: 'rgba(56,100,240,0.35)' }}
             />
             <img
               src="/assets/hero_server.jpg"
               alt="High Performance Cloud Infrastructure"
-              className="relative w-full h-auto rounded-2xl drop-shadow-[0_25px_35px_rgba(0,0,0,0.6)]"
-              style={{ boxShadow: '0 0 60px rgba(56,100,240,0.25)' }}
+              className="relative w-full h-auto rounded-xl sm:rounded-2xl drop-shadow-[0_20px_30px_rgba(0,0,0,0.6)]"
+              style={{ boxShadow: '0 0 50px rgba(56,100,240,0.25)' }}
               onError={(e) => {
                 if (e.currentTarget.src !== window.location.origin + '/hero_server.jpg') {
                   e.currentTarget.src = '/hero_server.jpg';

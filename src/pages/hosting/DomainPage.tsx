@@ -253,7 +253,7 @@ const DomainPage = () => {
 
             <form
               onSubmit={handleSearch}
-              className="relative flex items-center rounded-2xl p-2 shadow-2xl transition-all"
+              className="relative flex items-center rounded-2xl p-1.5 sm:p-2 shadow-2xl transition-all"
               style={{
                 background: 'rgba(8, 20, 62, 0.72)',
                 border: '1.5px solid rgba(125, 211, 252, 0.30)',
@@ -261,31 +261,34 @@ const DomainPage = () => {
                 boxShadow: '0 25px 60px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.18)',
               }}
             >
-              <div className="pl-4 pr-1 text-cyan-300 shrink-0 flex items-center">
-                <Search size={22} className="shrink-0" />
+              <div className="pl-3 sm:pl-4 pr-1 text-cyan-300 shrink-0 flex items-center">
+                <Search size={20} className="shrink-0 sm:w-[22px] sm:h-[22px]" />
               </div>
               <input
                 type="text"
-                placeholder="Type your ideal domain name here (e.g. mybrand.com)..."
+                placeholder="Search domain name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 disabled={isSearching}
-                className="flex-1 min-w-0 px-3 py-3.5 bg-transparent text-white placeholder-blue-200/60 outline-none text-base sm:text-lg font-medium"
+                className="flex-1 min-w-0 px-2 sm:px-3 py-2.5 sm:py-3.5 bg-transparent text-white placeholder-blue-200/60 outline-none text-sm sm:text-base md:text-lg font-medium"
               />
-              <div className="shrink-0 flex items-center pr-1 pl-2">
+              <div className="shrink-0 flex items-center pr-0.5 sm:pr-1 pl-1 sm:pl-2">
                 <button
                   type="submit"
                   disabled={isSearching}
-                  className="flex items-center justify-center gap-2 text-white font-bold px-6 sm:px-8 py-3.5 rounded-xl transition-all active:scale-95 hover:brightness-110 shadow-lg shadow-orange-500/30 cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-70"
+                  className="flex items-center justify-center gap-1.5 sm:gap-2 text-white font-bold px-3.5 sm:px-8 py-2.5 sm:py-3.5 rounded-xl transition-all active:scale-95 hover:brightness-110 shadow-lg shadow-orange-500/30 cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-70 text-xs sm:text-base"
                   style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
                 >
                   {isSearching ? (
-                    <Loader2 size={18} className="animate-spin shrink-0" />
+                    <Loader2 size={16} className="animate-spin shrink-0 sm:w-[18px] sm:h-[18px]" />
                   ) : (
-                    <Search size={18} className="shrink-0" />
+                    <Search size={16} className="shrink-0 sm:w-[18px] sm:h-[18px]" />
                   )}
-                  <span className="whitespace-nowrap font-bold text-sm sm:text-base">
+                  <span className="hidden sm:inline font-bold">
                     {isSearching ? 'Checking...' : 'Search Now'}
+                  </span>
+                  <span className="sm:hidden font-bold">
+                    {isSearching ? '...' : 'Search'}
                   </span>
                 </button>
               </div>
