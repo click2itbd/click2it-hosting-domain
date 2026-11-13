@@ -269,8 +269,8 @@ export default function DomainSearchResults() {
         noindex={true}
       />
       <HostingPromoBanner />
-      <div className="bg-[#f5f7f9] min-h-screen py-6 md:py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-[#f5f7f9] min-h-screen py-4 sm:py-6 md:py-8 pb-24 md:pb-12">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           
           {/* Main Search Bar */}
           <div className="bg-white rounded-xl md:rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.08)] overflow-hidden flex items-stretch mb-4 md:mb-6 border border-gray-100">
@@ -282,18 +282,18 @@ export default function DomainSearchResults() {
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Type your domain name here (e.g. yourbrand.com)..."
-                className="flex-1 px-3 md:px-4 py-4 md:py-5 text-base md:text-lg text-gray-800 outline-none bg-transparent placeholder-gray-400"
+                placeholder="Search domain (e.g. yourbrand.com)..."
+                className="flex-1 px-2.5 sm:px-4 py-3.5 sm:py-5 text-sm sm:text-lg text-gray-800 outline-none bg-transparent placeholder-gray-400"
               />
               {searchInput && (
-                <button type="button" onClick={() => setSearchInput('')} className="flex items-center text-gray-400 hover:text-gray-600 px-2">
+                <button type="button" onClick={() => setSearchInput('')} className="flex items-center text-gray-400 hover:text-gray-600 px-1.5 sm:px-2">
                   <X size={16} />
                 </button>
               )}
-              <div className="flex items-center gap-2 pr-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 pr-1.5 sm:pr-2">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 text-white font-bold px-5 md:px-7 h-[40px] md:h-[44px] rounded-xl transition-all active:scale-95 hover:opacity-90 my-auto shadow-md"
+                  className="flex items-center justify-center gap-1.5 sm:gap-2 text-white font-bold px-3.5 sm:px-7 h-[38px] sm:h-[44px] rounded-lg sm:rounded-xl transition-all active:scale-95 hover:opacity-90 my-auto shadow-md text-xs sm:text-sm"
                   style={{ background: 'linear-gradient(135deg, #f97316, #ea6100)' }}
                 >
                   <Search size={16} />
@@ -361,58 +361,85 @@ export default function DomainSearchResults() {
             <>
 
               {/* Exact Match Result Card */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 md:p-6 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-5 md:p-6 mb-4 md:mb-6 transition-all">
                 {loading ? (
                   <div className="flex items-center gap-3 text-gray-500 py-3">
                     <Loader2 className="animate-spin text-orange-500" size={24} />
-                    <span className="text-base font-medium">Checking live domain availability...</span>
+                    <span className="text-sm sm:text-base font-medium">Checking live domain availability...</span>
                   </div>
                 ) : exactMatch ? (
-                  <>
-                    <div className="flex items-center gap-3 md:gap-4 flex-wrap">
-                      <span className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{exactMatch.domain}</span>
-                      {exactMatch.available ? (
-                        <span className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                          Available
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    {/* Header: Domain name, Available badge, and Action icons */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+                        <span className="text-xl sm:text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight break-all">
+                          {exactMatch.domain}
                         </span>
-                      ) : (
-                        <span className="bg-gray-400 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                          Registered
-                        </span>
-                      )}
-                      <Info size={16} onClick={() => setInfoDomain(exactMatch)} className="text-gray-400 cursor-pointer hover:text-blue-500 transition-colors" />
-                      <Star size={16} onClick={() => toggleFavorite(exactMatch.domain)} className={favorites.includes(exactMatch.domain) ? "text-yellow-400 cursor-pointer" : "text-gray-400 cursor-pointer hover:text-yellow-400 transition-colors"} fill={favorites.includes(exactMatch.domain) ? "currentColor" : "none"} />
+                        {exactMatch.available ? (
+                          <span className="bg-emerald-500 text-white text-[10px] sm:text-xs font-bold px-2.5 py-0.5 sm:py-1 rounded-full uppercase tracking-wider shadow-sm shrink-0">
+                            Available
+                          </span>
+                        ) : (
+                          <span className="bg-gray-400 text-white text-[10px] sm:text-xs font-bold px-2.5 py-0.5 sm:py-1 rounded-full uppercase tracking-wider shadow-sm shrink-0">
+                            Registered
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 text-gray-400">
+                        <button
+                          type="button"
+                          onClick={() => setInfoDomain(exactMatch)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 hover:text-blue-500 transition-colors"
+                          title="Domain Information"
+                        >
+                          <Info size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(exactMatch.domain)}
+                          className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors ${
+                            favorites.includes(exactMatch.domain) ? "text-yellow-400" : "hover:text-yellow-400"
+                          }`}
+                          title="Bookmark domain"
+                        >
+                          <Star size={17} fill={favorites.includes(exactMatch.domain) ? "currentColor" : "none"} />
+                        </button>
+                      </div>
                     </div>
 
-                    <div>
+                    {/* Bottom controls on mobile, Right aligned on desktop */}
+                    <div className="pt-3 md:pt-0 border-t border-gray-100 md:border-0">
                       {exactMatch.available ? (
-                        <div className="flex flex-wrap items-center gap-3 md:gap-5">
-                          {/* Term selector */}
-                          <select
-                            value={selectedYears}
-                            onChange={(e) => setSelectedYears(Number(e.target.value))}
-                            className="bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold px-3 py-2.5 rounded-xl outline-none cursor-pointer hover:border-gray-300 transition-colors"
-                          >
-                            <option value={1}>1 Year</option>
-                            <option value={2}>2 Years</option>
-                            <option value={3}>3 Years</option>
-                            <option value={4}>4 Years</option>
-                            <option value={5}>5 Years</option>
-                          </select>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 md:gap-5">
+                          {/* Term selector & Price display */}
+                          <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4">
+                            <select
+                              value={selectedYears}
+                              onChange={(e) => setSelectedYears(Number(e.target.value))}
+                              className="bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold px-3 py-2.5 rounded-xl outline-none cursor-pointer hover:border-gray-300 transition-colors shrink-0"
+                            >
+                              <option value={1}>1 Year</option>
+                              <option value={2}>2 Years</option>
+                              <option value={3}>3 Years</option>
+                              <option value={4}>4 Years</option>
+                              <option value={5}>5 Years</option>
+                            </select>
 
-                          <div className="text-right">
-                            <div className="font-extrabold text-xl md:text-2xl text-gray-900">
-                              {getPrice(exactMatch) ? `৳${((getPrice(exactMatch) || 0) * selectedYears).toLocaleString()}` : 'Price unavailable'}
-                            </div>
-                            <div className="text-[11px] text-gray-500">
-                              for {selectedYears} {selectedYears === 1 ? 'year' : 'years'}
+                            <div className="text-right">
+                              <div className="font-extrabold text-xl sm:text-2xl text-gray-900 leading-tight">
+                                {getPrice(exactMatch) ? `৳${((getPrice(exactMatch) || 0) * selectedYears).toLocaleString()}` : 'Price unavailable'}
+                              </div>
+                              <div className="text-[11px] text-gray-500">
+                                for {selectedYears} {selectedYears === 1 ? 'year' : 'years'}
+                              </div>
                             </div>
                           </div>
 
+                          {/* Full-width button on mobile, auto-width on tablet/desktop */}
                           {isDomainInCart(exactMatch.domain) ? (
                             <button
                               onClick={() => navigate('/cart')}
-                              className="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95"
+                              className="w-full sm:w-auto bg-gray-800 hover:bg-gray-900 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
                             >
                               ✓ In Cart (View Cart)
                             </button>
@@ -423,56 +450,60 @@ export default function DomainSearchResults() {
                                 const price = getPrice(exactMatch);
                                 if (price) handleAddToCart(exactMatch.domain, price, selectedYears);
                               }}
-                              className="bg-emerald-600 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95"
+                              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
                             >
                               <ShoppingCart size={16} /> {getPrice(exactMatch) ? 'Add to cart' : 'Price unavailable'}
                             </button>
                           )}
                         </div>
                       ) : (
-                        <button onClick={() => setOfferDomain(exactMatch.domain)} className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors">
+                        <button 
+                          onClick={() => setOfferDomain(exactMatch.domain)} 
+                          className="w-full sm:w-auto border border-gray-300 text-gray-700 hover:bg-gray-50 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                        >
                           <DollarSign size={16} /> Make offer
                         </button>
                       )}
                     </div>
-                  </>
+                  </div>
                 ) : (
                   <div className="text-gray-500 py-3 text-sm">No exact match found.</div>
                 )}
               </div>
 
               {/* Results List */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+                <div className="px-3.5 sm:px-4 md:px-6 py-3 md:py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
                   <div className="flex items-center gap-2">
                     <h3 className="text-gray-800 font-bold text-sm md:text-base">Extension Alternatives</h3>
                     {alternativesLoading && (
-                      <span className="inline-flex items-center gap-1.5 text-xs text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full font-medium border border-orange-100">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full font-medium border border-orange-100">
                         <Loader2 className="w-3 h-3 animate-spin text-orange-500" />
                         <span className="hidden sm:inline">Finding more extensions...</span>
                       </span>
                     )}
                   </div>
                   
-                  <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+                  {/* Horizontally scrollable filter tabs on mobile */}
+                  <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto max-w-full">
                     <button
                       type="button"
                       onClick={() => setActiveFilter('all')}
-                      className={`px-3 py-1 rounded-lg transition-all ${activeFilter === 'all' ? 'bg-white text-gray-900 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer ${activeFilter === 'all' ? 'bg-white text-gray-900 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
                     >
                       All ({alternatives.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveFilter('available')}
-                      className={`px-3 py-1 rounded-lg transition-all ${activeFilter === 'available' ? 'bg-emerald-600 text-white shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer ${activeFilter === 'available' ? 'bg-emerald-600 text-white shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
                     >
                       Available ({alternatives.filter(a => a.available).length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveFilter('registered')}
-                      className={`px-3 py-1 rounded-lg transition-all ${activeFilter === 'registered' ? 'bg-gray-600 text-white shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer ${activeFilter === 'registered' ? 'bg-gray-600 text-white shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
                     >
                       Registered ({alternatives.filter(a => !a.available).length})
                     </button>
@@ -480,7 +511,7 @@ export default function DomainSearchResults() {
                       <button
                         type="button"
                         onClick={() => setActiveFilter('favorites')}
-                        className={`px-3 py-1 rounded-lg transition-all ${activeFilter === 'favorites' ? 'bg-amber-500 text-white shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
+                        className={`px-2.5 sm:px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer ${activeFilter === 'favorites' ? 'bg-amber-500 text-white shadow-sm font-bold' : 'text-gray-500 hover:text-gray-800'}`}
                       >
                         ★ ({alternatives.filter(a => favorites.includes(a.domain)).length})
                       </button>
@@ -492,44 +523,68 @@ export default function DomainSearchResults() {
                   {loading || (alternatives.length === 0 && alternativesLoading) ? (
                     <div className="py-12 flex justify-center items-center">
                       <Loader2 className="animate-spin text-orange-500" size={30} />
-                      <span className="text-xs font-medium text-gray-500">Checking extension alternatives...</span>
+                      <span className="text-xs font-medium text-gray-500 ml-2">Checking extension alternatives...</span>
                     </div>
                   ) : filteredAlternatives.length > 0 ? (
                     <>
                     {filteredAlternatives.map((alt, idx) => (
-                      <div key={idx} className="px-4 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-0 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center gap-2 md:gap-3">
-                          <span className={alt.available ? "text-gray-800 text-base md:text-lg font-medium" : "text-gray-400 text-base md:text-lg"}>{alt.domain}</span>
-                          
-                          {alt.available ? (
-                            <span className="bg-green-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                              Available
+                      <div key={idx} className="px-3.5 sm:px-4 md:px-6 py-2.5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 hover:bg-gray-50/80 transition-colors">
+                        {/* Domain name, status badge, and info/favorite buttons */}
+                        <div className="flex items-center justify-between sm:justify-start gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                            <span className={`text-sm sm:text-base md:text-lg font-semibold truncate ${alt.available ? "text-gray-900" : "text-gray-400"}`}>
+                              {alt.domain}
                             </span>
-                          ) : (
-                            <span className="bg-[#a4a9ad] text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                              Registered
-                            </span>
-                          )}
+                            
+                            {alt.available ? (
+                              <span className="bg-emerald-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                                Available
+                              </span>
+                            ) : (
+                              <span className="bg-[#a4a9ad] text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                                Registered
+                              </span>
+                            )}
+                          </div>
                           
-                          <Info size={14} onClick={() => setInfoDomain(alt)} className="text-gray-300 hover:text-blue-500 cursor-pointer transition-colors" />
-                          <Star size={14} onClick={() => toggleFavorite(alt.domain)} className={favorites.includes(alt.domain) ? "text-yellow-400 cursor-pointer" : "text-gray-300 cursor-pointer hover:text-yellow-400 transition-colors"} fill={favorites.includes(alt.domain) ? "currentColor" : "none"} />
+                          <div className="flex items-center gap-1 shrink-0 text-gray-400 sm:ml-2">
+                            <button
+                              type="button"
+                              onClick={() => setInfoDomain(alt)}
+                              className="p-1 rounded-md hover:bg-gray-100 hover:text-blue-500 transition-colors"
+                              title="Domain Info"
+                            >
+                              <Info size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleFavorite(alt.domain)}
+                              className={`p-1 rounded-md hover:bg-gray-100 transition-colors ${
+                                favorites.includes(alt.domain) ? "text-yellow-400" : "hover:text-yellow-400"
+                              }`}
+                              title="Bookmark"
+                            >
+                              <Star size={14} fill={favorites.includes(alt.domain) ? "currentColor" : "none"} />
+                            </button>
+                          </div>
                         </div>
                         
-                        <div className="mt-2 sm:mt-0 flex items-center justify-between sm:justify-end gap-3 md:gap-6">
+                        {/* Pricing & Cart Action Button */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-6 shrink-0">
                           {alt.available ? (
                             <>
                               <div className="text-left sm:text-right">
-                                <div className="text-sm font-bold text-gray-900">{formatPrice(getPrice(alt))}</div>
-                                {getRenewalPrice(alt) ? (
-                                  <div className="text-[10px] text-gray-500">Renews at {formatPrice(getRenewalPrice(alt))}/yr</div>
-                                ) : (
-                                  <div className="text-[10px] text-gray-400">Standard renewal rate</div>
-                                )}
+                                <div className="text-sm sm:text-base font-extrabold text-gray-900 leading-tight">
+                                  {formatPrice(getPrice(alt))}
+                                </div>
+                                <div className="text-[10px] text-gray-500 leading-tight">
+                                  {getRenewalPrice(alt) ? `Renews at ${formatPrice(getRenewalPrice(alt))}/yr` : 'Standard renewal rate'}
+                                </div>
                               </div>
                               {isDomainInCart(alt.domain) ? (
                                 <button
                                   onClick={() => navigate('/cart')}
-                                  className="bg-gray-800 hover:bg-gray-900 text-white px-3 md:px-4 py-2 rounded-xl text-xs md:text-sm font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 w-28 md:w-32 justify-center"
+                                  className="bg-gray-800 hover:bg-gray-900 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 min-w-[105px] sm:min-w-[125px] cursor-pointer"
                                 >
                                   ✓ In Cart
                                 </button>
@@ -540,15 +595,20 @@ export default function DomainSearchResults() {
                                     const price = getPrice(alt);
                                     if (price) handleAddToCart(alt.domain, price, 1);
                                   }}
-                                  className="bg-emerald-600 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 text-white px-3 md:px-4 py-2 rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95 w-28 md:w-32 justify-center"
+                                  className="bg-emerald-600 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 text-white px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 min-w-[105px] sm:min-w-[125px] cursor-pointer"
                                 >
-                                  <ShoppingCart size={14} /> {getPrice(alt) ? 'Add to cart' : 'Price unavailable'}
+                                  <ShoppingCart size={14} className="shrink-0" />
+                                  <span>{getPrice(alt) ? 'Add to cart' : 'Unavailable'}</span>
                                 </button>
                               )}
                             </>
                           ) : (
-                            <button onClick={() => setOfferDomain(alt.domain)} className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 md:px-4 py-2 rounded text-xs md:text-sm font-bold flex items-center gap-2 transition-colors w-28 md:w-32 justify-center">
-                              <DollarSign size={14} /> Make offer
+                            <button 
+                              onClick={() => setOfferDomain(alt.domain)} 
+                              className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-colors min-w-[105px] sm:min-w-[125px] cursor-pointer"
+                            >
+                              <DollarSign size={14} className="shrink-0" />
+                              <span>Make offer</span>
                             </button>
                           )}
                         </div>
