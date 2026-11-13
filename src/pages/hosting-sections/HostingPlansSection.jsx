@@ -315,26 +315,26 @@ export default function HostingPlansSection({
   };
 
   return (
-    <section id="shared-hosting" className="py-20 bg-gray-50 border-t border-gray-100">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="shared-hosting" className="py-12 sm:py-20 bg-gray-50 border-t border-gray-100">
+      <div className="container mx-auto px-3 sm:px-6 lg:px-8">
         
-        <div className="text-center max-w-3xl mx-auto mb-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-600 text-xs font-bold uppercase tracking-wider mb-4">
+        <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-600 text-xs font-bold uppercase tracking-wider mb-3 sm:mb-4">
             <Zap size={14} /> Shared NVMe Hosting
           </div>
-          <h2 className="text-3xl md:text-5xl font-extrabold text-gray-900 uppercase tracking-tight">OUR BEST PRICING</h2>
-          <p className="text-gray-500 max-w-2xl mx-auto mt-3 text-sm sm:text-base">
+          <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 uppercase tracking-tight">OUR BEST PRICING</h2>
+          <p className="text-gray-500 max-w-2xl mx-auto mt-2 sm:mt-3 text-xs sm:text-sm md:text-base">
             NVMe SSD powered web hosting backed by CloudLinux, LiteSpeed web server, and 24/7 dedicated support.
           </p>
         </div>
 
         {/* Claimed Offer Banner */}
         {activeOffer?.discountPercentage > 0 && (
-          <div className="max-w-xl mx-auto mb-8 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-300 rounded-2xl p-3.5 text-center shadow-sm animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-bold text-orange-800">
+          <div className="max-w-xl mx-auto mb-6 sm:mb-8 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-300 rounded-2xl p-3 sm:p-3.5 text-center shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-bold text-orange-800">
               <span className="text-base">🎉</span>
               <span>Special <strong>{activeOffer.discountPercentage}% Discount</strong> Active!</span>
-              <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-orange-100 text-orange-900 px-2 py-0.5 rounded-md border border-orange-200">
+              <span className="inline-flex items-center gap-1 font-mono text-[10px] sm:text-[11px] bg-orange-100 text-orange-900 px-1.5 sm:px-2 py-0.5 rounded-md border border-orange-200">
                 <Tag size={11} /> {activeOffer.code || 'HOSTING10'}
               </span>
               <span className="text-slate-600 font-normal hidden sm:inline">(auto-applied in cart &amp; checkout)</span>
@@ -342,12 +342,12 @@ export default function HostingPlansSection({
           </div>
         )}
 
-        <div className="flex justify-center mb-12">
-          <div className="inline-flex bg-white rounded-full p-1.5 border border-gray-200 shadow-sm">
+        <div className="flex justify-center mb-8 sm:mb-12">
+          <div className="inline-flex bg-white rounded-full p-1 sm:p-1.5 border border-gray-200 shadow-sm max-w-full">
             <button
               onClick={() => onBillingCycleChange && onBillingCycleChange('yearly')}
               className={cn(
-                "px-5 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all uppercase tracking-wide cursor-pointer",
+                "px-3.5 sm:px-6 py-2 sm:py-2.5 rounded-full text-[11px] sm:text-sm font-bold transition-all uppercase tracking-wide cursor-pointer",
                 (billingCycle === 'yearly' || billingCycle === 'annually') ? "bg-blue-600 text-white shadow-md" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
               )}
             >
@@ -356,7 +356,7 @@ export default function HostingPlansSection({
             <button
               onClick={() => onBillingCycleChange && onBillingCycleChange('monthly')}
               className={cn(
-                "px-5 sm:px-6 py-2.5 rounded-full text-xs sm:text-sm font-bold transition-all uppercase tracking-wide cursor-pointer",
+                "px-3.5 sm:px-6 py-2 sm:py-2.5 rounded-full text-[11px] sm:text-sm font-bold transition-all uppercase tracking-wide cursor-pointer",
                 billingCycle === 'monthly' ? "bg-blue-600 text-white shadow-md" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
               )}
             >
@@ -366,10 +366,10 @@ export default function HostingPlansSection({
         </div>
 
         <div className={cn(
-          "grid items-stretch gap-4 sm:gap-5",
+          "grid items-stretch gap-2.5 sm:gap-4 lg:gap-5",
           plans.length >= 5 
-            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5" 
-            : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+            ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" 
+            : "grid-cols-2 lg:grid-cols-4"
         )}>
           {plans.map((plan, idx) => {
             const priceObj = calculatePlanPrice(plan);
@@ -382,56 +382,56 @@ export default function HostingPlansSection({
               <div 
                 key={plan.id || idx} 
                 className={cn(
-                  "relative rounded-3xl p-6 sm:p-7 flex flex-col justify-between transition-all duration-300 group",
+                  "relative rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 lg:p-7 flex flex-col justify-between transition-all duration-300 group",
                   isPopular 
                     ? "bg-white text-gray-900 shadow-[0_20px_50px_rgba(37,99,235,0.12)] border-2 border-blue-500 transform lg:-translate-y-2" 
                     : "bg-white text-gray-900 border border-gray-200 hover:border-gray-300 hover:shadow-xl"
                 )}
               >
                 {isPopular && (
-                  <div className="absolute top-0 inset-x-0 flex justify-center -mt-3.5">
-                    <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold px-4 py-1 rounded-full uppercase tracking-widest shadow-md">
+                  <div className="absolute top-0 inset-x-0 flex justify-center -mt-2.5 sm:-mt-3.5">
+                    <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[8px] sm:text-[10px] font-bold px-2 sm:px-4 py-0.5 sm:py-1 rounded-full uppercase tracking-wider shadow-md whitespace-nowrap">
                       Most Popular
                     </span>
                   </div>
                 )}
                 
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={cn("p-3 rounded-2xl", isPopular ? "bg-blue-50 text-blue-600" : "bg-gray-50 text-gray-700")}>
-                      <Server size={28} strokeWidth={1.75} />
+                  <div className="flex items-center justify-between mb-2.5 sm:mb-4">
+                    <div className={cn("p-1.5 sm:p-3 rounded-xl sm:rounded-2xl shrink-0", isPopular ? "bg-blue-50 text-blue-600" : "bg-gray-50 text-gray-700")}>
+                      <Server className="w-5 h-5 sm:w-7 sm:h-7" strokeWidth={1.75} />
                     </div>
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 uppercase tracking-wider">
+                    <span className="text-[10px] sm:text-xs font-semibold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-gray-100 text-gray-600 uppercase tracking-wider truncate max-w-[85px] sm:max-w-none">
                       {plan.slug || 'Tier ' + (idx + 1)}
                     </span>
                   </div>
                   
-                  <h3 className="text-xl font-bold uppercase mb-2 tracking-wide text-gray-900">{plan.name}</h3>
-                  <p className="text-xs text-gray-500 mb-6">Best for growing projects & business websites.</p>
+                  <h3 className="text-sm sm:text-xl font-bold uppercase mb-1 sm:mb-2 tracking-wide text-gray-900 truncate">{plan.name}</h3>
+                  <p className="text-[11px] sm:text-xs text-gray-500 mb-3 sm:mb-6 line-clamp-2 min-h-[28px] sm:min-h-0 leading-tight">Best for growing projects & business websites.</p>
                   
-                  <div className="mb-6 pb-6 border-b border-gray-100">
-                    <p className="text-xs uppercase tracking-wider mb-1 text-gray-400 font-semibold">Starting at</p>
-                    <div className="flex items-baseline">
-                      <span className="text-2xl font-bold text-gray-500 mr-1">৳</span>
-                      <span className={cn("text-4xl sm:text-5xl font-extrabold tracking-tight", isPopular ? "text-blue-600" : "text-gray-900")}>
+                  <div className="mb-3 sm:mb-6 pb-3 sm:pb-6 border-b border-gray-100">
+                    <p className="text-[10px] sm:text-xs uppercase tracking-wider mb-0.5 sm:mb-1 text-gray-400 font-semibold">Starting at</p>
+                    <div className="flex items-baseline flex-wrap">
+                      <span className="text-base sm:text-2xl font-bold text-gray-500 mr-0.5 sm:mr-1">৳</span>
+                      <span className={cn("text-2xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight", isPopular ? "text-blue-600" : "text-gray-900")}>
                         {displayPrice.toLocaleString()}
                       </span>
-                      <span className="text-gray-500 text-sm font-medium ml-1.5">
+                      <span className="text-gray-500 text-[11px] sm:text-sm font-medium ml-1">
                         /{isYearly ? 'yr' : 'mo'}
                       </span>
                     </div>
                     {isYearly && (
-                      <p className="text-xs text-green-600 font-medium mt-1.5 flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5" /> Includes 20% annual discount
+                      <p className="text-[10px] sm:text-xs text-green-600 font-medium mt-1 sm:mt-1.5 flex items-center gap-1 leading-tight">
+                        <ShieldCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" /> <span className="line-clamp-1">Save 20% annually</span>
                       </p>
                     )}
                   </div>
 
-                  <ul className="space-y-3 mb-8 text-left">
+                  <ul className="space-y-1.5 sm:space-y-3 mb-4 sm:mb-8 text-left">
                     {featureList.map((feat, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-gray-600">
-                        <Check size={16} className={cn("shrink-0 mt-0.5", isPopular ? "text-blue-600" : "text-emerald-500")} />
-                        <span>{feat}</span>
+                      <li key={i} className="flex items-start gap-1.5 sm:gap-2.5 text-[11px] sm:text-sm text-gray-600 leading-tight">
+                        <Check className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 mt-0.5", isPopular ? "text-blue-600" : "text-emerald-500")} />
+                        <span className="line-clamp-2">{feat}</span>
                       </li>
                     ))}
                   </ul>
@@ -440,14 +440,14 @@ export default function HostingPlansSection({
                 <button 
                   onClick={() => handleBuyNow(plan)}
                   className={cn(
-                    "w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-xs sm:text-sm uppercase tracking-widest transition-all cursor-pointer active:scale-95",
+                    "w-full flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3.5 px-2 sm:px-4 rounded-xl font-bold text-[11px] sm:text-sm uppercase tracking-wider transition-all cursor-pointer active:scale-95",
                     isPopular 
                       ? "bg-blue-600 text-white shadow-lg hover:shadow-blue-500/25 hover:bg-blue-700" 
                       : "bg-gray-900 text-white hover:bg-black hover:shadow-md"
                   )}
                 >
                   <span>Buy Now</span>
-                  <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-1" />
                 </button>
               </div>
             );
