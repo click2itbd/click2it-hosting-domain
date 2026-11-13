@@ -1,136 +1,196 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <!-- E-Commerce Storefront URLs -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- 1. Home Page / Primary Portal -->
   <url>
-    <loc>https://click2itbd.com/</loc>
+    <loc>https://click2it.bd/</loc>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/deals</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/pc-build</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/compare</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/brands</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/used-items</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/blog</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/about</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/contact</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/warranty-policy</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/refund-policy</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/online-delivery</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/emi-terms</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/terms</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/privacy</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/" />
+    <xhtml:link rel="alternate" hreflang="bn" href="https://click2it.bd/" />
+    <image:image>
+      <image:loc>https://click2it.bd/logo.png</image:loc>
+      <image:title>CLICK2IT - High-Speed Web Hosting, Cloud VPS &amp; Domain Registration</image:title>
+      <image:caption>Fast NVMe cPanel Web Hosting and Cloud VPS Solutions</image:caption>
+    </image:image>
   </url>
 
-  <!-- Hosting & Cloud Services URLs -->
+  <!-- 2. NVMe Web Hosting & cPanel Solutions -->
   <url>
-    <loc>https://click2itbd.com/hosting</loc>
+    <loc>https://click2it.bd/hosting</loc>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/hosting" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/hosting" />
+    <xhtml:link rel="alternate" hreflang="bn" href="https://click2it.bd/hosting" />
+    <image:image>
+      <image:loc>https://click2it.bd/assets/cloud_server.jpg</image:loc>
+      <image:title>NVMe Web Hosting Infrastructure</image:title>
+    </image:image>
   </url>
+
+  <!-- 3. High Performance KVM Cloud VPS Servers -->
   <url>
-    <loc>https://click2itbd.com/services</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/pricing</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/vps</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/domain</loc>
+    <loc>https://click2it.bd/vps</loc>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>daily</changefreq>
-    <priority>0.9</priority>
+    <priority>0.95</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/vps" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/vps" />
+    <xhtml:link rel="alternate" hreflang="bn" href="https://click2it.bd/vps" />
+    <image:image>
+      <image:loc>https://click2it.bd/assets/hero_server.jpg</image:loc>
+      <image:title>KVM Cloud VPS Servers with Dedicated NVMe Storage</image:title>
+    </image:image>
   </url>
+
+  <!-- 4. Domain Name Registration & Search -->
   <url>
-    <loc>https://click2itbd.com/domain/bd</loc>
+    <loc>https://click2it.bd/domain</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/domain" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/domain" />
+    <xhtml:link rel="alternate" hreflang="bn" href="https://click2it.bd/domain" />
+    <image:image>
+      <image:loc>https://click2it.bd/assets/domain_hero_bg.jpg</image:loc>
+      <image:title>Global and .BD Domain Name Registration</image:title>
+    </image:image>
+  </url>
+
+  <!-- 5. Official .BD Domain Registration -->
+  <url>
+    <loc>https://click2it.bd/domain/bd</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/domain/bd" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/domain/bd" />
+    <xhtml:link rel="alternate" hreflang="bn" href="https://click2it.bd/domain/bd" />
+    <image:image>
+      <image:loc>https://click2it.bd/assets/bd_hero_bg.jpg</image:loc>
+      <image:title>Official .BD Domain Registration</image:title>
+    </image:image>
+  </url>
+
+  <!-- 6. Domain Name Transfer -->
+  <url>
+    <loc>https://click2it.bd/domain/transfer</loc>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/domain/transfer" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/domain/transfer" />
   </url>
+
+  <!-- 7. Bulk Domain Search & Multi-TLD -->
   <url>
-    <loc>https://click2itbd.com/domain/transfer</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/domain/bulk</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://click2itbd.com/ssl</loc>
+    <loc>https://click2it.bd/domain/bulk</loc>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/domain/bulk" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/domain/bulk" />
+  </url>
+
+  <!-- 8. Domain Renewal -->
+  <url>
+    <loc>https://click2it.bd/domain-renewal</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- 9. Pricing Plans & Comparisons -->
+  <url>
+    <loc>https://click2it.bd/pricing</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/pricing" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/pricing" />
+  </url>
+
+  <!-- 10. All Web Hosting & Cloud Services -->
+  <url>
+    <loc>https://click2it.bd/services</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.90</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/services" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/services" />
+  </url>
+
+  <!-- 11. SSL Certificates & Web Security -->
+  <url>
+    <loc>https://click2it.bd/ssl</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://click2it.bd/ssl" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://click2it.bd/ssl" />
+    <image:image>
+      <image:loc>https://click2it.bd/assets/secure_domain.jpg</image:loc>
+      <image:title>SSL Certificates &amp; 256-bit HTTPS Security</image:title>
+    </image:image>
+  </url>
+
+  <!-- 12. Real-time Status & Uptime -->
+  <url>
+    <loc>https://click2it.bd/status</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- 13. 24/7 Technical Support & Knowledgebase -->
+  <url>
+    <loc>https://click2it.bd/support</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <!-- 14. About Us -->
+  <url>
+    <loc>https://click2it.bd/about</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+
+  <!-- 15. Contact Us -->
+  <url>
+    <loc>https://click2it.bd/contact</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+
+  <!-- 16. Legal & Policies -->
+  <url>
+    <loc>https://click2it.bd/terms</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.60</priority>
   </url>
   <url>
-    <loc>https://click2itbd.com/domain-renewal</loc>
+    <loc>https://click2it.bd/privacy</loc>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.60</priority>
   </url>
   <url>
-    <loc>https://click2itbd.com/support</loc>
+    <loc>https://click2it.bd/refund-policy</loc>
+    <lastmod>2026-11-13</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.60</priority>
   </url>
+
 </urlset>
