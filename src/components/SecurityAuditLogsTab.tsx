@@ -6,16 +6,21 @@ import {
   KeyRound, 
   Clock, 
   Laptop, 
+  Smartphone,
+  LogOut,
   RefreshCw, 
   AlertTriangle, 
   CheckCircle2, 
   Lock, 
-  ExternalLink 
+  ExternalLink,
+  ShieldAlert,
+  Radio
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../firebase';
 import { apiGet, apiPost } from '../services/apiClient';
+import { getOrCreateSessionId } from '../utils/sessionManager';
 import toast from 'react-hot-toast';
 
 export interface SecurityLogItem {
@@ -35,6 +40,70 @@ export const SecurityAuditLogsTab: React.FC = () => {
   const [logs, setLogs] = useState<SecurityLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingReset, setSendingReset] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [revoking, setRevoking] = useState(false);
+  const currentSessionId = getOrCreateSessionId();
+
+  const fetchSessions = async () => {
+    if (!user) return;
+    setSessionsLoading(true);
+    try {
+      const res: any = await apiGet('/api/customers/sessions');
+      if (res && res.success && Array.isArray(res.sessions)) {
+        setSessions(res.sessions);
+      } else {
+        setSessions([]);
+      }
+    } catch (e) {
+      setSessions([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    if (!sessionId) return;
+    setRevoking(true);
+    try {
+      const res: any = await apiPost('/api/customers/sessions/revoke', { sessionId });
+      if (res && res.success) {
+        toast.success('Session terminated successfully.');
+        fetchSessions();
+        fetchLogs();
+      } else {
+        toast.error(res?.error || 'Failed to terminate session');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to terminate session');
+    } finally {
+      setRevoking(false);
+    }
+  };
+
+  const handleRevokeAllOthers = async () => {
+    if (!confirm('Are you sure you want to log out of all other devices? Any other computer or phone logged into your account will be immediately signed out.')) {
+      return;
+    }
+    setRevoking(true);
+    try {
+      const res: any = await apiPost('/api/customers/sessions/revoke', {
+        revokeAllOthers: true,
+        currentSessionId,
+      });
+      if (res && res.success) {
+        toast.success(res.message || 'Logged out of all other devices.');
+        fetchSessions();
+        fetchLogs();
+      } else {
+        toast.error(res?.error || 'Failed to revoke other sessions');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to revoke other sessions');
+    } finally {
+      setRevoking(false);
+    }
+  };
 
   const fetchLogs = async () => {
     if (!user) return;
@@ -48,7 +117,6 @@ export const SecurityAuditLogsTab: React.FC = () => {
       }
     } catch (err: any) {
       console.warn('Failed to load security logs:', err);
-      // Fallback local empty state
       setLogs([]);
     } finally {
       setLoading(false);
@@ -57,6 +125,7 @@ export const SecurityAuditLogsTab: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
+    fetchSessions();
   }, [user]);
 
   const handlePasswordReset = async () => {
@@ -187,6 +256,117 @@ export const SecurityAuditLogsTab: React.FC = () => {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Active Connected Sessions & Kill Switch */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </div>
+              <h3 className="font-bold text-slate-900 text-base">Active Sessions & Connected Devices</h3>
+              <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold">
+                {sessions.length || 1} Device{sessions.length > 1 ? 's' : ''} Online
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">
+              Manage all browsers and devices currently signed in to your Click2IT account.
+            </p>
+          </div>
+
+          <button
+            onClick={handleRevokeAllOthers}
+            disabled={revoking || sessions.length <= 1}
+            className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-40 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto"
+            title="Terminate all other sessions immediately"
+          >
+            <ShieldAlert size={14} className="text-rose-600" />
+            {revoking ? 'Terminating...' : 'Log out of all other devices (Kill Switch)'}
+          </button>
+        </div>
+
+        {sessionsLoading ? (
+          <div className="p-8 text-center text-slate-400 flex items-center justify-center gap-2">
+            <RefreshCw size={18} className="animate-spin text-blue-600" />
+            <span className="text-xs">Loading active devices...</span>
+          </div>
+        ) : sessions.length === 0 ? (
+          <div className="p-6">
+            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white text-emerald-600 rounded-lg shadow-2xs border border-emerald-100">
+                  <Laptop size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-slate-900">Current Web Session</h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      CURRENT DEVICE
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">Active right now • Strict TLS 1.3 encrypted</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {sessions.map((sess: any) => {
+              const isCurrent = sess.id === currentSessionId;
+              const isMobile = /android|iphone|ipad|ios|mobile/i.test(sess.device || sess.userAgent || '');
+              return (
+                <div key={sess.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className={`p-2.5 rounded-xl shrink-0 ${isCurrent ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                      {isMobile ? <Smartphone size={20} /> : <Laptop size={20} />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-slate-900">
+                          {sess.device || (isMobile ? 'Mobile Device' : 'Desktop PC')}
+                        </h4>
+                        {isCurrent ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            THIS DEVICE
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+                            Remote Session
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+                        <span className="font-mono text-slate-600">IP: {sess.ipAddress || '127.0.0.1'}</span>
+                        <span>•</span>
+                        <span>
+                          {isCurrent ? (
+                            <strong className="text-emerald-600">Active Now</strong>
+                          ) : (
+                            `Last active: ${sess.lastActiveAt ? new Date(sess.lastActiveAt).toLocaleString() : 'Recently'}`
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isCurrent && (
+                    <button
+                      onClick={() => handleRevokeSession(sess.id)}
+                      disabled={revoking}
+                      className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 self-start sm:self-auto shrink-0"
+                    >
+                      <LogOut size={13} className="text-rose-600" />
+                      Terminate Session
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Audit Logs Table */}

@@ -207,6 +207,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   }).catch(() => {});
                 });
               }
+
+              // Automatically register current browser device session
+              import('../utils/sessionManager').then(({ registerCurrentSession }) => {
+                registerCurrentSession().catch(() => {});
+              });
             } catch (e) {}
 
             const isBootstrap = isBootstrapAdminEmail(firebaseUser.email);

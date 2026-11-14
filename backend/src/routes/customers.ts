@@ -1617,4 +1617,159 @@ customersRouter.post('/security-logs/record', requireFirebaseAuth, async (req: a
   }
 });
 
+/**
+ * GET /api/customers/sessions
+ * List active login sessions for the authenticated user
+ */
+customersRouter.get('/sessions', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const db = getAdminDb();
+    const snap = await db.collection('user_sessions')
+      .where('userId', '==', userId)
+      .where('isActive', '==', true)
+      .limit(20)
+      .get();
+
+    const sessions = snap.docs.map((d: any) => ({
+      id: d.id,
+      ...d.data(),
+    }));
+
+    sessions.sort((a: any, b: any) => new Date(b.lastActiveAt || b.createdAt || 0).getTime() - new Date(a.lastActiveAt || a.createdAt || 0).getTime());
+
+    return res.json({ success: true, sessions });
+  } catch (err: any) {
+    console.error('Failed to fetch sessions:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to fetch sessions' });
+  }
+});
+
+/**
+ * POST /api/customers/sessions/register
+ * Register or update the current browser/device session
+ */
+customersRouter.post('/sessions/register', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { sessionId, device } = req.body || {};
+    if (!sessionId || typeof sessionId !== 'string') {
+      return res.status(400).json({ success: false, error: 'sessionId is required' });
+    }
+
+    const db = getAdminDb();
+    const clientIp = extractClientIp(req);
+    const userAgent = req.headers['user-agent'] || '';
+    const now = new Date().toISOString();
+
+    const sessionRef = db.collection('user_sessions').doc(sessionId);
+    const existing = await sessionRef.get();
+
+    if (!existing.exists) {
+      await sessionRef.set({
+        id: sessionId,
+        userId,
+        device: device || 'Web Browser',
+        ipAddress: clientIp,
+        userAgent,
+        createdAt: now,
+        lastActiveAt: now,
+        isActive: true,
+      });
+    } else {
+      await sessionRef.update({
+        device: device || existing.data()?.device || 'Web Browser',
+        ipAddress: clientIp,
+        userAgent,
+        lastActiveAt: now,
+        isActive: true,
+      });
+    }
+
+    return res.json({ success: true, sessionId });
+  } catch (err: any) {
+    console.error('Failed to register session:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to register session' });
+  }
+});
+
+/**
+ * POST /api/customers/sessions/revoke
+ * Revoke a specific session or revoke all other sessions (Kill Switch)
+ */
+customersRouter.post('/sessions/revoke', requireFirebaseAuth, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const { sessionId, revokeAllOthers, currentSessionId } = req.body || {};
+    const db = getAdminDb();
+    const now = new Date().toISOString();
+
+    if (revokeAllOthers) {
+      const snap = await db.collection('user_sessions')
+        .where('userId', '==', userId)
+        .where('isActive', '==', true)
+        .get();
+
+      const batch = db.batch();
+      let revokedCount = 0;
+
+      for (const doc of snap.docs) {
+        if (currentSessionId && doc.id === currentSessionId) {
+          continue; // keep current active session
+        }
+        batch.update(doc.ref, {
+          isActive: false,
+          revokedAt: now,
+          revokedReason: 'remote_kill_switch',
+        });
+        revokedCount++;
+      }
+
+      const userRef = db.collection('users').doc(userId);
+      batch.set(userRef, { sessionsRevokedAt: now, updatedAt: now }, { merge: true });
+
+      await batch.commit();
+
+      recordSecurityLog({
+        userId,
+        action: 'LOGIN',
+        details: `Kill Switch: Logged out from ${revokedCount} other device(s) remotely.`,
+        ipAddress: extractClientIp(req),
+        userAgent: req.headers['user-agent'] || '',
+        metadata: { currentSessionId, revokedCount },
+      }).catch(() => null);
+
+      return res.json({ success: true, message: `Successfully logged out of ${revokedCount} other device(s).`, revokedCount });
+    }
+
+    if (sessionId) {
+      const sessionRef = db.collection('user_sessions').doc(sessionId);
+      const docSnap = await sessionRef.get();
+      if (docSnap.exists && docSnap.data()?.userId === userId) {
+        await sessionRef.update({
+          isActive: false,
+          revokedAt: now,
+          revokedReason: 'user_revoked',
+        });
+        return res.json({ success: true, message: 'Session revoked successfully.' });
+      }
+      return res.status(404).json({ success: false, error: 'Session not found or unauthorized' });
+    }
+
+    return res.status(400).json({ success: false, error: 'Specify sessionId or revokeAllOthers' });
+  } catch (err: any) {
+    console.error('Failed to revoke session:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to revoke session' });
+  }
+});
+
 export default customersRouter;

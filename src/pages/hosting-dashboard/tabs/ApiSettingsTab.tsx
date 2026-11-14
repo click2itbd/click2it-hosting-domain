@@ -4,6 +4,7 @@ import { EpsPaymentSettings } from '../admin/EpsPaymentSettings';
 import { CloudLinuxApiSettings } from '../admin/CloudLinuxApiSettings';
 import { VpsApiSettings } from '../admin/VpsApiSettings';
 import { SystemConnectionStatus } from '../components/SystemConnectionStatus';
+import { DatabaseBackupsModule } from '../modules/DatabaseBackupsModule';
 
 export function ApiSettingsTab({ state }) {
   if (state.activeTab !== 'api-settings') return null;
@@ -11,6 +12,7 @@ export function ApiSettingsTab({ state }) {
   return (
     <div className="w-full space-y-6">
       <SystemConnectionStatus onNavigateTab={state.setActiveTab} currentTab={state.activeTab} />
+      <DatabaseBackupsModule />
       <EpsPaymentSettings />
       <HostingApiSettings />
       <VpsApiSettings />

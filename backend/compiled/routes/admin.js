@@ -528,4 +528,69 @@ adminRouter.post('/site-settings', async (req, res) => {
         return res.status(500).json({ success: false, error: error?.message || 'Failed to update site settings' });
     }
 });
+/**
+ * GET /api/admin/backups
+ * List all disaster recovery backup snapshots
+ */
+adminRouter.get('/backups', async (req, res) => {
+    try {
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
+        if (!isAdmin) {
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+        const { listBackupSnapshots } = await import('../services/backupService.js');
+        const backups = await listBackupSnapshots();
+        return res.json({ success: true, backups });
+    }
+    catch (error) {
+        console.error('Failed to list backups:', error);
+        return res.status(500).json({ success: false, error: error?.message || 'Failed to list backups' });
+    }
+});
+/**
+ * POST /api/admin/backups/create
+ * Generate a new snapshot now
+ */
+adminRouter.post('/backups/create', async (req, res) => {
+    try {
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
+        if (!isAdmin) {
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+        const { createDatabaseBackup } = await import('../services/backupService.js');
+        const adminEmail = req.user?.email || 'Admin';
+        const result = await createDatabaseBackup(`Admin Manual (${adminEmail})`);
+        if (!result.success) {
+            return res.status(500).json({ success: false, error: result.error });
+        }
+        return res.json({ success: true, message: 'Backup created successfully', metadata: result.metadata });
+    }
+    catch (error) {
+        console.error('Failed to create backup:', error);
+        return res.status(500).json({ success: false, error: error?.message || 'Failed to create backup' });
+    }
+});
+/**
+ * GET /api/admin/backups/:snapshotId/download
+ * Download a backup JSON snapshot file
+ */
+adminRouter.get('/backups/:snapshotId/download', async (req, res) => {
+    try {
+        const isAdmin = await isUserAdmin(req.user?.uid, req.user?.email, req.user);
+        if (!isAdmin) {
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+        const { getBackupFilePath } = await import('../services/backupService.js');
+        const { snapshotId } = req.params;
+        const filePath = getBackupFilePath(snapshotId);
+        if (!filePath) {
+            return res.status(404).json({ success: false, error: 'Backup file not found on server' });
+        }
+        return res.download(filePath, `${snapshotId}.json`);
+    }
+    catch (error) {
+        console.error('Failed to download backup:', error);
+        return res.status(500).json({ success: false, error: error?.message || 'Failed to download backup' });
+    }
+});
 export default adminRouter;
