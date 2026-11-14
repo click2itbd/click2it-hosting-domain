@@ -20,6 +20,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { getSiteContext } from '../hooks/useSiteContext';
+import { apiPost } from '../services/apiClient';
 
 interface UserProfileData {
   name: string;
@@ -211,6 +212,18 @@ export const Profile: React.FC = () => {
         photoURL: formData.photoURL,
         updatedAt: new Date().toISOString()
       }, { merge: true });
+
+      // Record security audit and trigger email alert
+      apiPost('/api/customers/security-logs/record', {
+        action: 'PROFILE_UPDATE',
+        details: `Profile updated: Name (${formData.name || 'N/A'}), Phone (${formData.phone || 'N/A'}), Address (${formData.address || 'N/A'})`,
+        metadata: {
+          phone: formData.phone,
+          customerName: formData.name,
+          customerEmail: user.email,
+        }
+      }).catch(() => null);
+
       toast.success('Profile updated successfully!');
     } catch (error) {
       console.error('Error updating profile:', error);

@@ -37,6 +37,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { getFriendlyErrorMessage } from '../utils/errorUtils';
 import { useSettings } from '../context/SettingsContext';
+import { checkEmailSafety } from '../utils/disposableEmailBlocker';
 import { isBootstrapAdminEmail } from '../context/AuthContext';
 import { useSiteContext } from '../hooks/useSiteContext';
 
@@ -265,6 +266,14 @@ export const Login: React.FC = () => {
     if (!email || !password) {
       toast.error('Please enter your email and password.');
       return;
+    }
+
+    if (isSignUp) {
+      const emailSafety = checkEmailSafety(email);
+      if (!emailSafety.isValid) {
+        toast.error(emailSafety.errorMessage || 'Invalid email address');
+        return;
+      }
     }
 
     if (isSignUp && passwordStrength.score < 2) {

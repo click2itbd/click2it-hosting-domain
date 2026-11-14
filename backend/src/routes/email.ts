@@ -896,6 +896,21 @@ emailRouter.post('/reset-password', async (req: any, res: Response) => {
       type: 'password_reset_confirmation',
     }).catch(() => null);
 
+    // Record security audit log and trigger instant security activity alert
+    try {
+      const { recordSecurityLog, extractClientIp } = await import('../services/securityAudit.js');
+      const usersSnap = await db.collection('users').where('email', '==', targetEmail).limit(1).get();
+      const uid = usersSnap.docs[0]?.id || targetEmail;
+      recordSecurityLog({
+        userId: uid,
+        action: 'PASSWORD_CHANGE',
+        details: 'Password was updated successfully via secure reset link.',
+        ipAddress: extractClientIp(req),
+        userAgent: req.headers['user-agent'] || '',
+        metadata: { customerEmail: targetEmail }
+      }).catch(() => null);
+    } catch (secErr) {}
+
     return res.status(200).json({
       success: true,
       message: 'Your password has been reset successfully. You can now sign in with your new password.',

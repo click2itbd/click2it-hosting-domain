@@ -859,6 +859,98 @@ export const EmailTemplates = {
       </div>
     `,
     }),
+    securityAlert: (params) => {
+        const brand = 'Click2IT BD';
+        const dateStr = params.timestamp
+            ? new Date(params.timestamp).toLocaleString('en-US', { timeZone: 'Asia/Dhaka', dateStyle: 'medium', timeStyle: 'short' })
+            : new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka', dateStyle: 'medium', timeStyle: 'short' });
+        let badgeText = 'SECURITY ALERT';
+        let badgeBg = '#ef4444';
+        let iconHeader = '🛡️';
+        if (params.alertType === 'NEW_LOGIN') {
+            badgeText = 'NEW LOGIN DETECTED';
+            badgeBg = '#f59e0b';
+            iconHeader = '🚨';
+        }
+        else if (params.alertType === 'NAMESERVER_CHANGE') {
+            badgeText = 'DOMAIN DNS MODIFIED';
+            badgeBg = '#2563eb';
+            iconHeader = '🌐';
+        }
+        else if (params.alertType === 'PROFILE_UPDATE') {
+            badgeText = 'PROFILE UPDATED';
+            badgeBg = '#6366f1';
+            iconHeader = '📱';
+        }
+        const subject = `${iconHeader} [Security Alert] ${params.title} - ${brand}`;
+        const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
+        <div style="background: linear-gradient(135deg, #091224 0%, #172554 100%); padding: 28px 24px; text-align: center;">
+          <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">CLICK2IT</h1>
+          <p style="margin: 6px 0 0; color: #93c5fd; font-size: 13px; font-weight: 500;">Automated Security Defense System</p>
+        </div>
+
+        <div style="padding: 28px 24px; color: #1e293b; font-size: 14px; line-height: 1.6;">
+          <div style="display: inline-block; background-color: ${badgeBg}; color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; margin-bottom: 14px;">
+            ${badgeText}
+          </div>
+
+          <h2 style="margin: 0 0 10px; color: #0f172a; font-size: 20px; font-weight: 700;">
+            ${params.title}
+          </h2>
+
+          <p style="margin: 0 0 16px; color: #475569;">
+            Hello ${params.customerName ? `<strong>${params.customerName}</strong>` : 'valued customer'},<br>
+            ${params.description}
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; background-color: #f8fafc; border-radius: 10px; overflow: hidden; margin: 20px 0; border: 1px solid #e2e8f0;">
+            <tbody>
+              <tr>
+                <td style="padding: 10px 14px; font-weight: 700; color: #64748b; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; width: 35%;">Account Email</td>
+                <td style="padding: 10px 14px; color: #0f172a; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e2e8f0;">${params.customerEmail}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 14px; font-weight: 700; color: #64748b; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #e2e8f0;">Device & Browser</td>
+                <td style="padding: 10px 14px; color: #0f172a; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e2e8f0;">${params.device || 'Web Browser'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 14px; font-weight: 700; color: #64748b; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #e2e8f0;">IP Address</td>
+                <td style="padding: 10px 14px; color: #0f172a; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e2e8f0; font-family: monospace;">${params.ipAddress || '127.0.0.1'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 14px; font-weight: 700; color: #64748b; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #e2e8f0;">Time (BST)</td>
+                <td style="padding: 10px 14px; color: #0f172a; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e2e8f0;">${dateStr}</td>
+              </tr>
+              ${params.details ? `
+              <tr>
+                <td style="padding: 10px 14px; font-weight: 700; color: #64748b; font-size: 12px; text-transform: uppercase;">Activity Details</td>
+                <td style="padding: 10px 14px; color: #0f172a; font-size: 13px;">${params.details}</td>
+              </tr>
+              ` : ''}
+            </tbody>
+          </table>
+
+          <div style="background-color: #fff7ed; border-left: 4px solid #f97316; padding: 14px 16px; border-radius: 0 10px 10px 0; margin-bottom: 24px; font-size: 13px; color: #9a3412;">
+            <strong>Was this you?</strong> If you performed this action or logged in from this device, you can safely disregard this message.<br><br>
+            <strong>Not you?</strong> If you did not make this change, your account may be compromised. Please click the button below to reset your password and secure your account immediately.
+          </div>
+
+          <div style="text-align: center; margin: 26px 0 10px;">
+            <a href="https://click2it.bd/reset-password" style="display: inline-block; background-color: #dc2626; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 28px; border-radius: 10px; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.25);">
+              🔒 Secure My Account Immediately
+            </a>
+          </div>
+        </div>
+
+        <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 24px; text-align: center; font-size: 12px; color: #64748b;">
+          <p style="margin: 0; font-weight: 700; color: #0f172a;">Click2IT Security Team</p>
+          <p style="margin: 4px 0 0;">Need immediate help? Contact 24/7 Security Support: <a href="mailto:info@click2it.bd" style="color: #2563eb; text-decoration: none;">info@click2it.bd</a></p>
+        </div>
+      </div>
+    `;
+        return { subject, html };
+    },
 };
 /**
  * Resolve admin notification recipients: ADMIN_EMAIL env (comma separated) -> settings/site.contactEmail -> default.

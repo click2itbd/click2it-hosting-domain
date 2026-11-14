@@ -14,6 +14,7 @@ import { generateDocumentNumber } from '../../lib/numbering';
 import { initiateBkashPayment, initiateSSLCommerzPayment, initiateNagadPayment } from '../../services/paymentApi';
 import { apiPost, getApiUrl, apiClient } from '../../services/apiClient';
 import { createCustomerAccountByAdmin, generateCustomerPassword } from '../../utils/customerAdminUtils';
+import { checkEmailSafety } from '../../utils/disposableEmailBlocker';
 
 export const HostingCheckout: React.FC = () => {
   const { user, effectiveUser, canAccessAdmin, isImpersonating, impersonatedCustomer, loading: authLoading } = useAuth();
@@ -632,6 +633,12 @@ export const HostingCheckout: React.FC = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       toast.error('Please enter a valid email address.');
+      return;
+    }
+
+    const emailSafety = checkEmailSafety(formData.email);
+    if (!emailSafety.isValid) {
+      toast.error(emailSafety.errorMessage || 'Invalid or disposable email address');
       return;
     }
 
