@@ -102,9 +102,9 @@ export default function Hosting() {
   return (
     <Layout fullWidth>
       <SEO 
-        title="High-Speed NVMe Web Hosting, Cloud VPS & Domain Registration | Click2IT"
-        description="Deploy ultra-fast NVMe cPanel Web Hosting, dedicated KVM Cloud VPS, and global .COM, .NET, .BD domain registration with 99.9% uptime, LiteSpeed, and 24/7 support at Click2IT."
-        keywords="web hosting, nvme hosting, cpanel hosting, cloud vps, kvm vps, buy domain, domain registration, bd domain, cheap vps, litespeed web hosting, fast hosting worldwide, best hosting bangladesh"
+        title="Web Hosting Bangladesh - NVMe cPanel Hosting, Domain & VPS | Click2IT"
+        description="Best web hosting in Bangladesh. Ultra-fast NVMe cPanel hosting, domain registration (.com, .bd, .net) & high-performance KVM cloud VPS. 99.9% uptime & 24/7 support at Click2IT."
+        keywords="hosting, web hosting, hosting price, domain, buy domain, vps, cloud vps, cheap hosting, cpanel hosting, best web hosting bangladesh, hosting price bd, click2it"
         canonical="https://click2it.bd"
       />
       {/* 1. Hero — dark blue bg, domain search, 3D server graphic */}

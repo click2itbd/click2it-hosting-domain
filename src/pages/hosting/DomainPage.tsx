@@ -93,9 +93,9 @@ const DomainPage = () => {
   return (
     <Layout fullWidth>
       <SEO
-        title="Domain Name Registration - Cheap .COM, .NET, .ORG & .BD Domains | Click2IT"
-        description="Search and register domain names with instant DNS management, free WHOIS privacy protection, domain locking, and 24/7 support. Fast activation for .COM, .NET, .ORG, and .BD."
-        keywords="buy domain, domain registration, domain name search, cheap com domain, .net domain, .bd domain registration, domain transfer"
+        title="Buy Domain & Domain Registration in Bangladesh - .COM, .BD, .NET | Click2IT"
+        description="Instant domain registration and domain search with free WHOIS privacy protection, full DNS control, and 24/7 support. Buy .COM, .NET, .ORG, and .BD domains in BDT."
+        keywords="domain, buy domain, domain registration, domain search, domain price, cheap domain bd, com domain price, bd domain registration"
         canonical="https://click2it.bd/domain"
       />
 

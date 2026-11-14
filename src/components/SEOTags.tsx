@@ -26,19 +26,23 @@ interface RouteConfig {
 
 const defaultRouteConfigs: Record<string, RouteConfig> = {
   '/': {
-    title: 'High-Speed NVMe Web Hosting, Cloud VPS & Domain Registration | Click2IT',
-    description: 'Deploy ultra-fast NVMe cPanel Web Hosting, dedicated KVM Cloud VPS, and global .COM, .NET, .BD domain registration with 99.9% uptime, LiteSpeed, and 24/7 support at Click2IT.',
-    keywords: 'web hosting, nvme hosting, cpanel hosting, cloud vps, kvm vps, buy domain, domain registration, bd domain, cheap vps, litespeed web hosting, fast hosting worldwide, best hosting bangladesh',
+    title: 'Web Hosting Bangladesh - NVMe cPanel Hosting, Domain & VPS | Click2IT',
+    description: 'Best web hosting in Bangladesh. Ultra-fast NVMe cPanel hosting, domain registration (.com, .bd, .net) & high-performance KVM cloud VPS. 99.9% uptime & 24/7 support at Click2IT.',
+    keywords: 'hosting, web hosting, hosting price, domain, buy domain, vps, cloud vps, cheap hosting, cpanel hosting, best web hosting bangladesh, hosting price bd, click2it',
     type: 'website',
     schemaType: 'Service',
     faqs: [
+      {
+        question: 'What is the web hosting price at Click2IT Bangladesh?',
+        answer: 'Click2IT web hosting prices start at only ৳75/month for student packages and scalable NVMe cPanel hosting with free SSL, automated backups, and 99.9% uptime.'
+      },
       {
         question: 'What makes Click2IT NVMe Web Hosting faster than traditional hosting?',
         answer: 'Click2IT utilizes pure Enterprise NVMe SSD storage in RAID-10 arrays combined with LiteSpeed Enterprise Web Server and CloudLinux OS, delivering up to 20x faster page load speeds and superior database response times worldwide.'
       },
       {
-        question: 'Does Click2IT provide free SSL certificates and automated backups?',
-        answer: 'Yes! Every hosting plan includes free automated Sectigo / Let\'s Encrypt SSL certificates with instant auto-renewal, plus automated off-site backups to keep your website and database safe.'
+        question: 'How do I buy a domain and web hosting together?',
+        answer: 'You can search your preferred domain (.com, .net, .org, .com.bd), choose your NVMe hosting plan, and checkout instantly with bKash, Nagad, card, or bank transfer with instant automated activation.'
       },
       {
         question: 'Can I host both international and local websites on Click2IT?',
@@ -49,7 +53,7 @@ const defaultRouteConfigs: Record<string, RouteConfig> = {
   '/hosting': {
     title: 'NVMe cPanel Web Hosting - LiteSpeed, Free SSL & 99.9% Uptime | Click2IT',
     description: 'Ultra-fast NVMe cPanel web hosting powered by LiteSpeed Enterprise and CloudLinux. Includes free SSL certificates, daily backups, 1-click WordPress install, and 24/7 technical assistance.',
-    keywords: 'cpanel web hosting, nvme hosting, litespeed hosting, cheap cpanel hosting, fast wordpress hosting, cloudlinux hosting, reliable web host',
+    keywords: 'hosting, web hosting, cpanel hosting, nvme hosting, cheap hosting, hosting price bd, litespeed hosting, fast web hosting, buy hosting',
     type: 'website',
     schemaType: 'Service',
     faqs: [
@@ -78,23 +82,23 @@ const defaultRouteConfigs: Record<string, RouteConfig> = {
     schemaType: 'Service',
   },
   '/pricing': {
-    title: 'Web Hosting & Cloud VPS Pricing Plans - Transparent & Scalable | Click2IT',
-    description: 'Affordable, transparent pricing on NVMe cPanel hosting, KVM Cloud VPS, and domain registrations. Zero setup fees, instant activation, and multiple secure payment methods.',
-    keywords: 'web hosting price, cloud vps pricing, cheap nvme hosting, domain pricing list, cpanel hosting plans',
+    title: 'Web Hosting Price in Bangladesh (2026) - Cheap NVMe Hosting & VPS | Click2IT',
+    description: 'Transparent web hosting price list in Bangladesh. Starting at ৳75/month for NVMe cPanel hosting, affordable domain registration, and high-performance KVM VPS with zero setup fee.',
+    keywords: 'hosting price, web hosting price, web hosting price in bangladesh, cheap hosting price, domain price, vps price, hosting cost, click2it pricing',
     type: 'website',
     schemaType: 'Service',
   },
   '/hosting/pricing': {
-    title: 'Web Hosting & Cloud VPS Pricing Plans - Transparent & Scalable | Click2IT',
-    description: 'Affordable, transparent pricing on NVMe cPanel hosting, KVM Cloud VPS, and domain registrations. Zero setup fees, instant activation, and multiple secure payment methods.',
-    keywords: 'web hosting price, cloud vps pricing, cheap nvme hosting, domain pricing list, cpanel hosting plans',
+    title: 'Web Hosting Price in Bangladesh (2026) - Cheap NVMe Hosting & VPS | Click2IT',
+    description: 'Transparent web hosting price list in Bangladesh. Starting at ৳75/month for NVMe cPanel hosting, affordable domain registration, and high-performance KVM VPS with zero setup fee.',
+    keywords: 'hosting price, web hosting price, web hosting price in bangladesh, cheap hosting price, domain price, vps price, hosting cost, click2it pricing',
     type: 'website',
     schemaType: 'Service',
   },
   '/vps': {
-    title: 'KVM Cloud VPS Servers - Dedicated NVMe, Full Root Access & 1Gbps | Click2IT',
-    description: 'Deploy enterprise KVM Cloud VPS servers with pure NVMe RAID-10 storage, dedicated IPv4, 1Gbps uplink, full root SSH & Windows RDP access, and guaranteed CPU/RAM resources.',
-    keywords: 'kvm cloud vps, linux vps, windows vps, high iops nvme vps, root access vps, cheap cloud server, unmetered bandwidth vps, bdix vps',
+    title: 'Cloud VPS Hosting Bangladesh - High Performance KVM NVMe VPS | Click2IT',
+    description: 'Deploy enterprise KVM Cloud VPS servers with pure NVMe RAID-10 storage, dedicated IPv4, 1Gbps BDIX uplink, full root SSH & Windows RDP access, and guaranteed CPU/RAM resources.',
+    keywords: 'vps, cloud vps, vps hosting, cheap vps, buy vps, kvm vps, linux vps, windows vps, bdix vps bangladesh, vps server',
     type: 'product',
     schemaType: 'Product',
     faqs: [
@@ -113,16 +117,16 @@ const defaultRouteConfigs: Record<string, RouteConfig> = {
     ]
   },
   '/hosting/vps': {
-    title: 'KVM Cloud VPS Servers - Dedicated NVMe, Full Root Access & 1Gbps | Click2IT',
-    description: 'Deploy enterprise KVM Cloud VPS servers with pure NVMe RAID-10 storage, dedicated IPv4, 1Gbps uplink, full root SSH & Windows RDP access, and guaranteed CPU/RAM resources.',
-    keywords: 'kvm cloud vps, linux vps, windows vps, high iops nvme vps, root access vps, cheap cloud server, unmetered bandwidth vps, bdix vps',
+    title: 'Cloud VPS Hosting Bangladesh - High Performance KVM NVMe VPS | Click2IT',
+    description: 'Deploy enterprise KVM Cloud VPS servers with pure NVMe RAID-10 storage, dedicated IPv4, 1Gbps BDIX uplink, full root SSH & Windows RDP access, and guaranteed CPU/RAM resources.',
+    keywords: 'vps, cloud vps, vps hosting, cheap vps, buy vps, kvm vps, linux vps, windows vps, bdix vps bangladesh, vps server',
     type: 'product',
     schemaType: 'Product',
   },
   '/domain': {
-    title: 'Domain Name Registration - Cheap .COM, .NET, .ORG & .BD Domains | Click2IT',
-    description: 'Search and register domain names with instant DNS management, free WHOIS privacy protection, domain locking, and 24/7 support. Fast activation for .COM, .NET, .ORG, and .BD.',
-    keywords: 'buy domain, domain registration, domain name search, cheap com domain, .net domain, .bd domain registration, domain transfer',
+    title: 'Buy Domain & Domain Registration in Bangladesh - .COM, .BD, .NET | Click2IT',
+    description: 'Instant domain registration and domain search with free WHOIS privacy protection, full DNS control, and 24/7 support. Buy .COM, .NET, .ORG, and .BD domains in BDT.',
+    keywords: 'domain, buy domain, domain registration, domain search, domain price, cheap domain bd, com domain price, bd domain registration',
     type: 'product',
     schemaType: 'Product',
     faqs: [
@@ -137,9 +141,9 @@ const defaultRouteConfigs: Record<string, RouteConfig> = {
     ]
   },
   '/hosting/domain': {
-    title: 'Domain Name Registration - Cheap .COM, .NET, .ORG & .BD Domains | Click2IT',
-    description: 'Search and register domain names with instant DNS management, free WHOIS privacy protection, domain locking, and 24/7 support. Fast activation for .COM, .NET, .ORG, and .BD.',
-    keywords: 'buy domain, domain registration, domain name search, cheap com domain, .net domain, .bd domain registration, domain transfer',
+    title: 'Buy Domain & Domain Registration in Bangladesh - .COM, .BD, .NET | Click2IT',
+    description: 'Instant domain registration and domain search with free WHOIS privacy protection, full DNS control, and 24/7 support. Buy .COM, .NET, .ORG, and .BD domains in BDT.',
+    keywords: 'domain, buy domain, domain registration, domain search, domain price, cheap domain bd, com domain price, bd domain registration',
     type: 'product',
     schemaType: 'Product',
   },
@@ -320,7 +324,7 @@ export const SEOTags: React.FC<SEOTagsProps> = ({
     'offers': {
       '@type': 'AggregateOffer',
       'priceCurrency': 'BDT',
-      'lowPrice': '150',
+      'lowPrice': '75',
       'highPrice': '18500',
       'offerCount': '24',
       'availability': 'https://schema.org/InStock',

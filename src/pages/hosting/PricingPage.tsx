@@ -59,9 +59,9 @@ export default function PricingPage() {
     <Layout fullWidth>
       <HostingPromoBanner />
       <SEO 
-        title="Web Hosting & Cloud VPS Pricing Plans - Transparent & Scalable | Click2IT"
-        description="Affordable, transparent pricing on NVMe cPanel hosting, KVM Cloud VPS, and domain registrations. Zero setup fees, instant activation, and multiple secure payment methods."
-        keywords="web hosting price, cloud vps pricing, cheap nvme hosting, domain pricing list, cpanel hosting plans"
+        title="Web Hosting Price in Bangladesh (2026) - Cheap NVMe Hosting & VPS | Click2IT"
+        description="Transparent web hosting price list in Bangladesh. Starting at ৳75/month for NVMe cPanel hosting, affordable domain registration, and high-performance KVM VPS with zero setup fee."
+        keywords="hosting price, web hosting price, web hosting price in bangladesh, cheap hosting price, domain price, vps price, hosting cost, click2it pricing"
         canonical="https://click2it.bd/pricing"
       />
 
