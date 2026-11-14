@@ -25,11 +25,21 @@ import { cronRouter } from "./routes/cron.js";
 export function createApp(): Express {
   const app = express();
 
+  // Strip Express fingerprint header to prevent server OS/framework profiling
+  app.disable('x-powered-by');
+
   app.use(requestId);
 
   app.use(
     helmet({
       frameguard: false,
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      noSniff: true,
+      xssFilter: true,
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
@@ -225,8 +235,8 @@ export function createApp(): Express {
   apiRouter.use("/dns", dnsRouter);
   apiRouter.use("/hosting", hostingRouter);
   apiRouter.use("/orders", ordersRouter);
-apiRouter.use("/payments", paymentsRouter);
-  apiRouter.use("/admin", adminRouter);
+  apiRouter.use("/payments", sensitiveLimiter, paymentsRouter);
+  apiRouter.use("/admin", sensitiveLimiter, adminRouter);
   apiRouter.use("/ai", aiRouter);
   apiRouter.use("/webhook", webhookRouter);
   apiRouter.use("/customers", customersRouter);
